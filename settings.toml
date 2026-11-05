@@ -1,0 +1,26 @@
+# Einstellungen der Loopstation.
+# Nach einer Änderung die Loopstation neu starten.
+# Fehlt diese Datei, gelten genau die Werte unten.
+
+# Größe des Pad-Rasters: Zeilen und Spalten (je 1 bis 16).
+rows = 3
+cols = 4
+
+# Längste Aufnahme in Sekunden (1 bis 120). Danach stoppt sie von selbst.
+max_record_seconds = 10
+
+# Abtastrate für Aufnahme und Wiedergabe in Hz.
+sample_rate = 44100
+
+# Kurzer Piepton beim Start und Ende einer Aufnahme.
+sound_effects = true
+
+# true = Vollbild ohne Fensterrahmen, false = maximiertes Fenster.
+fullscreen = false
+
+# Novation Launchpad automatisch suchen und benutzen.
+launchpad = true
+
+# Ordner für die Daten (relativ zum Startordner):
+# Aufnahmen in <data_dir>/samples/, Ereignis-Protokoll in <data_dir>/data/.
+data_dir = "."
