@@ -30,11 +30,23 @@ class NullAudio:
     def recording_seconds(self) -> float:
         return 0.0
 
+    def recording_wait(self) -> float:
+        return 0.0
+
+    def set_grid(self, frames: int | None) -> None:
+        pass  # nothing is audible, so there is nothing to keep in time
+
+    def next_boundary_in(self) -> float | None:
+        return None
+
+    def pending_pads(self) -> set[int]:
+        return set()
+
     def play(self, pad: int, data: np.ndarray, loop: bool) -> None:
         duration = len(data) / self.sample_rate
         self._voices[pad] = None if loop else self._clock() + duration
 
-    def stop(self, pad: int) -> None:
+    def stop(self, pad: int, at_boundary: bool = False) -> None:
         self._voices.pop(pad, None)
 
     def stop_all(self) -> None:

@@ -9,6 +9,14 @@ pushes ``{"seq": <event seq>, "pads": {pad_id: previous_sample}}`` and an
 ``undo`` event pops the top entry and puts the previous samples back. Because
 the stack is part of every snapshot, undo keeps working after old events have
 been moved to the archive.
+
+The loop grid ("master") is the length of the first sound of a session,
+``{"frames": int, "rate": int}``. A ``master_set`` event sets it; it is
+cleared as soon as no pad holds a sample any more (a ``session_start`` event
+follows in the log). Undo entries remember the previous master under
+``"master"`` whenever a content event changed it, so undoing "Alle löschen"
+brings the grid back together with the samples. Logs and snapshots written
+before the grid existed simply have no master.
 """
 
 from __future__ import annotations
@@ -45,6 +53,8 @@ class AppState:
     # Entries are treated as immutable, so copies of the list may share them.
     undo_stack: list[dict[str, Any]] = field(default_factory=list)
     last_seq: int = 0
+    # Loop grid {"frames": int, "rate": int}, or None while recordings are free.
+    master: dict[str, int] | None = None
 
     @classmethod
     def empty(cls, pad_count: int) -> AppState:
@@ -61,6 +71,7 @@ class AppState:
             pads={pad_id: replace(pad) for pad_id, pad in self.pads.items()},
             undo_stack=list(self.undo_stack),
             last_seq=self.last_seq,
+            master=self.master,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -74,14 +85,9 @@ class AppState:
                 }
                 for pad_id, pad in sorted(self.pads.items())
             },
-            "undo_stack": [
-                {
-                    "seq": entry["seq"],
-                    "pads": {str(p): s for p, s in sorted(entry["pads"].items())},
-                }
-                for entry in self.undo_stack
-            ],
+            "undo_stack": [_entry_to_dict(entry) for entry in self.undo_stack],
             "last_seq": self.last_seq,
+            "master": None if self.master is None else dict(self.master),
         }
 
     @classmethod
@@ -95,14 +101,49 @@ class AppState:
             )
             for pad_id, pad in raw.get("pads", {}).items()
         }
-        undo_stack = [
-            {
-                "seq": int(entry["seq"]),
-                "pads": {int(p): s for p, s in entry["pads"].items()},
-            }
-            for entry in raw.get("undo_stack", [])
-        ]
-        return cls(pads=pads, undo_stack=undo_stack, last_seq=int(raw.get("last_seq", 0)))
+        undo_stack = [_entry_from_dict(entry) for entry in raw.get("undo_stack", [])]
+        return cls(
+            pads=pads,
+            undo_stack=undo_stack,
+            last_seq=int(raw.get("last_seq", 0)),
+            master=parse_master(raw.get("master")),
+        )
+
+    def has_content(self) -> bool:
+        """True if at least one pad holds a sample."""
+        return any(pad.sample is not None for pad in self.pads.values())
+
+
+def parse_master(raw: Any) -> dict[str, int] | None:
+    """A valid master ``{"frames", "rate"}`` from JSON data, else None."""
+    if not isinstance(raw, dict):
+        return None
+    frames, rate = raw.get("frames"), raw.get("rate")
+    for value in (frames, rate):
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            return None
+    return {"frames": frames, "rate": rate}
+
+
+def _entry_to_dict(entry: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "seq": entry["seq"],
+        "pads": {str(p): s for p, s in sorted(entry["pads"].items())},
+    }
+    if "master" in entry:
+        out["master"] = None if entry["master"] is None else dict(entry["master"])
+    return out
+
+
+def _entry_from_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "seq": int(raw["seq"]),
+        "pads": {int(p): s for p, s in raw["pads"].items()},
+    }
+    # Only entries of events that changed the master carry the key.
+    if "master" in raw:
+        entry["master"] = parse_master(raw["master"])
+    return entry
 
 
 def ensure_pads(state: AppState, pad_count: int) -> AppState:
@@ -144,6 +185,7 @@ def apply(state: AppState, event: ev.Event) -> AppState:
     new = state.copy()
     new.last_seq = event.seq
     pad_id = event.pad
+    master_before = new.master
 
     if event.type == ev.RECORD_STOP:
         sample = event.data.get("sample")
@@ -197,6 +239,8 @@ def apply(state: AppState, event: ev.Event) -> AppState:
             if pad.sample != previous_sample or previous_sample is None:
                 pad.looping = False
             pad.sample = previous_sample
+        if "master" in entry:
+            new.master = entry["master"]
 
     elif event.type == ev.LOOP_ON:
         if pad_id is not None:
@@ -204,12 +248,27 @@ def apply(state: AppState, event: ev.Event) -> AppState:
             if pad.sample is not None:
                 pad.looping = True
 
-    elif event.type == ev.LOOP_OFF:
-        if pad_id is not None:
-            _pad(new, pad_id).looping = False
+    elif event.type == ev.LOOP_OFF and pad_id is not None:
+        _pad(new, pad_id).looping = False
+
+    elif event.type == ev.MASTER_SET:
+        master = parse_master(event.data)
+        if master is None:
+            log.warning("master_set seq=%s: invalid data %r; ignored", event.seq, event.data)
+        else:
+            new.master = master
+
+    elif event.type == ev.SESSION_START:
+        new.master = None
 
     # record_start and play are logged for the record only; they do not
     # change the state apart from last_seq.
+
+    if new.master is not None and not new.has_content():
+        new.master = None  # the grid is free again once every pad is empty
+    if new.master != master_before and new.undo_stack and new.undo_stack[-1]["seq"] == event.seq:
+        # Remember the previous grid so that undoing this event restores it.
+        new.undo_stack[-1] = {**new.undo_stack[-1], "master": master_before}
     return new
 
 

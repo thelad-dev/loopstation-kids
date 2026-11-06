@@ -232,3 +232,89 @@ def test_replay_adds_pads_for_a_larger_grid():
     log.snapshot()
     state = replay(log.events, 16)
     assert set(state.pads) == set(range(16))
+
+
+# ---------------------------------------------------------------- loop grid
+
+MASTER = {"frames": 8000, "rate": 8000}
+
+
+def test_master_set_and_cleared_with_the_last_sound():
+    log = Log()
+    log.record(0, "a.wav")
+    assert log.state.master is None
+    log.add(ev.MASTER_SET, None, **MASTER)
+    log.record(1, "b.wav")
+    log.add(ev.DELETE_PAD, 0)
+    assert log.state.master == MASTER  # the first pad is gone, the session goes on
+    log.add(ev.DELETE_PAD, 1)
+    assert log.state.master is None
+    log.add(ev.SESSION_START)
+    assert log.state.master is None
+
+
+def test_undo_brings_the_master_back_with_the_sounds():
+    log = Log()
+    log.record(0, "a.wav")
+    log.add(ev.MASTER_SET, None, **MASTER)
+    log.add(ev.DELETE_ALL)
+    log.add(ev.SESSION_START)
+    assert log.state.master is None
+    log.undo()
+    assert samples(log.state)[0] == "a.wav" and log.state.master == MASTER
+    log.undo()  # the first recording itself: empty again, no master
+    assert samples(log.state)[0] is None and log.state.master is None
+
+
+def test_undo_across_two_sessions():
+    log = Log()
+    log.record(0, "a.wav")
+    log.add(ev.MASTER_SET, None, **MASTER)
+    log.add(ev.DELETE_PAD, 0)
+    log.add(ev.SESSION_START)
+    log.record(1, "b.wav")
+    log.add(ev.MASTER_SET, None, frames=6000, rate=8000)
+    log.undo()
+    assert log.state.master is None
+    log.undo()
+    assert samples(log.state)[0] == "a.wav" and log.state.master == MASTER
+
+
+def test_invalid_master_set_is_ignored():
+    log = Log()
+    log.record(0, "a.wav")
+    log.add(ev.MASTER_SET, None, frames=0, rate=8000)
+    log.add(ev.MASTER_SET, None, frames=True, rate=8000)
+    assert log.state.master is None
+
+
+def test_master_survives_snapshot_and_json():
+    log = Log()
+    log.record(0, "a.wav")
+    log.add(ev.MASTER_SET, None, **MASTER)
+    log.add(ev.DELETE_ALL)
+    raw = json.loads(json.dumps(log.state.to_dict()))
+    again = AppState.from_dict(raw)
+    assert again == log.state
+    assert again.undo_stack[-1]["master"] == MASTER
+
+
+def test_old_logs_without_grid_fields_replay_unchanged():
+    """A log and snapshot written before the loop grid existed."""
+    old_snapshot = {
+        "pads": {"0": {"sample": "a.wav", "looping": False, "history": ["a.wav"]}},
+        "undo_stack": [{"seq": 2, "pads": {"0": None}}],
+        "last_seq": 2,
+    }
+    lines = [
+        {"seq": 3, "ts": "t", "type": "snapshot", "pad": None, "data": {"state": old_snapshot}},
+        {"seq": 4, "ts": "t", "type": "record_start", "pad": 1, "data": {"stamp": 5}},
+        {"seq": 5, "ts": "t", "type": "record_stop", "pad": 1, "data": {"sample": "b.wav", "duration": 1.0}},
+        {"seq": 6, "ts": "t", "type": "undo", "pad": None, "data": {"target": 5}},
+        {"seq": 7, "ts": "t", "type": "undo", "pad": None, "data": {"target": 2}},
+    ]
+    events = [ev.Event.from_json(json.dumps(line)) for line in lines]
+    state = replay(events, 12)
+    assert state.master is None
+    assert samples(state)[0] is None and samples(state)[1] is None
+    assert state.pads[1].history == ["b.wav"]

@@ -132,3 +132,45 @@ def test_history_dialog_restores_a_version(window, clock, qapp):
     assert ("play", -1, False) in controller.audio.calls
     click(dialog.take_buttons[first])
     assert controller.pad(1).sample == first
+
+
+def test_waiting_pad_pulses_without_text(window, clock):
+    controller = window.controller
+    click(window.grid.pads[0])
+    clock.advance(1)
+    click(window.grid.pads[0])  # sets the loop length
+    audio = controller.audio
+    audio.wait = 0.4
+    audio.boundary_in = 0.25
+    click(window.grid.pads[1])  # waits for the next loop start
+    window.refresh()
+    pad = window.grid.pads[1]
+    assert pad.color == "red" and pad.waiting == 0.75
+    assert pad.remaining is None and pad.overlay is None  # no countdown number yet
+    assert window.grid.pads[0].waiting is None
+    pad.grab()  # paints without errors
+
+    audio.wait = 0.0  # loop start reached: now it really records
+    window.refresh()
+    assert pad.waiting is None and pad.remaining is not None
+
+
+def test_new_session_runs_a_wave_across_the_pads(window, clock):
+    controller = window.controller
+    click(window.grid.pads[0])
+    clock.advance(1)
+    click(window.grid.pads[0])
+    controller.delete_all()
+    window.refresh()
+    assert window.grid.pads[0].sparkle == 0.5  # 0 s after the start, top left
+    clock.advance(0.15)
+    window.refresh()
+    assert window.grid.pads[0].sparkle == 1.0 and window.grid.pads[11].sparkle == 0.0
+    window.grid.pads[0].grab()
+    clock.advance(0.75)
+    window.refresh()
+    assert window.grid.pads[11].sparkle == 1.0  # bottom right, last
+    clock.advance(1)
+    controller.tick()
+    window.refresh()
+    assert all(p.sparkle == 0.0 for p in window.grid.pads)

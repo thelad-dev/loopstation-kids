@@ -23,6 +23,10 @@ class Settings:
     sound_effects: bool = True
     fullscreen: bool = False
     launchpad: bool = True
+    # Cut recordings to the length of the first loop and keep loops in time.
+    loop_sync: bool = True
+    # Microphone plus speaker delay in ms; None ("auto") = what PortAudio reports.
+    latency_ms: float | None = None
     # Relative paths are resolved against the current working directory.
     data_dir: Path = Path(".")
 
@@ -87,9 +91,16 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
         )
     if "sample_rate" in raw:
         values["sample_rate"] = _check_int(source, "sample_rate", raw["sample_rate"], 8000, 192000)
-    for key in ("sound_effects", "fullscreen", "launchpad"):
+    for key in ("sound_effects", "fullscreen", "launchpad", "loop_sync"):
         if key in raw:
             values[key] = _check_bool(source, key, raw[key])
+    if "latency_ms" in raw and raw["latency_ms"] != "auto":
+        if isinstance(raw["latency_ms"], str):
+            raise ConfigError(
+                f"{source}: Schlüssel 'latency_ms' muss \"auto\" oder eine Zahl von 0 bis 1000 sein, "
+                f"ist aber {raw['latency_ms']!r}"
+            )
+        values["latency_ms"] = _check_float(source, "latency_ms", raw["latency_ms"], 0, 1000)
     if "data_dir" in raw:
         values["data_dir"] = Path(_check_str(source, "data_dir", raw["data_dir"]))
     return Settings(**values)

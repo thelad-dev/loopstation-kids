@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-# The ten event types. Nothing else is ever written to the log.
+# The event types. Nothing else is ever written to the log.
 RECORD_START = "record_start"
 RECORD_STOP = "record_stop"
 PLAY = "play"
@@ -24,6 +24,12 @@ DELETE_ALL = "delete_all"
 UNDO = "undo"
 RESTORE_PAD = "restore_pad"
 SNAPSHOT = "snapshot"
+# Loop grid: ``master_set {data: {frames, rate}}`` records the loop length
+# that the first sound of a session defines; ``session_start`` marks that the
+# last pad was emptied, so the next sound starts a new session with a new
+# loop length. Both were added later; logs without them read as before.
+MASTER_SET = "master_set"
+SESSION_START = "session_start"
 
 EVENT_TYPES = frozenset(
     {
@@ -37,6 +43,8 @@ EVENT_TYPES = frozenset(
         UNDO,
         RESTORE_PAD,
         SNAPSHOT,
+        MASTER_SET,
+        SESSION_START,
     }
 )
 

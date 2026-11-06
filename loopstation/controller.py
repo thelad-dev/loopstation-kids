@@ -20,6 +20,7 @@ from loopstation import events as ev
 from loopstation.audio.base import PREVIEW_VOICE, AudioBackend
 from loopstation.audio.effects import start_beep, stop_beep
 from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, save_wav
+from loopstation.audio.sync import fit_to_grid, grace_frames, max_grid_frames
 from loopstation.config import Settings
 from loopstation.state import PadState
 from loopstation.store import EventStore
@@ -30,6 +31,8 @@ log = logging.getLogger(__name__)
 MIN_RECORD_SECONDS = 0.3
 # How long a short hint stays in the status line.
 NOTICE_SECONDS = 3.0
+# How long the pads show that a new session has begun.
+SESSION_SHOW_SECONDS = 1.6
 
 WHITE, YELLOW, GREEN, RED = "white", "yellow", "green", "red"
 
@@ -47,6 +50,8 @@ class _Recording:
     pad: int
     stamp: int
     started: float
+    # Cut to the loop grid when it stops (the session already has a loop length).
+    synced: bool = False
 
 
 @dataclass(frozen=True)
@@ -71,6 +76,10 @@ class Controller:
         self.mode = Mode.PLAY
         self._recording: _Recording | None = None
         self._cache: dict[str, np.ndarray] = {}
+        # Samples fitted to a grid for loop playback, keyed by (sample, grid).
+        self._fitted: dict[tuple[str, int], np.ndarray] = {}
+        self._grid_sent: int | None = None
+        self._session_started: float | None = None
         self._notice: tuple[str, float] | None = None
         self._listeners: list[Callable[[], None]] = []
         self._history_listeners: list[Callable[[int], None]] = []
@@ -87,6 +96,7 @@ class Controller:
         self._history_listeners.append(callback)
 
     def _changed(self) -> None:
+        self._apply_grid()
         for callback in list(self._listeners):
             callback()
 
@@ -107,14 +117,90 @@ class Controller:
         """Seconds left until the automatic stop, or None if not recording."""
         if self._recording is None:
             return None
+        if self._recording.synced and self._grid() is not None:
+            # On the grid the recording counts from the loop start on and
+            # ends after a whole number of loops.
+            return max(0.0, self.recording_limit() - self.audio.recording_seconds())
         elapsed = self._clock() - self._recording.started
         return max(0.0, self.settings.max_record_seconds - elapsed)
+
+    def recording_limit(self) -> float:
+        """Longest possible recording in seconds (a whole number of loops on the grid)."""
+        grid = self._grid() if self._recording is not None and self._recording.synced else None
+        if grid is None:
+            return self.settings.max_record_seconds
+        rate = self.audio.sample_rate
+        return max_grid_frames(grid, int(self.settings.max_record_seconds * rate)) / rate
+
+    def recording_waits(self) -> bool:
+        """True while a recording waits for the next loop start."""
+        return self._recording is not None and self.audio.recording_wait() > 0
+
+    def waiting_pads(self) -> set[int]:
+        """Pads that wait for the next loop start (to record, to start or to stop a loop)."""
+        pads = set(self.audio.pending_pads())
+        if self.recording_waits():
+            pads.add(self._recording.pad)
+        return {p for p in pads if 0 <= p < self.pad_count}
+
+    def loop_progress(self) -> float | None:
+        """How far the running loops are towards their next start (0..1), None without a grid."""
+        grid = self._grid()
+        wait = self.audio.next_boundary_in()
+        if grid is None or wait is None:
+            return None
+        loop_seconds = grid / self.audio.sample_rate
+        return min(1.0, max(0.0, 1.0 - wait / loop_seconds))
 
     def notice(self) -> str | None:
         """A short hint for the status line, or None."""
         if self._notice and self._clock() < self._notice[1]:
             return self._notice[0]
         return None
+
+    # ------------------------------------------------------------- loop grid
+
+    def _grid(self) -> int | None:
+        """Loop length in frames at the current sample rate, None while recordings are free."""
+        master = self.store.state.master
+        if not self.settings.loop_sync or master is None:
+            return None
+        rate = self.audio.sample_rate
+        if master["rate"] == rate:
+            return master["frames"]
+        return max(1, round(master["frames"] * rate / master["rate"]))
+
+    def _apply_grid(self) -> int | None:
+        """Hand the current grid to the audio engine (only when it changed)."""
+        grid = self._grid()
+        if grid != self._grid_sent:
+            self.audio.set_grid(grid)
+            self._grid_sent = grid
+        return grid
+
+    def _set_master_from(self, pad: int) -> None:
+        """The first sound of a session sets the loop length (``master_set``)."""
+        state = self.store.state
+        sample = self.pad(pad).sample
+        if not self.settings.loop_sync or state.master is not None or sample is None:
+            return
+        data = self._load(sample)
+        if data is None or len(data) == 0:
+            return
+        self.store.append(ev.MASTER_SET, None, {"frames": len(data), "rate": self.audio.sample_rate})
+
+    def _content_changed(self, had_content: bool) -> None:
+        """Log a new session once the last pad has been emptied."""
+        if had_content and not self.store.state.has_content():
+            self.store.append(ev.SESSION_START)
+            self._session_started = self._clock()
+
+    def session_shown(self) -> float | None:
+        """Seconds since a new session began while that is still shown, else None."""
+        if self._session_started is None:
+            return None
+        elapsed = self._clock() - self._session_started
+        return elapsed if 0 <= elapsed < SESSION_SHOW_SECONDS else None
 
     def _set_notice(self, text: str) -> None:
         self._notice = (text, self._clock() + NOTICE_SECONDS)
@@ -179,7 +265,7 @@ class Controller:
             if state.sample is None:
                 self._start_recording(pad)
             elif pad in self.audio.playing_pads() or state.looping:
-                self._stop_pad(pad)
+                self._stop_pad(pad, at_boundary=True)
             else:
                 data = self._load(state.sample)
                 if data is not None:
@@ -191,9 +277,9 @@ class Controller:
             if state.sample is None:
                 self._start_recording(pad)
             elif state.looping:
-                self._stop_pad(pad)
+                self._stop_pad(pad, at_boundary=True)
             else:
-                data = self._load(state.sample)
+                data = self._loop_data(state.sample)
                 if data is not None:
                     self.store.append(ev.LOOP_ON, pad)
                     self.audio.play(pad, data, loop=True)
@@ -201,6 +287,7 @@ class Controller:
             self.audio.stop(pad)
             if state.sample is not None:
                 self.store.append(ev.DELETE_PAD, pad)
+                self._content_changed(True)
             self.mode = Mode.PLAY
         elif self.mode == Mode.HISTORY:
             self.mode = Mode.PLAY
@@ -211,10 +298,11 @@ class Controller:
                 self._set_notice("Hier gibt es noch keine Aufnahmen")
         self._changed()
 
-    def _stop_pad(self, pad: int) -> None:
+    def _stop_pad(self, pad: int, at_boundary: bool = False) -> None:
+        """Stop a pad; ``at_boundary`` lets a loop on the grid finish up to the next loop start."""
         if self.pad(pad).looping:
             self.store.append(ev.LOOP_OFF, pad)
-        self.audio.stop(pad)
+        self.audio.stop(pad, at_boundary=at_boundary)
 
     # ------------------------------------------------------------ recording
 
@@ -227,13 +315,16 @@ class Controller:
         # Never reuse a file name, even if the clock jumped backwards.
         while (self.samples_dir / sample_filename(pad, stamp)).exists():
             stamp += 1
+        # Once the session has a loop length every recording is cut to it,
+        # even a new take of the first pad; the first one is free and sets it.
+        synced = self._apply_grid() is not None
         if not self.audio.start_recording():
             self._set_notice("Mikrofon lässt sich nicht öffnen")
             return
         if self.settings.sound_effects:
             self.audio.play_effect(start_beep(self.audio.sample_rate))
         self.store.append(ev.RECORD_START, pad, {"stamp": stamp})
-        self._recording = _Recording(pad, stamp, self._clock())
+        self._recording = _Recording(pad, stamp, self._clock(), synced)
 
     def _stop_recording(self) -> bool:
         """Stop the running recording; return True if a sample was kept."""
@@ -242,24 +333,34 @@ class Controller:
             return False
         self._recording = None
         data = self.audio.stop_recording()
+        rate = self.audio.sample_rate
         if self.settings.sound_effects:
-            self.audio.play_effect(stop_beep(self.audio.sample_rate))
-        duration = 0.0 if data is None else len(data) / self.audio.sample_rate
+            self.audio.play_effect(stop_beep(rate))
+        duration = 0.0 if data is None else len(data) / rate
         sample: str | None = None
-        if duration >= MIN_RECORD_SECONDS:
+        info: dict[str, object] = {}
+        if data is not None and duration >= MIN_RECORD_SECONDS:
+            grid = self._grid() if recording.synced else None
+            if grid is not None:
+                limit = int(self.settings.max_record_seconds * rate)
+                data = fit_to_grid(data, grid, grace_frames(grid, rate), limit)
+                duration = len(data) / rate
             name = sample_filename(recording.pad, recording.stamp)
             try:
-                save_wav(self.samples_dir / name, data, self.audio.sample_rate)
+                save_wav(self.samples_dir / name, data, rate)
                 self._cache[name] = np.asarray(data, dtype=np.float32)
                 sample = name
+                info["frames"] = len(data)
             except OSError as exc:
                 log.error("saving %s failed: %s", name, exc)
                 self._set_notice("Aufnahme konnte nicht gespeichert werden")
         else:
             self._set_notice("Zu kurz - nochmal!")
         self.store.append(
-            ev.RECORD_STOP, recording.pad, {"sample": sample, "duration": round(duration, 3)}
+            ev.RECORD_STOP, recording.pad, {"sample": sample, "duration": round(duration, 3), **info}
         )
+        if sample is not None:
+            self._set_master_from(recording.pad)
         return sample is not None
 
     def _load(self, sample: str) -> np.ndarray | None:
@@ -272,6 +373,21 @@ class Controller:
                 self._set_notice("Aufnahme fehlt")
                 return None
         return self._cache[sample]
+
+    def _loop_data(self, sample: str) -> np.ndarray | None:
+        """Sample data for loop playback, fitted to the grid if there is one.
+
+        Recordings made on the grid already fit; older versions (or a changed
+        sample rate) are padded or cut here, the file itself stays untouched.
+        """
+        data = self._load(sample)
+        grid = self._apply_grid()
+        if data is None or grid is None:
+            return data
+        key = (sample, grid)
+        if key not in self._fitted:
+            self._fitted[key] = fit_to_grid(data, grid, grace_frames(grid, self.audio.sample_rate))
+        return self._fitted[key]
 
     # ------------------------------------------------------------- buttons
 
@@ -288,6 +404,10 @@ class Controller:
         if playing != self._last_playing:
             self._last_playing = playing
             changed = True
+        if self.audio.pending_pads() or self._session_started is not None:
+            changed = True  # waiting pads count down; the new-session wave moves
+            if self.session_shown() is None:
+                self._session_started = None
         if changed:
             self._changed()
 
@@ -307,7 +427,9 @@ class Controller:
         for pad_id, previous in top["pads"].items():
             if self.pad(pad_id).sample != previous:
                 self.audio.stop(pad_id)
+        had_content = self.store.state.has_content()
         self.store.append(ev.UNDO, None, {"target": top["seq"]})
+        self._content_changed(had_content)
         self._changed()
 
     def restore(self, pad: int, sample: str) -> None:
@@ -316,6 +438,8 @@ class Controller:
             return
         self._stop_pad(pad)
         self.store.append(ev.RESTORE_PAD, pad, {"sample": sample})
+        # Brought back into an empty session: this sound sets the loop length again.
+        self._set_master_from(pad)
         self._changed()
 
     def preview(self, sample: str) -> None:
@@ -332,7 +456,9 @@ class Controller:
         if self._recording is not None:
             self._stop_recording()
         self.audio.stop_all()
+        had_content = self.store.state.has_content()
         self.store.append(ev.DELETE_ALL)
+        self._content_changed(had_content)
         self.mode = Mode.PLAY
         self._changed()
 
@@ -354,6 +480,7 @@ class Controller:
     def startup(self) -> None:
         """Nothing plays after a start: switch off loops left by a crash."""
         self._loops_off()
+        self._apply_grid()
 
     def shutdown(self) -> None:
         """Stop recording and loops, then release audio and the store."""

@@ -49,7 +49,8 @@ def test_record_by_second_press_writes_wav(tmp_path, clock):
     path = tmp_path / "samples" / name
     data, rate = soundfile.read(str(path))
     assert rate == 8000 and abs(len(data) / rate - 1.5) < 0.01
-    assert event_types(controller)[-2:] == ["record_start", "record_stop"]
+    # The first sound of a session also fixes the loop length.
+    assert event_types(controller)[-3:] == ["record_start", "record_stop", "master_set"]
     assert len(audio.effects) == 2  # start and stop beep
     assert controller.pad_colors()[0] == "yellow"
 

@@ -21,6 +21,18 @@ fullscreen = false
 # Novation Launchpad automatisch suchen und benutzen.
 launchpad = true
 
+# Taktgenauer Schnitt: Die erste Aufnahme bestimmt die Loop-Länge. Jede weitere
+# Aufnahme wird auf genau diese Länge (oder ein Vielfaches davon) geschnitten,
+# und Loops starten und stoppen nur am Loop-Anfang, damit alles im Takt bleibt.
+# false = jede Aufnahme behält ihre eigene Länge, Loops starten sofort.
+loop_sync = true
+
+# Verzögerung zwischen Lautsprecher und Mikrofon in Millisekunden (0 bis 1000),
+# damit neue Loops genau auf den gehörten liegen. "auto" nimmt den Wert, den
+# der Audiotreiber meldet. Klingen neue Loops etwas zu spät, die Zahl erhöhen;
+# klingen sie zu früh, verkleinern.
+latency_ms = "auto"
+
 # Ordner für die Daten (relativ zum Startordner):
 # Aufnahmen in <data_dir>/samples/, Ereignis-Protokoll in <data_dir>/data/.
 data_dir = "."

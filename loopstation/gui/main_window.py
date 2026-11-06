@@ -39,6 +39,7 @@ from loopstation.gui.widgets import (
 from loopstation.midi.launchpad import LaunchpadController
 
 TICK_MS = 30
+SESSION_WAVE_WIDTH = 0.3  # seconds a pad stays lit while the new-session wave passes
 PAD_GAP = 8  # visible gap is larger: each pad keeps a margin for its glow
 
 # (mode, icon, word, accent colour)
@@ -258,18 +259,34 @@ class MainWindow(QMainWindow):
             return "history"
         return None
 
+    def _session_wave(self, pad: int, elapsed: float) -> float:
+        """A new session began: a sky-blue wave runs once across the pads, top left first."""
+        rows, cols = self.grid.rows, self.grid.cols
+        row, col = divmod(pad, cols)
+        spread = max(1, rows + cols - 2)
+        delay = 0.15 + 0.75 * (row + col) / spread
+        return max(0.0, 1.0 - abs(elapsed - delay) / SESSION_WAVE_WIDTH)
+
     def refresh(self) -> None:
         """Bring every widget (and the Launchpad LEDs) in line with the controller."""
         controller = self.controller
         colors = controller.pad_colors()
         remaining = controller.recording_remaining()
-        max_seconds = controller.settings.max_record_seconds
+        limit = controller.recording_limit()
+        waiting = controller.waiting_pads()
+        progress = controller.loop_progress() if waiting else None
+        session = controller.session_shown()
         for pad in self.grid.pads:
             color = colors.get(pad.index, "white")
-            if pad.index == controller.recording_pad and remaining is not None:
-                pad.set_look(color, None, remaining, remaining / max_seconds)
+            sparkle = 0.0 if session is None else self._session_wave(pad.index, session)
+            if pad.index in waiting:
+                # Waits for the next loop start: pulsing frame, filling bar, no text.
+                pad.set_look(color, None, None, 0.0, progress if progress is not None else 0.0, sparkle)
+            elif pad.index == controller.recording_pad and remaining is not None:
+                pad.set_look(color, None, remaining, min(1.0, remaining / limit), None, sparkle)
             else:
-                pad.set_look(color, self._overlay(controller.mode, color, pad.index), None, 0.0)
+                pad.set_look(color, self._overlay(controller.mode, color, pad.index), None, 0.0,
+                             None, sparkle)
 
         for mode, button in self.mode_buttons.items():
             button.setChecked(mode == controller.mode)

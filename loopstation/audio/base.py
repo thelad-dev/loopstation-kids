@@ -33,12 +33,37 @@ class AudioBackend(Protocol):
         """Length of the current recording in seconds."""
         ...
 
-    def play(self, pad: int, data: np.ndarray, loop: bool) -> None:
-        """Play ``data`` on ``pad`` once or as a loop."""
+    def recording_wait(self) -> float:
+        """Seconds until a recording that waits for the next loop start begins (0 if not waiting)."""
         ...
 
-    def stop(self, pad: int) -> None:
-        """Stop the voice of ``pad`` (no-op if silent)."""
+    def set_grid(self, frames: int | None) -> None:
+        """Loop length in frames that loops and recordings snap to (None = free, as without sync).
+
+        With a grid, a loop starts on the next loop start of the loops that
+        are already playing (at once if none is), and a recording started
+        while loops play begins exactly on the next loop start.
+        """
+        ...
+
+    def next_boundary_in(self) -> float | None:
+        """Seconds until the next loop start, or None while no loop runs on the grid."""
+        ...
+
+    def pending_pads(self) -> set[int]:
+        """Pads whose loop waits for the next loop start to begin or to end."""
+        ...
+
+    def play(self, pad: int, data: np.ndarray, loop: bool) -> None:
+        """Play ``data`` on ``pad`` once (at once) or as a loop (on the grid, if one is set)."""
+        ...
+
+    def stop(self, pad: int, at_boundary: bool = False) -> None:
+        """Stop the voice of ``pad`` (no-op if silent).
+
+        ``at_boundary``: a loop on the grid keeps playing up to the next loop
+        start; everything else stops at once.
+        """
         ...
 
     def stop_all(self) -> None:
