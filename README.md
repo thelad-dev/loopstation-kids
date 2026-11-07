@@ -2,6 +2,10 @@
 
 Kindgerechte Loopstation im Novation-Launchpad-Stil: 12 große Pads (4 × 3), Geräusche mit dem Mikrofon aufnehmen, abspielen, als Loop laufen lassen, löschen und alles wieder zurücknehmen. Läuft komplett lokal, ohne Konto und ohne Internet.
 
+## Herunterladen
+
+Fertige Versionen stehen unter [Releases](https://github.com/thelad-dev/loopstation-kids/releases): für Windows der Installer `Loopstation-Setup-<Version>.exe` (siehe [Windows](#windows)), für Linux das Quellcode-Archiv, darin `scripts/install-linux.sh` (siehe [Linux-Installation](#linux-installation)).
+
 ## Start
 
 Voraussetzung: Python 3.11 oder neuer. Unter Linux braucht die Tonausgabe zusätzlich PortAudio (`sudo apt install libportaudio2`).
