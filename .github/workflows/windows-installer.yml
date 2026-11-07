@@ -1,0 +1,149 @@
+name: windows-installer
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+  # Pull requests that touch the build also build and try the installer, so it is proven before merge.
+  pull_request:
+    paths:
+      - ".github/workflows/windows-installer.yml"
+      - "packaging/windows/**"
+      - "loopstation/installed.py"
+      - "requirements.txt"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            packaging/windows/requirements-build.txt
+            packaging/windows/constraints.txt
+      - run: pip install -c packaging/windows/constraints.txt -r requirements-dev.txt -r packaging/windows/requirements-build.txt
+      - run: ruff check .
+      - run: python -m pytest -q
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+      - name: Version
+        id: version
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $version = python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
+          if (-not $version) { throw "no version in pyproject.toml" }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME does not match version $version in pyproject.toml"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Bundle with PyInstaller
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python packaging/windows/make_icon.py build/loopstation.ico
+          pyinstaller --noconfirm packaging/windows/loopstation.spec
+
+      - name: Check bundle contents
+        run: |
+          $internal = "dist/Loopstation/_internal"
+          foreach ($pattern in @("libportaudio*.dll", "libsndfile*.dll", "_rtmidi*.pyd", "qwindows.dll", "settings.toml")) {
+            if (-not (Get-ChildItem $internal -Recurse -Filter $pattern)) { throw "missing in bundle: $pattern" }
+          }
+
+      - name: Smoke test (start the exe with an empty profile)
+        run: |
+          $profileDir = Join-Path $env:RUNNER_TEMP "smoke"
+          New-Item -ItemType Directory $profileDir | Out-Null
+          $env:LOCALAPPDATA = $profileDir
+          $proc = Start-Process -FilePath "dist/Loopstation/Loopstation.exe" -PassThru
+          $null = $proc.Handle  # keeps the handle, so ExitCode is readable later
+          Start-Sleep -Seconds 20
+          $data = Join-Path $profileDir "Loopstation"
+          $log = Join-Path $data "loopstation.log"
+          if (Test-Path $log) { Get-Content $log }
+          if ($proc.HasExited) { throw "Loopstation.exe exited early with code $($proc.ExitCode)" }
+          Stop-Process -Id $proc.Id -Force
+          foreach ($file in @("settings.toml", "data/events.jsonl")) {
+            if (-not (Test-Path (Join-Path $data $file))) { throw "not created in data folder: $file" }
+          }
+          if ((Test-Path $log) -and (Select-String -Path $log -Pattern "Traceback|No module named|PortAudio library not found|MIDI not available" -Quiet)) {
+            throw "bundle problem, see log above"
+          }
+
+      - name: Build installer with Inno Setup
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $pattern = "${env:ProgramFiles(x86)}\Inno Setup *\ISCC.exe"
+          if (-not (Test-Path $pattern)) { choco install innosetup --no-progress -y }
+          $iscc = (Get-Item $pattern | Select-Object -First 1).FullName
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" packaging/windows/loopstation.iss
+
+      - name: Try the installer (install, update, uninstall; recordings stay)
+        run: |
+          $setup = (Get-Item dist/Loopstation-Setup-*.exe).FullName
+          $app = Join-Path $env:LOCALAPPDATA "Programs\Loopstation"
+          $exe = Join-Path $app "Loopstation.exe"
+          $link = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Loopstation.lnk"
+          $recording = Join-Path $env:LOCALAPPDATA "Loopstation\samples\pad_0_test.wav"
+          function Invoke-Quiet($file, [string[]]$extra = @()) {
+            $p = Start-Process $file -ArgumentList (@("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") + $extra) -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "$file exited with $($p.ExitCode)" }
+          }
+
+          Invoke-Quiet $setup "/CURRENTUSER"
+          foreach ($path in @($exe, $link)) { if (-not (Test-Path $path)) { throw "not installed: $path" } }
+
+          New-Item -ItemType File -Force $recording | Out-Null
+          Invoke-Quiet $setup "/CURRENTUSER"  # update over the existing installation
+          foreach ($path in @($exe, $recording)) { if (-not (Test-Path $path)) { throw "missing after update: $path" } }
+
+          Invoke-Quiet (Join-Path $app "unins000.exe")
+          # The uninstaller hands over to a copy of itself and returns early.
+          for ($i = 0; $i -lt 60 -and (Test-Path $exe); $i++) { Start-Sleep -Seconds 1 }
+          foreach ($path in @($exe, $link)) { if (Test-Path $path) { throw "left after uninstall: $path" } }
+          if (-not (Test-Path $recording)) { throw "uninstall removed the recordings" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Loopstation-Setup-${{ steps.version.outputs.version }}
+          path: dist/Loopstation-Setup-*.exe
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Loopstation-Setup-${{ needs.build.outputs.version }}
+      - name: Draft release for the tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Loopstation-Setup-*.exe --clobber
+          else
+            gh release create "$TAG" Loopstation-Setup-*.exe --draft --title "Loopstation $TAG" \
+              --notes "Windows-Installer, nicht signiert (SmartScreen-Hinweis siehe README)."
+          fi

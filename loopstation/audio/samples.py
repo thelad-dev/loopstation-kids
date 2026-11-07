@@ -29,7 +29,7 @@ def save_wav(path: Path, data: np.ndarray, sample_rate: int) -> None:
     tmp = path.with_name(path.name + ".tmp")
     soundfile.write(str(tmp), np.asarray(data, dtype=np.float32), sample_rate,
                     subtype="PCM_16", format="WAV")
-    with open(tmp, "rb") as handle:
+    with open(tmp, "r+b") as handle:  # fsync needs a writable fd on Windows
         os.fsync(handle.fileno())
     os.replace(tmp, path)
 

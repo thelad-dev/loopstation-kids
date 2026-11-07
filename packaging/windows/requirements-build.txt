@@ -1,0 +1,3 @@
+# Build tools for the Windows bundle (on top of requirements.txt).
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.9
