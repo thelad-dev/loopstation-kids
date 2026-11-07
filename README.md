@@ -38,6 +38,33 @@ pyinstaller --noconfirm packaging/windows/loopstation.spec
 
 Das Ergebnis liegt in `dist\Loopstation-Setup-1.0.0.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
 
+## Linux-Installation
+
+`scripts/install-linux.sh` installiert die Loopstation aus diesem Ordner für den aktuellen Benutzer, samt Startbefehl und Menüeintrag:
+
+```bash
+scripts/install-linux.sh             # fragt vor dem Installieren der Systempakete
+scripts/install-linux.sh --dry-run   # zeigt nur, was passieren würde
+loopstation-kids                     # starten (oder im Menü: Loopstation)
+```
+
+Das Skript erkennt die Distribution über `/etc/os-release` und installiert die fehlenden Systempakete mit dem passenden Paketmanager: Debian, Ubuntu, Linux Mint und Verwandte (apt), Fedora, RHEL, Rocky und AlmaLinux (dnf, unter RHEL-Abkömmlingen mit EPEL), Arch, Manjaro und EndeavourOS (pacman), openSUSE (zypper) und Alpine (apk). Dazu gehören Python 3.11 oder neuer mit venv, PortAudio, libsndfile, ALSA, die Bibliotheken für die Qt-Oberfläche (libGL, libxkbcommon, xcb-util-cursor und Verwandte) sowie Compiler und Header, falls pip ein Paket aus dem Quelltext bauen muss. Root-Rechte (sudo oder doas) braucht es nur dafür, und nur nach Rückfrage oder mit `--yes`. Fehlen Pakete und gibt es keine Root-Rechte, bricht das Skript ab und nennt die Pakete samt Befehl. Unter Arch und Verwandten ist ein vollständiges Systemupdate (`pacman -Syu`) nötig, wenn die Paketdatenbanken noch fehlen; darauf weist das Skript vor der Rückfrage hin.
+
+Was wohin kommt:
+
+- `~/.local/share/loopstation-kids/`: das Programm in einer eigenen Python-Umgebung (`venv`), dazu `settings.toml`, die Aufnahmen (`samples/`) und das Protokoll (`data/`). Die Loopstation startet in diesem Ordner. Eine vorhandene `settings.toml` wird bei einer neuen Installation nicht überschrieben.
+- `~/.local/bin/loopstation-kids`: der Startbefehl. Liegt `~/.local/bin` nicht im `PATH`, sagt das Skript Bescheid.
+- `~/.local/share/applications/` und `~/.local/share/icons/`: Menüeintrag und Icon.
+
+Weitere Optionen:
+
+- `--yes`: Systempakete ohne Rückfrage installieren.
+- `--uninstall`: Programm, Startbefehl, Menüeintrag und Icon entfernen; Aufnahmen und Einstellungen bleiben. Mit `--purge` werden auch diese gelöscht (nach Rückfrage). Systempakete bleiben installiert.
+- `--no-system-packages`: Systempakete nicht anfassen, etwa auf einer Distribution, die das Skript nicht kennt.
+- `--python PFAD`: einen bestimmten Python-Interpreter verwenden.
+
+Erneut aufrufen aktualisiert die Installation auf den Stand dieses Ordners; die alte Installation bleibt bis zum erfolgreichen Abschluss bestehen. Unter Alpine kommt PySide6 aus dem Paket `py3-pyside6`, und das Skript braucht `bash` (`sudo apk add bash`). Ein Audio-Server (PipeWire oder PulseAudio) gehört zum Desktop und wird nicht mitinstalliert.
+
 ## Bedienung
 
 | Pad-Farbe | Bedeutung |

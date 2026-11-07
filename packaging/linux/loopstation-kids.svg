@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect x="4" y="4" width="120" height="120" rx="22" fill="#0E0E10"/>
+  <g transform="translate(14 26)">
+    <rect x="0" y="0" width="22" height="22" rx="5" fill="#F2F2F2"/>
+    <rect x="26" y="0" width="22" height="22" rx="5" fill="#FFD60A"/>
+    <rect x="52" y="0" width="22" height="22" rx="5" fill="#32D74B"/>
+    <rect x="78" y="0" width="22" height="22" rx="5" fill="#F2F2F2"/>
+    <rect x="0" y="26" width="22" height="22" rx="5" fill="#FFD60A"/>
+    <rect x="26" y="26" width="22" height="22" rx="5" fill="#FF3B30"/>
+    <rect x="52" y="26" width="22" height="22" rx="5" fill="#F2F2F2"/>
+    <rect x="78" y="26" width="22" height="22" rx="5" fill="#FFD60A"/>
+    <rect x="0" y="52" width="22" height="22" rx="5" fill="#32D74B"/>
+    <rect x="26" y="52" width="22" height="22" rx="5" fill="#F2F2F2"/>
+    <rect x="52" y="52" width="22" height="22" rx="5" fill="#FFD60A"/>
+    <rect x="78" y="52" width="22" height="22" rx="5" fill="#32D74B"/>
+  </g>
+</svg>
