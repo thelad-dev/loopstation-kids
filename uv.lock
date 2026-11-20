@@ -150,7 +150,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "python-rtmidi", specifier = ">=1.5" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
-    { name = "sounddevice", specifier = ">=0.4.6" },
+    { name = "sounddevice", specifier = ">=0.5.1" },
     { name = "soundfile", specifier = ">=0.12" },
 ]
 provides-extras = ["dev"]

@@ -6,7 +6,7 @@ import math
 import time
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPaintEvent, QPen
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPaintEvent, QPen, QPolygonF
 from PySide6.QtWidgets import QAbstractButton, QWidget
 
 from loopstation.gui.icons import draw_icon
@@ -37,6 +37,8 @@ class PadButton(QAbstractButton):
         self.fraction = 0.0  # share of the recording time that is left
         self.waiting: float | None = None  # progress towards the next loop start
         self.sparkle = 0.0  # new-session wave
+        self.clip = False  # the microphone is too loud right now (recording pad)
+        self.level = 0  # coarse input level 0..3 while recording
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setAccessibleName(f"Pad {index + 1}")
@@ -55,17 +57,19 @@ class PadButton(QAbstractButton):
         fraction: float,
         waiting: float | None = None,
         sparkle: float = 0.0,
+        clip: bool = False,
+        level: int = 0,
     ) -> None:
         # The countdown only needs whole seconds and a bar with ~200 steps.
         shown_remaining = None if remaining is None else max(1, math.ceil(remaining))
         sparkle = round(sparkle, 2)
-        new = (color, overlay, shown_remaining, round(fraction, 3), waiting, sparkle)
+        new = (color, overlay, shown_remaining, round(fraction, 3), waiting, sparkle, clip, level)
         old = (self.color, self.overlay, self.remaining, round(self.fraction, 3), self.waiting,
-               self.sparkle)
+               self.sparkle, self.clip, self.level)
         if new == old and waiting is None:
             return
         self.color, self.overlay, self.remaining, self.fraction = color, overlay, shown_remaining, fraction
-        self.waiting, self.sparkle = waiting, sparkle
+        self.waiting, self.sparkle, self.clip, self.level = waiting, sparkle, clip, level
         self.update()
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
@@ -132,6 +136,7 @@ class PadButton(QAbstractButton):
             done = QRectF(track.left(), track.top(), max(bar_h, track.width() * self.fraction), bar_h)
             painter.setBrush(QColor("#FFFFFF"))
             painter.drawRoundedRect(done, bar_h / 2, bar_h / 2)
+            self._paint_level(painter, rect, inset)
         elif self.waiting is None and self.overlay:
             icon = rect.width() * 0.36
             center = QPointF(rect.center())
@@ -144,7 +149,52 @@ class PadButton(QAbstractButton):
         if self.sparkle > 0:
             # New session: the pad lights up sky blue with a soft glow.
             self._paint_sparkle(painter, rect, radius, glow)
+        if self.clip:
+            self._paint_clip(painter, rect, side)
         painter.end()
+
+    def _paint_clip(self, painter: QPainter, rect: QRectF, side: float) -> None:
+        """"zu laut": white pill with a red rim, a warning triangle and the words (shape, colour, word)."""
+        height = rect.height() * 0.20
+        width = rect.width() * 0.80
+        pill = QRectF(rect.center().x() - width / 2, rect.top() + rect.height() * 0.62, width, height)
+        red = QColor("#FF3B30")
+        painter.setPen(QPen(red, max(2.5, side * 0.022)))
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.drawRoundedRect(pill, height / 2, height / 2)
+        # Outlined triangle with an exclamation mark, then the word.
+        icon = height * 0.58
+        cx, cy = pill.left() + height * 0.62, pill.center().y()
+        pen = QPen(red, max(1.5, icon * 0.12))
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPolygon(QPolygonF([QPointF(cx, cy - icon / 2), QPointF(cx + icon / 2, cy + icon * 0.42),
+                                       QPointF(cx - icon / 2, cy + icon * 0.42)]))
+        painter.drawLine(QPointF(cx, cy - icon * 0.1), QPointF(cx, cy + icon * 0.14))
+        painter.drawPoint(QPointF(cx, cy + icon * 0.30))
+        font = QFont()
+        font.setPointSizeF(max(8.0, side * 0.085))
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(red)
+        text = QRectF(cx + icon * 0.75, pill.top(), pill.right() - cx - icon * 0.75 - height * 0.2, height)
+        painter.drawText(text, Qt.AlignmentFlag.AlignCenter, "zu laut")
+
+    def _paint_level(self, painter: QPainter, rect: QRectF, inset: float) -> None:
+        """Three rising bars (coarse input level) in the top right corner of the recording pad."""
+        bar_w = rect.width() * 0.065
+        gap = bar_w * 0.55
+        base = rect.top() + inset * 0.7 + rect.height() * 0.17
+        left = rect.right() - inset - 3 * bar_w - 2 * gap
+        painter.setPen(Qt.PenStyle.NoPen)
+        for i in range(3):
+            tall = rect.height() * (0.07 + 0.045 * i)
+            on = self.level > i
+            painter.setBrush(QColor(255, 255, 255, 255 if on else 90))
+            painter.drawRoundedRect(QRectF(left + i * (bar_w + gap), base - tall, bar_w, tall),
+                                    bar_w / 3, bar_w / 3)
 
     def _paint_sparkle(self, painter: QPainter, rect: QRectF, radius: float, glow: float) -> None:
         painter.setBrush(Qt.BrushStyle.NoBrush)

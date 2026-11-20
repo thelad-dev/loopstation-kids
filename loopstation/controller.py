@@ -18,6 +18,7 @@ import numpy as np
 
 from loopstation import events as ev
 from loopstation.audio.base import PREVIEW_VOICE, AudioBackend
+from loopstation.audio.dynamics import db_to_gain
 from loopstation.audio.effects import start_beep, stop_beep
 from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, save_wav
 from loopstation.audio.sync import fit_to_grid, grace_frames, max_grid_frames
@@ -33,6 +34,12 @@ MIN_RECORD_SECONDS = 0.3
 NOTICE_SECONDS = 3.0
 # How long the pads show that a new session has begun.
 SESSION_SHOW_SECONDS = 1.6
+# A clipped microphone block keeps the "too loud" sign on screen this long.
+CLIP_HOLD_SECONDS = 1.5
+# Peaks (linear) where the coarse three-step level display moves up a step.
+LEVEL_QUIET, LEVEL_MEDIUM, LEVEL_LOUD = 0.02, 0.25, 0.7
+# Range of the parents' ceiling in dB(FS), as in settings.toml.
+MIN_MAX_LEVEL_DB, MAX_MAX_LEVEL_DB = -30.0, 0.0
 
 WHITE, YELLOW, GREEN, RED = "white", "yellow", "green", "red"
 
@@ -84,6 +91,19 @@ class Controller:
         self._listeners: list[Callable[[], None]] = []
         self._history_listeners: list[Callable[[int], None]] = []
         self._last_playing: set[int] = set()
+        # Level chain. The controller holds the one master volume; the
+        # volume widgets only show and set this value. It never exceeds the
+        # parents' ceiling.
+        self._max_level_db = settings.max_level_db
+        self._volume = min(settings.volume, self.volume_limit)
+        self._input_gain_db = settings.input_gain_db
+        self._auto_gain = settings.auto_gain
+        self._peak_meter = settings.peak_meter
+        self._input_peak = 0.0
+        self._clips_seen = 0
+        self._clip_count = 0
+        self._clip_at: float | None = None
+        self._push_levels()
 
     # ------------------------------------------------------------ listeners
 
@@ -157,6 +177,103 @@ class Controller:
         if self._notice and self._clock() < self._notice[1]:
             return self._notice[0]
         return None
+
+    # ---------------------------------------------------------------- levels
+
+    @property
+    def volume(self) -> float:
+        """Master volume as a linear gain, 0 (silent) to ``volume_limit``."""
+        return self._volume
+
+    @property
+    def volume_limit(self) -> float:
+        """Highest volume the child can choose: the ceiling as a linear gain."""
+        return db_to_gain(self._max_level_db)
+
+    @property
+    def max_level_db(self) -> float:
+        return self._max_level_db
+
+    @property
+    def input_gain_db(self) -> float:
+        return self._input_gain_db
+
+    @property
+    def auto_gain(self) -> bool:
+        return self._auto_gain
+
+    @property
+    def peak_meter(self) -> bool:
+        return self._peak_meter
+
+    def _push_levels(self) -> None:
+        self.audio.set_ceiling_db(self._max_level_db)
+        self.audio.set_volume(self._volume)
+        self.audio.set_input_gain_db(self._input_gain_db)
+        self.audio.set_auto_gain(self._auto_gain)
+
+    def set_volume(self, volume: float) -> float:
+        """Set the master volume (clamped to 0..ceiling); returns the value that applies."""
+        volume = min(self.volume_limit, max(0.0, float(volume)))
+        if volume != self._volume:
+            self._volume = volume
+            self.audio.set_volume(volume)
+            self._changed()
+        return self._volume
+
+    def set_max_level_db(self, db: float) -> float:
+        """Set the parents' ceiling in dB(FS); the volume slides down with it, never above."""
+        db = min(MAX_MAX_LEVEL_DB, max(MIN_MAX_LEVEL_DB, float(db)))
+        if db != self._max_level_db:
+            self._max_level_db = db
+            self.audio.set_ceiling_db(db)
+            self.set_volume(self._volume)  # clamps to the new ceiling
+            self._changed()
+        return self._max_level_db
+
+    def set_input_gain_db(self, db: float) -> None:
+        self._input_gain_db = min(24.0, max(-24.0, float(db)))
+        self.audio.set_input_gain_db(self._input_gain_db)
+
+    def set_auto_gain(self, enabled: bool) -> None:
+        self._auto_gain = bool(enabled)
+        self.audio.set_auto_gain(self._auto_gain)
+
+    def set_peak_meter(self, enabled: bool) -> None:
+        self._peak_meter = bool(enabled)
+        self._changed()
+
+    def input_peak(self) -> float:
+        """Microphone peak at the last poll (linear, after the trim; 0 when not recording)."""
+        return self._input_peak
+
+    def input_level_stage(self) -> int:
+        """Coarse input level for the child while recording: 0 (silent) to 3 (very loud)."""
+        if self._recording is None:
+            return 0
+        peak = self._input_peak
+        return 3 if peak >= LEVEL_LOUD else 2 if peak >= LEVEL_MEDIUM else 1 if peak >= LEVEL_QUIET else 0
+
+    @property
+    def clip_count(self) -> int:
+        """How many microphone blocks clipped since the start (for the parents)."""
+        return self._clip_count
+
+    def input_clipping(self) -> bool:
+        """True while a recording runs and the microphone clipped a moment ago."""
+        return (
+            self._recording is not None
+            and self._clip_at is not None
+            and self._clock() - self._clip_at < CLIP_HOLD_SECONDS
+        )
+
+    def _poll_input_level(self) -> None:
+        peak, clips = self.audio.poll_input_level()
+        self._input_peak = peak
+        if clips > self._clips_seen:
+            self._clip_count += clips - self._clips_seen
+            self._clip_at = self._clock()
+        self._clips_seen = clips
 
     # ------------------------------------------------------------- loop grid
 
@@ -321,6 +438,9 @@ class Controller:
         if not self.audio.start_recording():
             self._set_notice("Mikrofon lässt sich nicht öffnen")
             return
+        self._clips_seen = self.audio.poll_input_level()[1]
+        self._clip_at = None
+        self._input_peak = 0.0
         if self.settings.sound_effects:
             self.audio.play_effect(start_beep(self.audio.sample_rate))
         self.store.append(ev.RECORD_START, pad, {"stamp": stamp})
@@ -333,6 +453,7 @@ class Controller:
             return False
         self._recording = None
         data = self.audio.stop_recording()
+        self._poll_input_level()  # count clips of the last blocks, too
         rate = self.audio.sample_rate
         if self.settings.sound_effects:
             self.audio.play_effect(stop_beep(rate))
@@ -395,6 +516,7 @@ class Controller:
         """Called regularly by the GUI (about every 30 ms)."""
         changed = False
         if self._recording is not None:
+            self._poll_input_level()
             remaining = self.recording_remaining()
             if remaining is not None and remaining <= 0:
                 self._stop_recording()

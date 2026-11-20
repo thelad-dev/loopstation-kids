@@ -78,6 +78,27 @@ class AudioBackend(Protocol):
         """Play a short sound effect on top of everything else."""
         ...
 
+    def set_volume(self, volume: float) -> None:
+        """Master volume as a linear gain from 0 (silent) to 1; the engine moves there in a ramp."""
+        ...
+
+    def set_ceiling_db(self, db: float) -> None:
+        """Peak ceiling of the output in dB(FS) (0 or below); the output never gets louder."""
+        ...
+
+    def set_input_gain_db(self, db: float) -> None:
+        """Trim of the microphone in dB, applied to what is recorded."""
+        ...
+
+    def set_auto_gain(self, enabled: bool) -> None:
+        """Slowly even out the recording level (never raises the gain while the input clips)."""
+        ...
+
+    def poll_input_level(self) -> tuple[float, int]:
+        """``(peak, clips)``: peak of the microphone since the last call (linear, after the
+        trim, can exceed 1) and how many input blocks clipped in total since the start."""
+        ...
+
     def close(self) -> None:
         """Release the audio device."""
         ...

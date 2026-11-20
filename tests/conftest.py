@@ -50,6 +50,15 @@ class FakeAudio:
         self.wait = 0.0  # what recording_wait() reports
         self.boundary_in: float | None = None  # what next_boundary_in() reports
         self.pending: set[int] = set()
+        # Level chain as the controller sets it (kept apart from ``calls``);
+        # the real maths is tested against SoundDeviceAudio.
+        self.volume = 1.0
+        self.ceiling_db = 0.0
+        self.input_gain_db = 0.0
+        self.auto_gain = False
+        self.levels: list[tuple[str, Any]] = []
+        self.input_peak = 0.0  # what poll_input_level() reports
+        self.clips = 0
 
     def start_recording(self) -> bool:
         if not self.available_input:
@@ -105,6 +114,25 @@ class FakeAudio:
 
     def play_effect(self, data: np.ndarray) -> None:
         self.effects.append(data)
+
+    def set_volume(self, volume: float) -> None:
+        self.volume = volume
+        self.levels.append(("volume", volume))
+
+    def set_ceiling_db(self, db: float) -> None:
+        self.ceiling_db = db
+        self.levels.append(("ceiling_db", db))
+
+    def set_input_gain_db(self, db: float) -> None:
+        self.input_gain_db = db
+        self.levels.append(("input_gain_db", db))
+
+    def set_auto_gain(self, enabled: bool) -> None:
+        self.auto_gain = enabled
+        self.levels.append(("auto_gain", enabled))
+
+    def poll_input_level(self) -> tuple[float, int]:
+        return self.input_peak, self.clips
 
     def close(self) -> None:
         self.closed = True
