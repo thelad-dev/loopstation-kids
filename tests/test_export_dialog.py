@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import soundfile
 from conftest import make_settings
+from PySide6.QtWidgets import QWidget
 from test_export import session
 from test_parent_area import AutoDialog
 
@@ -14,7 +15,8 @@ from loopstation.gui.export_dialog import (
     rate_text,
     unique_path,
 )
-from loopstation.gui.settings_page import ParentAction, SettingsDialog
+from loopstation.gui.parent_nav import ParentPage
+from loopstation.gui.settings_page import SettingsDialog
 
 
 def texts(widget):
@@ -153,18 +155,23 @@ def test_the_default_folder_is_below_documents(qapp):
 # ---------------------------------------------- way in from the parents' area
 
 
-def test_settings_page_shows_an_export_button_that_opens_the_page(qapp, tmp_path):
-    opened = []
-    action = ParentAction("download", "Export", lambda parent: opened.append(parent))
+def test_parents_area_has_an_export_area_that_is_built_on_the_first_visit(qapp, tmp_path):
+    built = []
+    page = ParentPage("export", "download", "Export", lambda: built.append(1) or QWidget())
     dialog = SettingsDialog(tmp_path / "settings.toml", make_settings(tmp_path), lambda s: [],
-                            None, None, [action])
-    dialog.action_buttons["Export"].click()
-    assert opened == [dialog]
+                            None, None, [page])
+    assert built == [] and "export" in dialog.nav.buttons
+    assert dialog.nav.buttons["export"].text() == "Export"
+    dialog.nav.buttons["export"].click()
+    assert built == [1] and dialog.current_key() == "export"
+    dialog.nav.buttons["levels"].click()
+    dialog.nav.buttons["export"].click()
+    assert built == [1]  # built once, then kept
 
 
-def test_settings_page_without_actions_has_no_extra_buttons(qapp, tmp_path):
+def test_parents_area_without_further_areas_has_only_the_three_settings_pages(qapp, tmp_path):
     dialog = SettingsDialog(tmp_path / "settings.toml", make_settings(tmp_path), lambda s: [])
-    assert dialog.action_buttons == {}
+    assert list(dialog.nav.buttons) == ["levels", "devices", "tempo"]
 
 
 def test_main_window_offers_the_export_only_behind_the_gate(qapp, tmp_path, clock):
@@ -188,12 +195,12 @@ def test_main_window_offers_the_export_only_behind_the_gate(qapp, tmp_path, cloc
         shown, exports = [], []
         win.gate_factory = lambda _parent: AutoDialog(QDialog.DialogCode.Accepted)
         win.settings_factory = lambda *a: shown.append(a) or AutoDialog(QDialog.DialogCode.Rejected)
-        win.export_factory = lambda c, p: exports.append((c, p)) or AutoDialog(QDialog.DialogCode.Rejected)
+        win.export_factory = lambda c, p: exports.append((c, p)) or QWidget()
         win.open_parent_area()
-        actions = shown[0][5]
-        assert [a.label for a in actions] == ["Erweitert", "Export"]
-        actions[1].open(win)
-        assert exports == [(controller, win)]
+        pages = shown[0][5]
+        assert [page.label for page in pages] == ["Verlauf & Undo", "Erweitert", "Export"]
+        pages[-1].build()
+        assert exports == [(controller, None)]
     finally:
         win.timer.stop()
         win.close()

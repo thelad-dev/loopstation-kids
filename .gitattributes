@@ -1,0 +1,2 @@
+# The frozen v1.0.0 session must stay byte-identical on every platform (no CRLF conversion).
+tests/fixtures/replay_v1/** -text

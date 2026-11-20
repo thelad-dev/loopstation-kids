@@ -125,6 +125,15 @@ class EventStore:
             self._archive_if_needed()
         return event
 
+    def active_events(self) -> dict[int, ev.Event]:
+        """The events of the active log by seq (read-only; archived events are not included)."""
+        found: dict[int, ev.Event] = {}
+        for line in self._lines:
+            event = ev.Event.from_json(line)
+            if event.type != ev.SNAPSHOT:
+                found[event.seq] = event
+        return found
+
     def close(self) -> None:
         """Close the log file. The store must not be used afterwards."""
         if self._handle is not None:

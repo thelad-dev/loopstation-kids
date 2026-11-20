@@ -21,7 +21,6 @@ from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QKeyEvent, QMouseEvent, QPainter, QPaintEvent, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QSizePolicy,
@@ -31,8 +30,9 @@ from PySide6.QtWidgets import (
 
 from loopstation.clips import ClipEvent
 from loopstation.gui.parent_gate import PARENT_ACCENT
+from loopstation.gui.parent_nav import CardGrid
 from loopstation.gui.peak_meter import PeakMeter
-from loopstation.gui.widgets import ACCENT_ORANGE, ACCENT_RED, TEXT, TEXT_DIM
+from loopstation.gui.widgets import ACCENT_ORANGE, ACCENT_RED, TEXT, TEXT_DIM, weak_slot
 
 if TYPE_CHECKING:
     from loopstation.controller import Controller
@@ -312,30 +312,32 @@ class LevelPanel(QWidget):
         self.meter = PeakMeter()
         self.clip_list = ClipList()
 
-        grid = QGridLayout(self)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(16)
-        grid.setVerticalSpacing(16)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        grid.addWidget(self._ceiling_card(), 0, 0)
-        grid.addWidget(self._input_card(), 0, 1)
-        grid.addWidget(self._automatic_card(values), 1, 0)
-        grid.addWidget(self._clips_card(), 1, 1)
+        # Two columns on a wide page, one column at 1024 px.
+        cards = CardGrid([[self._ceiling_card(), self._input_card()],
+                          [self._automatic_card(values), self._clips_card()]], gap=20, spacing=16)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(cards)
 
-        self.ceiling.valueChanged.connect(lambda v: self.edited.emit("max_level_db", v, False))
-        self.ceiling.released.connect(lambda v: self.edited.emit("max_level_db", v, True))
-        self.trim.valueChanged.connect(lambda v: self.edited.emit("input_gain_db", v, False))
-        self.trim.released.connect(lambda v: self.edited.emit("input_gain_db", v, True))
+        for slider, key in ((self.ceiling, "max_level_db"), (self.trim, "input_gain_db")):
+            slider.valueChanged.connect(weak_slot(self._emit_edited, key, False, pass_signal_args=True))
+            slider.released.connect(weak_slot(self._emit_edited, key, True, pass_signal_args=True))
         for key, switch in self.switches.items():
-            switch.toggled.connect(lambda on, key=key: self.edited.emit(key, bool(on), True))
+            switch.toggled.connect(weak_slot(self._emit_switched, key, pass_signal_args=True))
 
         for key, slider in (("max_level_db", self.ceiling), ("input_gain_db", self.trim)):
             self.editors[key] = PanelEditor(fields[key], slider, lambda slider=slider: slider.value)
         for key, switch in self.switches.items():
             self.editors[key] = PanelEditor(fields[key], switch, switch.isChecked)
-        self.editors["volume"] = PanelEditor(fields["volume"], QWidget(), lambda: self.controller.volume)
+        controller = self.controller
+        self.editors["volume"] = PanelEditor(fields["volume"], self, lambda: controller.volume)
         self.refresh()
+
+    def _emit_edited(self, key: str, final: bool, value: Any) -> None:
+        self.edited.emit(key, value, final)
+
+    def _emit_switched(self, key: str, on: Any) -> None:
+        self.edited.emit(key, bool(on), True)
 
     # ------------------------------------------------------------ the cards
 
@@ -366,24 +368,30 @@ class LevelPanel(QWidget):
         if key is not None:
             self.switches[key] = switch
         name = QLabel(title)
-        name.setStyleSheet("font-size: 16.5px; font-weight: 600;")
+        name.setWordWrap(True)
+        name.setStyleSheet("font-size: 16px; font-weight: 600;")
         head = QHBoxLayout()
         head.setSpacing(10)
-        head.addWidget(name)
-        if pill:
-            badge = QLabel(pill)
-            badge.setStyleSheet("background: #3A3A41; color: #AEAEB2; font-size: 12px; font-weight: bold; "
-                                "border-radius: 11px; padding: 0px 10px;")
-            badge.setFixedHeight(22)
-            head.addWidget(badge)
-        head.addStretch(1)
+        head.addWidget(name, 1)  # the title keeps the whole width: one line
         texts = QVBoxLayout()
         texts.setSpacing(0)
         texts.addLayout(head)
         note = QLabel(hint)
         note.setWordWrap(True)
         note.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 13px;")
-        texts.addWidget(note)
+        if pill:
+            # The badge sits behind the description, so it does not take room from the title.
+            badge = QLabel(pill)
+            badge.setStyleSheet("background: #3A3A41; color: #AEAEB2; font-size: 12px; font-weight: bold; "
+                                "border-radius: 11px; padding: 0px 10px;")
+            badge.setFixedHeight(22)
+            line = QHBoxLayout()
+            line.setSpacing(10)
+            line.addWidget(note, 1)
+            line.addWidget(badge, 0, Qt.AlignmentFlag.AlignTop)
+            texts.addLayout(line)
+        else:
+            texts.addWidget(note)
         row = QHBoxLayout()
         row.setSpacing(16)
         row.addWidget(switch, 0, Qt.AlignmentFlag.AlignTop)
@@ -408,7 +416,8 @@ class LevelPanel(QWidget):
         texts = QVBoxLayout()
         texts.setSpacing(2)
         title = QLabel(HONESTY_TITLE)
-        title.setStyleSheet("font-size: 14px; font-weight: bold;")
+        title.setWordWrap(True)
+        title.setStyleSheet("font-size: 13px; font-weight: bold;")
         body = QLabel(HONESTY_TEXT)
         body.setWordWrap(True)
         body.setStyleSheet("color: #C7C7CC; font-size: 14px;")

@@ -118,7 +118,7 @@ def _run_session(
 
     Returns the exit code, or the set the parents asked to open.
     """
-    from PySide6.QtCore import QLockFile, QTimer
+    from PySide6.QtCore import QCoreApplication, QEvent, QLockFile, QTimer
 
     from loopstation.audio import create_audio
     from loopstation.clips import ClipLog
@@ -186,7 +186,11 @@ def _run_session(
     code = app.exec()
     shutdown()
     app.aboutToQuit.disconnect(shutdown)
+    # The session's windows must be gone before the next session (or the
+    # interpreter) goes on: widgets that outlive the event loop are torn down at
+    # interpreter exit in arbitrary order, which can abort the process.
     window.timer.stop()
     window.close()
     window.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     return requested[-1] if requested else code

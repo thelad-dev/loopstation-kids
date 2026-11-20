@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from loopstation.gui.widgets import TEXT, TEXT_DIM
 
@@ -67,7 +67,10 @@ class _Tile(QFrame):
         self.label = QLabel(label)
         self.label.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 14px; font-weight: 600;")
         self.value = QLabel()
+        # The tile must not grow with its text (four tiles in a row at 1024 px): a long word is cut.
+        self.value.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.hint = QLabel()
+        self.hint.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.hint.setStyleSheet("color: #AEAEB2; font-size: 13px;")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 14, 18, 14)
@@ -83,7 +86,7 @@ class _Tile(QFrame):
         self.value.setText(value)
         self.hint.setText(hint)
         # A long word ("Aufnahmelänge") has to fit the tile; the mockup only shows short ones.
-        size = 32 if len(value) <= 10 else 22
+        size = 32 if len(value) <= 7 else 20 if len(value) <= 9 else 17
         self.value.setStyleSheet(f"color: {TEXT.name()}; font-size: {size}px; font-weight: 800;")
 
 

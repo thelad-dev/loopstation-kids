@@ -363,6 +363,7 @@ def test_settings_of_the_set_never_replace_the_local_ones(running, tmp_path):
         sample_rate=8000, pad_count=12, settings_file=settings_file,
     )
     prepared = running.session.prepare_open(target)
+    running.close()  # the old session is shut down first (Windows cannot rename an open folder)
     commit_open(running.settings.data_dir, prepared)
     # The set's own settings.toml and its data_dir are not carried into the work folder.
     assert not (running.settings.data_dir / "settings.toml").exists()

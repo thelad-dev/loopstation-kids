@@ -14,6 +14,7 @@ from test_session import SET_SETTINGS, Running, content, sound_card, two_takes
 from loopstation import app as app_module
 from loopstation import sets
 from loopstation.gui.main_window import MainWindow
+from loopstation.gui.parent_nav import ParentPage
 from loopstation.gui.sets_page import (
     SetsDialog,
     clean_name,
@@ -21,6 +22,7 @@ from loopstation.gui.sets_page import (
     format_size,
     target_path,
 )
+from loopstation.gui.settings_page import SettingsDialog
 from loopstation.session import SetSession
 
 NOW = datetime(2026, 11, 20, 16, 48)
@@ -324,13 +326,14 @@ def test_opening_a_set_closes_the_parents_area(running, qapp):
     try:
         closed = []
 
-        class Settings(QDialog):
-            def __init__(self, *args, **kwargs):
-                super().__init__()
-                self.actions = args[5]
+        class Parents(SettingsDialog):
+            """The real parents' area; ``exec`` stands in for the modal loop: visit "Sets", open a set."""
 
             def exec(self):
-                next(a for a in self.actions if a.label == "Sets").open(self)
+                self.show_page("sets")
+                sets = self.page("sets")
+                sets.open_tab.click()
+                sets.open_button.click()
                 return self.result()
 
             def accept(self):
@@ -338,20 +341,26 @@ def test_opening_a_set_closes_the_parents_area(running, qapp):
                 super().accept()
 
         window.gate_factory = lambda _parent: type("G", (QDialog,), {"exec": lambda self: 1})()
-        window.settings_factory = Settings
-
-        class Sets(SetsDialog):
-            def exec(self):
-                self.open_tab.click()
-                self.open_button.click()
-                return self.result()
-
-        window.sets_factory = Sets
+        window.settings_factory = Parents
         window.open_parent_area()
         assert len(handed) == 1 and closed == [1]
     finally:
         window.timer.stop()
         window.close()
+
+
+def test_cancelling_on_the_sets_area_goes_back_to_the_first_area(running, qapp):
+    dialog = SettingsDialog(running.settings_file, running.controller.settings, lambda new: [],
+                            None, None, [ParentPage("sets", "save", "Sets",
+                                                    lambda: SetsDialog(running.session, None, None))])
+    try:
+        dialog.show_page("sets")
+        sets = dialog.page("sets")
+        assert dialog.current_key() == "sets"
+        sets.cancel_button.click()
+        assert dialog.current_key() == "levels" and dialog.result() == QDialog.DialogCode.Rejected
+    finally:
+        dialog.close()
 
 
 # ------------------------------------------------------- app.run: the swap

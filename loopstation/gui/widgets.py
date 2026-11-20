@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import weakref
+from collections.abc import Callable
+from typing import Any
+
 from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPaintEvent
 from PySide6.QtWidgets import QAbstractButton, QSizePolicy, QWidget
@@ -33,6 +37,39 @@ ACCENT_YELLOW = QColor("#FFD60A")
 ACCENT_GRAY = QColor("#AEAEB2")
 
 BUTTON_FONT_PT = 22
+
+# Dark, slim scroll bar for the parents' pages (a QSS fragment to append to a dialog's style sheet).
+# Without it a QScrollArea shows the white native bar with arrow buttons.
+DARK_SCROLLBAR_QSS = (
+    "QScrollBar:vertical { background: transparent; width: 10px; margin: 0; } "
+    "QScrollBar::handle:vertical { background: #3A3A41; border-radius: 5px; min-height: 24px; } "
+    "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; } "
+    "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; } "
+    "QScrollBar:horizontal { background: transparent; height: 10px; margin: 0; } "
+    "QScrollBar::handle:horizontal { background: #3A3A41; border-radius: 5px; min-width: 24px; } "
+    "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; } "
+    "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; } "
+)
+
+
+def weak_slot(method: Callable[..., Any], *bound: Any, pass_signal_args: bool = False) -> Callable[..., None]:
+    """A slot for ``signal.connect`` that does not keep the owner of ``method`` alive.
+
+    ``signal.connect(lambda: self.foo())`` makes the connection (C++) hold a Python
+    function that holds ``self``: the widget tree can then never be freed by
+    reference counting, lives on until the interpreter ends and is torn down
+    there in arbitrary order, which can abort the process. This holds the
+    method weakly instead. ``bound`` arguments are passed on; the arguments
+    of the signal are dropped unless ``pass_signal_args`` is set.
+    """
+    target = weakref.WeakMethod(method)
+
+    def slot(*args: Any) -> None:
+        function = target()
+        if function is not None:
+            function(*bound, *(args if pass_signal_args else ()))
+
+    return slot
 
 
 def big_font(point_size: int = BUTTON_FONT_PT, bold: bool = True) -> QFont:

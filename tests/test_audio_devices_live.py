@@ -347,12 +347,13 @@ def _labels(combo) -> list[str]:
 
 def test_the_page_lists_the_devices_of_the_chosen_audio_system(page) -> None:
     dialog, *_ = page
-    hostapi = dialog.editors["audio_hostapi"].box
-    assert _labels(hostapi) == ["Systemstandard", "MME", "Windows WASAPI"]
-    assert hostapi.currentText() == "Windows WASAPI"
+    hostapi = dialog.editors["audio_hostapi"].list  # a list of radio buttons, one per audio system
+    assert hostapi.labels() == ["MME", "Windows WASAPI"]
+    assert hostapi.value() == "Windows WASAPI"
+    assert hostapi.by_name["Windows WASAPI"].isChecked()
     assert _labels(dialog.editors["input_device"].box) == ["Systemstandard", "Mikro", "Kids Mic"]
     assert _labels(dialog.editors["output_device"].box) == ["Systemstandard", "Boxen", "Kopfhörer"]
-    hostapi.setCurrentIndex(hostapi.findData("MME"))
+    hostapi.select("MME")
     assert _labels(dialog.editors["input_device"].box) == ["Systemstandard", "Mikro"]
 
 
