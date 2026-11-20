@@ -54,7 +54,10 @@ class Rig:
         self.clock = FakeClock()
         self.device = FakeSoundDevice(block=BLOCK)
         self.settings = make_settings(
-            tmp_path / "live", auto_grid=True, sound_effects=False, volume=1.0, max_level_db=0.0)
+            tmp_path / "live", auto_grid=True, sound_effects=False, volume=1.0, max_level_db=0.0,
+            # The seam check below needs the hard jump at the end of the stretched take, which the
+            # simple stretch keeps and Rubber Band smooths; the engine is not what this test is about.
+            stretch_engine="simple")
         # As ``loopstation.audio`` builds it: the seam setting goes to the engine.
         self.audio = SoundDeviceAudio(
             SR, 10, latency_seconds=0.0, sd=self.device, clock=lambda: 0.0,
