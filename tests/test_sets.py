@@ -346,3 +346,33 @@ def test_malformed_snapshot_in_the_live_log_is_a_set_error(session, tmp_path, ba
         handle.write(bad.to_json() + "\n")
     with pytest.raises(SetError):
         session.write_set(tmp_path / "s.loopset")
+
+
+@pytest.mark.parametrize("name", ["mine.loopset", "mine"])
+def test_round_trip_keeps_where_the_bar_came_from(session, tmp_path, clock, name):
+    session.record(0, "pad_0_1.wav")
+    master = {"frames": 100, "rate": RATE, "source": "onset", "signature": "4/4", "pad": 0}
+    session.store.append(ev.MASTER_SET, None, master)
+
+    manifest = session.write_set(tmp_path / name, clock=clock)
+    assert manifest.grid == master
+    # The manifest file itself carries the fields, and reading it back gives them again.
+    assert sets.read_manifest(tmp_path / name).grid == master
+    opened = tmp_path / "opened"
+    assert sets.open_set(tmp_path / name, opened).grid == master
+
+    restored = EventStore(opened / "data", PADS, snapshot_interval=4, max_active_events=40, clock=clock)
+    try:
+        assert restored.state.master == master
+    finally:
+        restored.close()
+
+
+def test_older_grid_without_source_still_reads(session, tmp_path, clock):
+    session.record(0, "pad_0_1.wav")
+    session.store.append(ev.MASTER_SET, None, {"frames": 100, "rate": RATE})
+    manifest = session.write_set(tmp_path / "old.loopset", clock=clock)
+    assert manifest.grid == {"frames": 100, "rate": RATE}
+    with zipfile.ZipFile(tmp_path / "old.loopset") as archive:
+        text = archive.read("manifest.toml").decode("utf-8")
+    assert "source" not in text and "pad =" not in text
