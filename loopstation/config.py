@@ -29,6 +29,9 @@ class Settings:
     latency_ms: float | None = None
     # Relative paths are resolved against the current working directory.
     data_dir: Path = Path(".")
+    # --- Loop seam (W1-NAHT) ---
+    # Fade the first and last few milliseconds of every loop so it does not click.
+    soft_seam: bool = True
 
     @property
     def pad_count(self) -> int:
@@ -103,6 +106,9 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
         values["latency_ms"] = _check_float(source, "latency_ms", raw["latency_ms"], 0, 1000)
     if "data_dir" in raw:
         values["data_dir"] = Path(_check_str(source, "data_dir", raw["data_dir"]))
+    # --- Loop seam (W1-NAHT) ---
+    if "soft_seam" in raw:
+        values["soft_seam"] = _check_bool(source, "soft_seam", raw["soft_seam"])
     return Settings(**values)
 
 

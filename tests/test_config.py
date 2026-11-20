@@ -15,6 +15,14 @@ def test_shipped_settings_file_matches_the_defaults():
     assert shipped.loop_sync is True and shipped.latency_ms is None
 
 
+def test_soft_seam_is_on_by_default_and_can_be_switched_off():
+    assert Settings().soft_seam is True
+    assert parse_settings({}).soft_seam is True
+    assert parse_settings({"soft_seam": False}).soft_seam is False
+    with pytest.raises(ConfigError, match="soft_seam"):
+        parse_settings({"soft_seam": "nein"}, "settings.toml")
+
+
 def test_loop_sync_and_latency_values():
     assert parse_settings({"loop_sync": False}).loop_sync is False
     assert parse_settings({"latency_ms": "auto"}).latency_ms is None
