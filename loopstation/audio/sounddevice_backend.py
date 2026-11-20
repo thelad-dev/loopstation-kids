@@ -180,6 +180,11 @@ class SoundDeviceAudio:
             args["extra_settings"] = extra
         return args
 
+    def _start_output(self, index: int | None) -> Any:
+        stream = self._sd.OutputStream(callback=self._output_callback, **self._stream_args(index))
+        stream.start()
+        return stream
+
     def _open_output(self, preferred: int | None, fallback: int | None) -> tuple[Any, int | None, str]:
         """Open and start the output stream: ``preferred``, else the system default, else ``fallback``.
 
@@ -194,8 +199,7 @@ class SoundDeviceAudio:
         error: Exception | None = None
         for position, index in enumerate(tries):
             try:
-                stream = self._sd.OutputStream(callback=self._output_callback, **self._stream_args(index))
-                stream.start()
+                stream = self._start_output(index)
             except Exception as exc:
                 log.warning("cannot open output device %s: %s", index, exc)
                 error = exc
@@ -218,11 +222,12 @@ class SoundDeviceAudio:
         wanted_out = resolve_choice(self._sd, output_name, hostapi, "output", self._platform)
         notes = [wanted_in.note, wanted_out.note]
         previous = self._output_index
-        try:
-            opened = self._open_output(wanted_out.index, previous)
-        except Exception as exc:
-            log.info("opening the new output next to the running one failed (%s), closing the old one first", exc)
-            opened = None
+        opened = None
+        if self._output is not None and wanted_out.index != previous:
+            try:
+                opened = (self._start_output(wanted_out.index), wanted_out.index, "")
+            except Exception as exc:
+                log.info("opening the new output next to the running one failed (%s), closing the old one first", exc)
         if self._output is not None:
             try:
                 self._output.stop()
