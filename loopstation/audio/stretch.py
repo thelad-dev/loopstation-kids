@@ -27,7 +27,10 @@ with the total length unchanged.
 from __future__ import annotations
 
 import functools
+import importlib
 import logging
+import sys
+from pathlib import Path
 from typing import Protocol
 
 import numpy as np
@@ -141,8 +144,7 @@ class RubberBandEngine:
         return out
 
     def _run(self, data: np.ndarray, target: int) -> np.ndarray:
-        import pylibrb as rb
-
+        rb = _import_pylibrb()
         options = rb.Option.PROCESS_OFFLINE | rb.Option.ENGINE_FINER
         stretcher = rb.RubberBandStretcher(self.sample_rate, 1, options, target / len(data), 1.0)
         stretcher.set_max_process_size(RUBBERBAND_BLOCK)
@@ -170,24 +172,42 @@ class RubberBandEngine:
         return np.nan_to_num(result, copy=False).astype(np.float32, copy=False)
 
 
+def _import_pylibrb():
+    """The ``pylibrb`` module. Rubber Band is never bundled with the Windows installer: the
+    installer downloads it on request into a ``rubberband`` folder next to the program, which
+    is searched here when the app is frozen. The app itself never uses the network."""
+    try:
+        return importlib.import_module("pylibrb")
+    except ImportError:
+        local = Path(sys.executable).parent / "rubberband"
+        if not getattr(sys, "frozen", False) or not local.is_dir():
+            raise
+        sys.path.insert(0, str(local))
+        return importlib.import_module("pylibrb")
+
+
+NOT_INSTALLED = "nicht installiert"
+
+
 @functools.cache
 def rubberband_status() -> tuple[bool, str]:
-    """Whether Rubber Band can be used, and a short detail (version or the reason it cannot).
+    """Whether Rubber Band can be used, and a short detail (version, or why not).
 
     Checked once per run: imports ``pylibrb`` and stretches a few frames, so a
-    wheel that is present but cannot load its library counts as missing.
+    wheel that is present but cannot load its library counts as unusable. The
+    detail is ``NOT_INSTALLED`` when the package is simply not there.
     """
     try:
-        import pylibrb
+        pylibrb = _import_pylibrb()
     except ImportError:
-        return False, "pylibrb ist nicht installiert"
+        return False, NOT_INSTALLED
     except Exception as exc:  # a broken native library
-        return False, f"pylibrb lässt sich nicht laden ({exc})"
+        return False, f"lässt sich nicht laden: {exc}"
     try:
         probe = np.sin(np.arange(16384, dtype=np.float32) * 0.05)
         RubberBandEngine(44100)._run(probe, 16384 + 512)
     except Exception as exc:
-        return False, f"Rubber Band läuft nicht ({exc})"
+        return False, f"läuft nicht: {exc}"
     return True, f"pylibrb {getattr(pylibrb, '__version__', '?')}"
 
 
@@ -202,15 +222,29 @@ def resolve_engine(choice: str, sample_rate: int) -> StretchEngine:
     return WsolaEngine()
 
 
+def install_hint() -> str:
+    """How to add Rubber Band later (it is never loaded without the user's consent)."""
+    if sys.platform == "win32":
+        return ("Zum Nachinstallieren den Loopstation-Installer erneut ausführen und "
+                "„Rubber Band (GPL) herunterladen“ ankreuzen.")
+    return ("Zum Nachinstallieren scripts/install-linux.sh erneut aufrufen und der Frage zustimmen "
+            "(oder --rubberband), oder „pip install pylibrb“ in der Umgebung der Loopstation.")
+
+
 def engine_notice(choice: str) -> str:
-    """One sentence for the parents' settings: which engine runs and why."""
+    """The parents' status line: which engine runs and what is installed, with a hint if not."""
     available, detail = rubberband_status()
-    if choice == "simple":
-        return "Der einfache, eingebaute Stretch wird benutzt."
     if available:
-        return f"Rubber Band ist da ({detail}) und wird benutzt."
-    wanted = "Rubber Band ist gewählt, aber nicht nutzbar" if choice == "rubberband" else "Rubber Band fehlt"
-    return f"{wanted}: {detail}. Es läuft der einfache Stretch, etwas weniger sauber."
+        status = f"Rubber Band installiert ({detail})"
+    elif detail == NOT_INSTALLED:
+        status = "Rubber Band nicht installiert"
+    else:
+        status = f"Rubber Band installiert, aber nicht nutzbar ({detail})"
+    if choice == "simple":
+        return f"Der einfache Stretch ist gewählt. {status}."
+    if available:
+        return f"{status}, wird benutzt."
+    return f"{status}, einfache Engine aktiv. {install_hint()}"
 
 
 def _resample_tail(data: np.ndarray, target: int) -> np.ndarray:

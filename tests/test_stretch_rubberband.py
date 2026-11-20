@@ -95,7 +95,7 @@ def test_rubberband_engine_goes_through_stretch_to_grid():
 @needs_rubberband
 def test_rubberband_is_found_and_described():
     assert rubberband_status()[0] is True
-    assert "pylibrb" in engine_notice("auto")
+    assert "installiert (pylibrb" in engine_notice("auto") and "wird benutzt" in engine_notice("auto")
     assert isinstance(resolve_engine("auto", RATE), RubberBandEngine)
     assert isinstance(resolve_engine("rubberband", RATE), RubberBandEngine)
 
@@ -117,10 +117,65 @@ def test_missing_library_falls_back_for_auto_and_rubberband(no_rubberband):
 
 
 def test_missing_library_is_explained_to_the_parents(no_rubberband):
-    assert "fehlt" in engine_notice("auto") and "einfache Stretch" in engine_notice("auto")
-    assert "nicht nutzbar" in engine_notice("rubberband")
-    assert "pylibrb" in engine_notice("auto")
-    assert engine_notice("simple") == "Der einfache, eingebaute Stretch wird benutzt."
+    notice = engine_notice("auto")
+    assert "Rubber Band nicht installiert, einfache Engine aktiv" in notice
+    assert "nachinstallieren" in notice.lower()
+    assert "nicht installiert" in engine_notice("rubberband")
+    simple = engine_notice("simple")
+    assert simple.startswith("Der einfache Stretch ist gewählt.") and "nicht installiert" in simple
+    assert "nachinstallieren" not in simple.lower()  # nothing to fix if simple is what they chose
+
+
+def test_install_hint_names_the_way_for_each_platform(monkeypatch):
+    monkeypatch.setattr(stretch_module.sys, "platform", "win32")
+    assert "Installer" in stretch_module.install_hint()
+    monkeypatch.setattr(stretch_module.sys, "platform", "linux")
+    hint = stretch_module.install_hint()
+    assert "install-linux.sh" in hint and "pip install pylibrb" in hint
+
+
+def test_installed_but_broken_library_is_reported_as_unusable(monkeypatch):
+    class Fake:
+        __version__ = "9"
+
+    def broken(self, data, target):
+        raise OSError("dll")
+
+    stretch_module.rubberband_status.cache_clear()
+    monkeypatch.setattr(stretch_module, "_import_pylibrb", lambda: Fake)
+    monkeypatch.setattr(RubberBandEngine, "_run", broken)
+    try:
+        assert rubberband_status() == (False, "läuft nicht: dll")
+        assert "installiert, aber nicht nutzbar" in engine_notice("auto")
+        assert isinstance(resolve_engine("auto", RATE), WsolaEngine)
+    finally:
+        stretch_module.rubberband_status.cache_clear()
+
+
+def test_a_frozen_app_finds_the_downloaded_rubber_band_next_to_the_exe(tmp_path, monkeypatch):
+    local = tmp_path / "rubberband"
+    local.mkdir()
+
+    class Fake:
+        __version__ = "fake"
+
+    def fake_import(name):  # only importable once the folder next to the exe is on the path
+        if str(local) in sys.path:
+            return Fake
+        raise ImportError(name)
+
+    monkeypatch.setattr(stretch_module.importlib, "import_module", fake_import)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "Loopstation.exe"))
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    assert stretch_module._import_pylibrb() is Fake
+
+
+def test_not_frozen_never_looks_next_to_the_interpreter(tmp_path, monkeypatch, no_rubberband):
+    (tmp_path / "rubberband").mkdir()
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "python"))
+    with pytest.raises(ImportError):
+        stretch_module._import_pylibrb()
 
 
 def test_a_failing_library_falls_back_for_that_stretch(monkeypatch):
@@ -186,6 +241,6 @@ def test_parents_page_shows_the_engine_choice_and_why(qapp, tmp_path, no_rubberb
     dialog = SettingsDialog(tmp_path / "settings.toml", make_settings(tmp_path), lambda s: [])
     editor = dialog.editors["stretch_engine"]
     assert [editor._combo.itemText(i) for i in range(editor._combo.count())] == list(STRETCH_ENGINES)
-    assert "fehlt" in dialog._engine_hint.text()
+    assert "nicht installiert" in dialog._engine_hint.text()
     editor._combo.setCurrentText("simple")
     assert dialog._engine_hint.text() == engine_notice("simple")

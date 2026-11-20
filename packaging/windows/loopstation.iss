@@ -16,6 +16,7 @@
 #define AppName "Loopstation"
 #define AppExe "Loopstation.exe"
 #define Root AddBackslash(SourcePath) + "..\.."
+#include "rubberband.inc"
 
 [Setup]
 ; Fixed AppId: a newer setup updates the existing installation in place.
@@ -51,6 +52,9 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+; Off by default: Rubber Band is GPL software and is not shipped. Ticking this downloads it
+; (see rubberband.inc and the consent page below). Without it the app runs with the simple stretch.
+Name: "rubberband"; Description: "Rubber Band (GPL) herunterladen (optional, bessere Qualität beim Strecken)"; GroupDescription: "Optionale Komponente:"; Flags: unchecked
 
 [InstallDelete]
 ; Remove files of the previous version so no stale library is left behind.
@@ -63,5 +67,71 @@ Source: "{#Root}\dist\{#AppName}\*"; DestDir: "{app}"; Flags: ignoreversion recu
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\rubberband"
+
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+var
+  RubberBandPage: TOutputMsgWizardPage;
+
+procedure InitializeWizard;
+begin
+  // The consent text: what is downloaded, under which license, from where, how big.
+  RubberBandPage := CreateOutputMsgPage(wpSelectTasks, 'Rubber Band (GPL)',
+    'Optionaler Download, nur mit Ihrer Zustimmung',
+    'Sie haben ausgewählt, Rubber Band herunterzuladen. Bitte lesen:' + #13#10 + #13#10 +
+    'Name: Rubber Band (Python-Anbindung pylibrb {#RubberBandVersion}, Bibliothek eingebaut)' + #13#10 +
+    'Lizenz: GNU General Public License (GPL). Die Loopstation liefert Rubber Band nicht mit; ' +
+    'es wird auf Ihren Wunsch auf diesen Rechner geladen. Die Pflichten der GPL (etwa bei einer ' +
+    'Weitergabe) liegen dann bei Ihnen.' + #13#10 +
+    'Herkunft: {#RubberBandUrl}' + #13#10 +
+    'Größe: ca. {#RubberBandSize}' + #13#10 +
+    'Prüfsumme (SHA-256): {#RubberBandSha256}' + #13#10 + #13#10 +
+    'Der Download wird gegen die Prüfsumme geprüft. Schlägt er fehl, wird die Loopstation trotzdem ' +
+    'installiert und nutzt den einfachen Stretch. Wer nicht zustimmt, geht zurück und nimmt den ' +
+    'Haken bei "Rubber Band (GPL) herunterladen" heraus.');
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = RubberBandPage.ID) and not WizardIsTaskSelected('rubberband');
+end;
+
+// Downloads the wheel, checks its SHA-256 (DownloadTemporaryFile raises on any failure or
+// mismatch) and unpacks it to {app}\rubberband. Returns false on any problem; never raises.
+function InstallRubberBand: Boolean;
+var
+  Target, Zip, Args: String;
+  Code: Integer;
+begin
+  Result := False;
+  Target := ExpandConstant('{app}\rubberband');
+  try
+    DelTree(Target, True, True, True);
+    DownloadTemporaryFile('{#RubberBandUrl}', 'pylibrb.zip', '{#RubberBandSha256}', nil);
+    Zip := ExpandConstant('{tmp}\pylibrb.zip');
+    Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath ''' +
+      Zip + ''' -DestinationPath ''' + Target + ''' -Force"';
+    if Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0) then
+      Result := FileExists(Target + '\pylibrb\__init__.py')
+    else
+      Log('Expand-Archive failed, exit code ' + IntToStr(Code));
+  except
+    Log('Rubber Band download failed: ' + GetExceptionMessage);
+  end;
+  if not Result then
+    DelTree(Target, True, True, True);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if (CurStep = ssPostInstall) and WizardIsTaskSelected('rubberband') then
+    if not InstallRubberBand then
+      SuppressibleMsgBox('Rubber Band konnte nicht geladen oder geprüft werden. ' +
+        'Rubber Band nicht installiert, einfache Engine aktiv. Die Loopstation ist ' +
+        'installiert und läuft normal. Zum Nachholen den Installer erneut ausführen und den Haken setzen.',
+        mbInformation, MB_OK, IDOK);
+end;

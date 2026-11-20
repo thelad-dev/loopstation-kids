@@ -46,6 +46,7 @@ REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 readonly SCRIPT_DIR REPO_DIR
 
 ASSUME_YES=0
+RUBBERBAND=ask   # ask | yes | no (Rubber Band, GPL: nur mit Zustimmung)
 DRY_RUN=0
 UNINSTALL=0
 PURGE=0
@@ -134,6 +135,10 @@ Aufruf: $(basename -- "$0") [Optionen]
       --purge               mit --uninstall: auch Aufnahmen, Protokoll und
                             Einstellungen löschen (mit Rückfrage)
       --no-system-packages  Systempakete weder prüfen noch installieren
+      --rubberband          Rubber Band (GPL, Paket pylibrb) ohne Rückfrage installieren
+      --no-rubberband       Rubber Band nicht installieren und nicht danach fragen
+                            (ohne Terminal und ohne --rubberband gilt ebenfalls "nein";
+                            -y/--yes stimmt dem NICHT zu)
       --python PFAD         diesen Python-Interpreter verwenden (mindestens ${MIN_PYTHON})
   -h, --help                diese Hilfe
 
@@ -155,6 +160,8 @@ parse_args() {
             --uninstall) UNINSTALL=1 ;;
             --purge) PURGE=1 ;;
             --no-system-packages) SKIP_SYSTEM=1 ;;
+            --rubberband) RUBBERBAND=yes ;;
+            --no-rubberband) RUBBERBAND=no ;;
             --python)
                 [ $# -ge 2 ] || die "$EXIT_USAGE" "--python braucht einen Pfad"
                 PYTHON_OVERRIDE="$2"
@@ -182,6 +189,28 @@ confirm() {
         return 1
     fi
     printf '%s [j/N] ' "$1"
+    read -r answer || return 1
+    case "$answer" in
+        j|J|ja|Ja|JA|y|Y|yes|Yes) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Zustimmung zu Rubber Band (GPL). Eigene Frage, die -y/--yes nicht beantwortet:
+# nur --rubberband oder ein "ja" am Terminal stimmt zu; sonst gilt "nein".
+rubberband_consent() {
+    local answer=""
+    case "$RUBBERBAND" in
+        yes) return 0 ;;
+        no) return 1 ;;
+    esac
+    if [ "$DRY_RUN" -eq 1 ] || [ ! -t 0 ]; then
+        return 1
+    fi
+    printf '\nOptional: Rubber Band (Paket pylibrb, Lizenz GPL) für sauberes Strecken laden?\n'
+    printf 'Herkunft: PyPI (pypi.org/project/pylibrb), wird in die Programm-Umgebung installiert.\n'
+    printf 'Ohne Rubber Band läuft der einfache Stretch. Die GPL-Pflichten bei einer Weitergabe liegen bei Ihnen.\n'
+    printf 'Rubber Band installieren? [j/N] '
     read -r answer || return 1
     case "$answer" in
         j|J|ja|Ja|JA|y|Y|yes|Yes) return 0 ;;
@@ -698,10 +727,14 @@ install_app() {
         die "$EXIT_ERROR" "pip konnte die Loopstation nicht installieren (Ausgabe oben). Internetverbindung prüfen; bei Compiler-Fehlern fehlen Systempakete."
     fi
 
-    # Rubber Band (GPL) ist optional: es gibt ein Wheel mit eingebauter Bibliothek
-    # nur für x86_64 (manylinux). Fehlt es, läuft der einfache Stretch.
-    if ! run "$pip_python" -m pip install --disable-pip-version-check --only-binary=:all: "pylibrb>=0.1.2"; then
-        warn "Rubber Band (pylibrb) ist hier nicht installierbar: die Loopstation benutzt den einfachen Stretch, etwas weniger sauber"
+    # Rubber Band (GPL) nur mit Zustimmung. Es gibt ein Wheel mit eingebauter Bibliothek nur
+    # für x86_64 (manylinux); ohne Wheel oder ohne Zustimmung läuft der einfache Stretch.
+    if rubberband_consent; then
+        if ! run "$pip_python" -m pip install --disable-pip-version-check --only-binary=:all: "pylibrb>=0.1.2"; then
+            warn "Rubber Band (pylibrb) ist hier nicht installierbar: die Loopstation benutzt den einfachen Stretch"
+        fi
+    else
+        info "Rubber Band wird nicht installiert (einfacher Stretch). Nachholen: scripts/install-linux.sh --rubberband"
     fi
 
     step "Installation prüfen"

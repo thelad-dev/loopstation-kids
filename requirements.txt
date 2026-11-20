@@ -4,6 +4,3 @@ sounddevice>=0.5.1
 soundfile>=0.12
 mido>=1.3
 python-rtmidi>=1.5
-# Rubber Band stretch engine (GPL). Optional: without it the simple stretch runs.
-# Only where PyPI has a wheel with the library built in (Windows x64, Linux x86_64).
-pylibrb>=0.1.2; (sys_platform == "win32" and platform_machine == "AMD64") or (sys_platform == "linux" and platform_machine == "x86_64")
