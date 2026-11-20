@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="916" viewBox="0 0 1280 916">
+<title>Mockup 11 – Elternbereich – Takt, Tempo und Loop-Verhalten</title>
+<defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#2E2E34"/><line x1="0" y1="0" x2="0" y2="10" stroke="#4A4A52" stroke-width="4"/></pattern><filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter></defs>
+<rect width="1280" height="800" fill="#0E0E10"/>
+<rect x="6" y="6" width="1268" height="788" rx="26" fill="none" stroke="#7FA7FF" stroke-opacity="0.75" stroke-width="4"/>
+<rect x="28" y="24" width="260" height="104" rx="20" fill="#26262B" />
+<path transform="translate(48,60) scale(1.3333)" d="M19 12H5 M12 19l-7-7 7-7" fill="none" stroke="#F2F2F2" stroke-width="2.60" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="92" y="70" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F2F2" text-anchor="start" >Zur Kinderseite</text>
+<text x="92" y="96" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Eltern-Modus beenden</text>
+<path transform="translate(312,50) scale(1.4167)" d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M7 11V7a5 5 0 0 1 9.9-1" fill="none" stroke="#7FA7FF" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="360" y="72" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="30" font-weight="800" fill="#F2F2F2" text-anchor="start" >Elternbereich</text>
+<text x="360" y="102" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >Änderungen gelten sofort · gespeichert in settings.toml</text>
+<rect x="868" y="24" width="384" height="104" rx="20" fill="#26262B" />
+<path transform="translate(886,60.0) scale(1.3333)" d="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07" fill="none" stroke="#F2F2F2" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<path transform="translate(1200,60.0) scale(1.3333)" d="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07 M19.07 4.93a10 10 0 0 1 0 14.14" fill="none" stroke="#F2F2F2" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<rect x="1123.0" y="73.0" width="63.0" height="22" rx="11" fill="url(#hatch)"/>
+<rect x="934" y="73.0" width="195.0" height="22" rx="11" fill="#3A3A41"/>
+<rect x="934" y="73.0" width="138.6" height="22" rx="11" fill="#5AC8FA"/>
+<line x1="1123.0" y1="64.0" x2="1123.0" y2="104.0" stroke="#AEAEB2" stroke-width="3" stroke-linecap="round"/>
+<path transform="translate(1115.0,102.0) scale(0.6667)" d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="#AEAEB2" stroke-width="2.00" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<circle cx="1072.6" cy="84.0" r="27" fill="#FFFFFF" stroke="#5AC8FA" stroke-width="5"/>
+<text x="934" y="50" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="start" >Lautstärke 62 %</text>
+<text x="1186" y="50" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#AEAEB2" text-anchor="end" >Grenze −6 dBFS</text>
+<rect x="28" y="148" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,166) scale(1.0000)" d="M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="185" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Lautstärke &amp; Pegel</text>
+<rect x="28" y="218" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,236) scale(1.0000)" d="M3 18v-6a9 9 0 0 1 18 0v6 M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="255" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Geräte &amp; Audio</text>
+<rect x="28" y="288" width="260" height="60" rx="14" fill="#2F3550" stroke="#7FA7FF" stroke-width="2" />
+<path transform="translate(46,306) scale(1.0000)" d="M22 12h-4l-3 9L9 3l-3 9H2" fill="none" stroke="#7FA7FF" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="325" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#F2F2F2" text-anchor="start" >Takt &amp; Loop</text>
+<rect x="28" y="358" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,376) scale(1.0000)" d="M12 2a10 10 0 1 0 0.01 0 M12 6v6l4 2" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="395" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Verlauf &amp; Undo</text>
+<rect x="28" y="428" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,446) scale(1.0000)" d="M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="465" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Erweitert</text>
+<rect x="28" y="498" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,516) scale(1.0000)" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z M17 21v-8H7v8 M7 3v5h8" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="535" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Sets</text>
+<rect x="28" y="568" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,586) scale(1.0000)" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="605" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Export</text>
+<text x="40" y="676" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >Lokal · ohne Konto · ohne Internet</text>
+<text x="40" y="698" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >Neustart nötig nur für:</text>
+<text x="40" y="718" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >sample_rate, rows, cols, data_dir</text>
+<rect x="312" y="148" width="940" height="196" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<text x="334" y="184" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Aktueller Takt der Sitzung</text>
+<rect x="334" y="196" width="212" height="128" rx="14" fill="#26262B" />
+<text x="352" y="226" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#8E8E93" text-anchor="start" >Tempo</text>
+<text x="352" y="272" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="32" font-weight="800" fill="#F2F2F2" text-anchor="start" >96 BPM</text>
+<text x="352" y="304" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#AEAEB2" text-anchor="start" >gemessen</text>
+<rect x="562" y="196" width="212" height="128" rx="14" fill="#26262B" />
+<text x="580" y="226" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#8E8E93" text-anchor="start" >Taktart</text>
+<text x="580" y="272" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="32" font-weight="800" fill="#F2F2F2" text-anchor="start" >4/4</text>
+<text x="580" y="304" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#AEAEB2" text-anchor="start" >Standard</text>
+<rect x="790" y="196" width="212" height="128" rx="14" fill="#26262B" />
+<text x="808" y="226" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#8E8E93" text-anchor="start" >Takt-Länge</text>
+<text x="808" y="272" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="32" font-weight="800" fill="#F2F2F2" text-anchor="start" >2,50 s</text>
+<text x="808" y="304" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#AEAEB2" text-anchor="start" >1 Takt = 4 Schläge</text>
+<rect x="1018" y="196" width="212" height="128" rx="14" fill="#26262B" />
+<text x="1036" y="226" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#8E8E93" text-anchor="start" >Quelle</text>
+<text x="1036" y="272" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="32" font-weight="800" fill="#F2F2F2" text-anchor="start" >Klatschen</text>
+<text x="1036" y="304" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#AEAEB2" text-anchor="start" >onset · Pad 1</text>
+<rect x="312" y="360" width="456" height="416" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<text x="334" y="396" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Takt korrigieren (Eltern-BPM)</text>
+<text x="334" y="420" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8E8E93" text-anchor="start" >Vorrang vor gemessenem Takt (Regel 8)</text>
+<text x="334" y="440" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#F2F2F2" text-anchor="start" >Tempo</text>
+<rect x="334" y="454" width="64" height="56" rx="12" fill="#26262B" />
+<text x="366" y="491" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="28" font-weight="700" fill="#F2F2F2" text-anchor="middle" >−</text>
+<rect x="408" y="454" width="140" height="56" rx="12" fill="#26262B" stroke="#7FA7FF" stroke-width="2" />
+<text x="478" y="491" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="26" font-weight="800" fill="#F2F2F2" text-anchor="middle" >96</text>
+<rect x="558" y="454" width="64" height="56" rx="12" fill="#26262B" />
+<text x="590" y="491" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="28" font-weight="700" fill="#F2F2F2" text-anchor="middle" >+</text>
+<text x="638" y="489" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >BPM (40–200)</text>
+<text x="334" y="548" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#F2F2F2" text-anchor="start" >Taktart</text>
+<rect x="334" y="562" width="92" height="48" rx="12" fill="#26262B" />
+<text x="380" y="593" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F2F2" text-anchor="middle" >2/4</text>
+<rect x="436" y="562" width="92" height="48" rx="12" fill="#26262B" />
+<text x="482" y="593" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F2F2" text-anchor="middle" >3/4</text>
+<rect x="538" y="562" width="92" height="48" rx="12" fill="#2F3550" stroke="#7FA7FF" stroke-width="2" />
+<text x="584" y="593" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F2F2" text-anchor="middle" >4/4</text>
+<rect x="640" y="562" width="92" height="48" rx="12" fill="#26262B" />
+<text x="686" y="593" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F2F2" text-anchor="middle" >6/8</text>
+<rect x="334" y="640" width="196" height="48" rx="12" fill="#7FA7FF" />
+<text x="432.0" y="669.76" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#111114" text-anchor="middle" >Übernehmen</text>
+<rect x="542" y="640" width="204" height="48" rx="12" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<text x="644.0" y="669.76" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#F2F2F2" text-anchor="middle" >Gemessenen Takt</text>
+<text x="334" y="720" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Ohne Takt (freie Sitzung) wird nichts geraten:</text>
+<text x="334" y="740" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >lieber kein Raster als ein falsches.</text>
+<rect x="788" y="360" width="464" height="416" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<text x="810" y="396" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Loop-Verhalten</text>
+<rect x="810" y="408" width="64" height="36" rx="18" fill="#32D74B" />
+<circle cx="856" cy="426" r="14" fill="#FFFFFF"/>
+<text x="890" y="424" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >Takt aus Klatschen erkennen</text>
+<text x="890" y="444" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Onset/Auto-Grid · aus = Aufnahmelänge wird Takt</text>
+<rect x="810" y="468" width="64" height="36" rx="18" fill="#32D74B" />
+<circle cx="856" cy="486" r="14" fill="#FFFFFF"/>
+<text x="890" y="484" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >Loops am Takt einrasten</text>
+<text x="890" y="504" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >loop_sync · Start/Stopp am Takt-Anfang</text>
+<rect x="810" y="528" width="64" height="36" rx="18" fill="#32D74B" />
+<circle cx="856" cy="546" r="14" fill="#FFFFFF"/>
+<text x="890" y="544" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >Loop beginnt beim ersten Schlag</text>
+<text x="890" y="564" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Verschiebung, nicht Abschneiden</text>
+<rect x="810" y="588" width="64" height="36" rx="18" fill="#48484F" />
+<circle cx="828" cy="606" r="14" fill="#FFFFFF"/>
+<text x="890" y="604" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >Vorpause entfernen</text>
+<text x="890" y="624" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >kürzt die Aufnahme (nur bewusst wählen)</text>
+<rect x="810" y="648" width="64" height="36" rx="18" fill="#32D74B" />
+<circle cx="856" cy="666" r="14" fill="#FFFFFF"/>
+<text x="890" y="664" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >Freie Pads am Takt-Punkt starten</text>
+<text x="890" y="684" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >behalten ihre eigene Länge</text>
+<rect x="810" y="708" width="64" height="36" rx="18" fill="#48484F" />
+<circle cx="828" cy="726" r="14" fill="#FFFFFF"/>
+<text x="890" y="724" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >Metronom-Ton (leise)</text>
+<text x="890" y="744" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Kinderseite zeigt nur den Puls</text>
+<rect x="0" y="800" width="1280" height="116" fill="#F4F4F6"/><rect x="0" y="800" width="1280" height="4" fill="#7FA7FF"/><text x="24" y="834" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="20" font-weight="700" fill="#111114" text-anchor="start" >Mockup 11 · Elternbereich – Takt, Tempo und Loop-Verhalten</text><text x="1256" y="834" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="600" fill="#55555C" text-anchor="end" >Plan §2.2 (Regeln 7–8), §2.3, §1.3, §3.1–3.2, §13</text><text x="24" y="858" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#3A3A41" text-anchor="start" >Zeigt BPM, Taktart und Quelle des Takts (Aufnahmelänge | Klatschen/Onset | Eltern-BPM | freies Pad). Eltern korrigieren hier – das Kind bekommt keinen Dialog.</text><text x="24" y="877" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#3A3A41" text-anchor="start" >Eltern-BPM hat Vorrang. Plausibles Tempo 40–200 BPM (justierbar in settings.toml). Metronom: visuell beim Kind, Ton nur optional, leise.</text>
+</svg>

@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="916" viewBox="0 0 1280 916">
+<title>Mockup 10 – Elternbereich – Geräte (Mikrofon / Kopfhörer) und Audio-System</title>
+<defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#2E2E34"/><line x1="0" y1="0" x2="0" y2="10" stroke="#4A4A52" stroke-width="4"/></pattern><filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter></defs>
+<rect width="1280" height="800" fill="#0E0E10"/>
+<rect x="6" y="6" width="1268" height="788" rx="26" fill="none" stroke="#7FA7FF" stroke-opacity="0.75" stroke-width="4"/>
+<rect x="28" y="24" width="260" height="104" rx="20" fill="#26262B" />
+<path transform="translate(48,60) scale(1.3333)" d="M19 12H5 M12 19l-7-7 7-7" fill="none" stroke="#F2F2F2" stroke-width="2.60" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="92" y="70" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F2F2" text-anchor="start" >Zur Kinderseite</text>
+<text x="92" y="96" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Eltern-Modus beenden</text>
+<path transform="translate(312,50) scale(1.4167)" d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M7 11V7a5 5 0 0 1 9.9-1" fill="none" stroke="#7FA7FF" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="360" y="72" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="30" font-weight="800" fill="#F2F2F2" text-anchor="start" >Elternbereich</text>
+<text x="360" y="102" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >Änderungen gelten sofort · gespeichert in settings.toml</text>
+<rect x="868" y="24" width="384" height="104" rx="20" fill="#26262B" />
+<path transform="translate(886,60.0) scale(1.3333)" d="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07" fill="none" stroke="#F2F2F2" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<path transform="translate(1200,60.0) scale(1.3333)" d="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07 M19.07 4.93a10 10 0 0 1 0 14.14" fill="none" stroke="#F2F2F2" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<rect x="1123.0" y="73.0" width="63.0" height="22" rx="11" fill="url(#hatch)"/>
+<rect x="934" y="73.0" width="195.0" height="22" rx="11" fill="#3A3A41"/>
+<rect x="934" y="73.0" width="138.6" height="22" rx="11" fill="#5AC8FA"/>
+<line x1="1123.0" y1="64.0" x2="1123.0" y2="104.0" stroke="#AEAEB2" stroke-width="3" stroke-linecap="round"/>
+<path transform="translate(1115.0,102.0) scale(0.6667)" d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="#AEAEB2" stroke-width="2.00" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<circle cx="1072.6" cy="84.0" r="27" fill="#FFFFFF" stroke="#5AC8FA" stroke-width="5"/>
+<text x="934" y="50" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="start" >Lautstärke 62 %</text>
+<text x="1186" y="50" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#AEAEB2" text-anchor="end" >Grenze −6 dBFS</text>
+<rect x="28" y="148" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,166) scale(1.0000)" d="M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="185" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Lautstärke &amp; Pegel</text>
+<rect x="28" y="218" width="260" height="60" rx="14" fill="#2F3550" stroke="#7FA7FF" stroke-width="2" />
+<path transform="translate(46,236) scale(1.0000)" d="M3 18v-6a9 9 0 0 1 18 0v6 M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" fill="none" stroke="#7FA7FF" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="255" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#F2F2F2" text-anchor="start" >Geräte &amp; Audio</text>
+<rect x="28" y="288" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,306) scale(1.0000)" d="M22 12h-4l-3 9L9 3l-3 9H2" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="325" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Takt &amp; Loop</text>
+<rect x="28" y="358" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,376) scale(1.0000)" d="M12 2a10 10 0 1 0 0.01 0 M12 6v6l4 2" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="395" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Verlauf &amp; Undo</text>
+<rect x="28" y="428" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,446) scale(1.0000)" d="M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="465" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Erweitert</text>
+<rect x="28" y="498" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,516) scale(1.0000)" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z M17 21v-8H7v8 M7 3v5h8" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="535" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Sets</text>
+<rect x="28" y="568" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,586) scale(1.0000)" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="605" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Export</text>
+<text x="40" y="676" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >Lokal · ohne Konto · ohne Internet</text>
+<text x="40" y="698" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >Neustart nötig nur für:</text>
+<text x="40" y="718" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >sample_rate, rows, cols, data_dir</text>
+<rect x="312" y="148" width="456" height="250" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<path transform="translate(334,168) scale(1.2500)" d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z M19 10v2a7 7 0 0 1-14 0v-2 M12 19v4 M8 23h8" fill="none" stroke="#7FA7FF" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="376" y="192" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Mikrofon (Eingang)</text>
+<rect x="334" y="214" width="412" height="56" rx="12" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<text x="350" y="235" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >USB-Mikrofon „Kids Mic“</text>
+<text x="350" y="253" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#8E8E93" text-anchor="start" >WASAPI · 1 Kanal · 48 kHz</text>
+<path transform="translate(710,231.0) scale(0.9167)" d="M6 9l6 6 6-6" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="334" y="300" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Aktueller Pegel</text>
+<rect x="334" y="310" width="412" height="18" rx="6" fill="#1A1A1E" stroke="#3A3A41" stroke-width="1" />
+<rect x="643.0" y="310" width="51.5" height="18" fill="#32D74B" opacity="0.14"/>
+<rect x="336" y="313" width="272.7" height="12" rx="3" fill="#32D74B"/>
+<rect x="658.7" y="311" width="3" height="16" fill="#FFFFFF"/>
+<text x="334" y="360" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Andere: Systemstandard · Laptop-Mikrofon (intern)</text>
+<rect x="788" y="148" width="464" height="250" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<path transform="translate(810,168) scale(1.2500)" d="M3 18v-6a9 9 0 0 1 18 0v6 M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" fill="none" stroke="#7FA7FF" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="852" y="192" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Lautsprecher / Kopfhörer (Ausgang)</text>
+<rect x="810" y="214" width="420" height="56" rx="12" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<text x="826" y="235" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >Kopfhörer (Klinke, kabelgebunden)</text>
+<text x="826" y="253" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#8E8E93" text-anchor="start" >WASAPI · Stereo · 48 kHz</text>
+<path transform="translate(1194,231.0) scale(0.9167)" d="M6 9l6 6 6-6" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<rect x="810" y="290" width="200" height="44" rx="12" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<path transform="translate(828.55,301.0) scale(0.9167)" d="M7 4 L20 12 L7 20 Z" fill="#F2F2F2"/>
+<text x="860.55" y="317.04" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="start" >Testton abspielen</text>
+<text x="810" y="360" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Andere: Systemstandard · Lautsprecher (Realtek) · BT-Kopfhörer ⚠</text>
+<rect x="312" y="414" width="456" height="362" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<text x="334" y="450" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Audio-System (Windows)</text>
+<text x="334" y="474" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8E8E93" text-anchor="start" >Nur ändern, wenn nötig. Stream startet kurz neu.</text>
+<circle cx="350" cy="496" r="11" fill="none" stroke="#7FA7FF" stroke-width="2.5"/>
+<circle cx="350" cy="496" r="6" fill="#7FA7FF"/>
+<text x="372" y="502" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="700" fill="#F2F2F2" text-anchor="start" >WASAPI (geteilt)</text>
+<rect x="515.3000000000001" y="486" width="72" height="21" rx="10" fill="#2F3550" />
+<text x="551.3000000000001" y="501" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#7FA7FF" text-anchor="middle" >Standard</text>
+<text x="372" y="522" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8E8E93" text-anchor="start" >Nativ, mischt sich mit anderen Programmen</text>
+<circle cx="350" cy="552" r="11" fill="none" stroke="#6E6E75" stroke-width="2.5"/>
+<text x="372" y="558" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="500" fill="#F2F2F2" text-anchor="start" >ASIO</text>
+<rect x="425.4" y="542" width="72" height="21" rx="10" fill="#3A3A41" />
+<text x="461.4" y="557" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#AEAEB2" text-anchor="middle" >optional</text>
+<text x="372" y="578" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8E8E93" text-anchor="start" >Für Audio-Interfaces · oft exklusiv</text>
+<circle cx="350" cy="608" r="11" fill="none" stroke="#6E6E75" stroke-width="2.5"/>
+<text x="372" y="614" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="500" fill="#F2F2F2" text-anchor="start" >WASAPI (exklusiv)</text>
+<text x="372" y="634" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8E8E93" text-anchor="start" >Gerät nur für die Loopstation</text>
+<circle cx="350" cy="664" r="11" fill="none" stroke="#6E6E75" stroke-width="2.5"/>
+<text x="372" y="670" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="500" fill="#F2F2F2" text-anchor="start" >DirectSound</text>
+<rect x="478.1" y="654" width="114" height="21" rx="10" fill="#3A3A41" />
+<text x="535.1" y="669" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#AEAEB2" text-anchor="middle" >Kompatibilität</text>
+<text x="372" y="690" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8E8E93" text-anchor="start" >Ältere Schicht, mehr Verzögerung</text>
+<circle cx="350" cy="720" r="11" fill="none" stroke="#6E6E75" stroke-width="2.5"/>
+<text x="372" y="726" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="500" fill="#F2F2F2" text-anchor="start" >MME</text>
+<rect x="414.55" y="710" width="114" height="21" rx="10" fill="#3A3A41" />
+<text x="471.55" y="725" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#AEAEB2" text-anchor="middle" >letzter Ausweg</text>
+<text x="372" y="746" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8E8E93" text-anchor="start" >Hohe Verzögerung</text>
+<rect x="788" y="414" width="464" height="172" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<text x="810" y="450" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Verzögerung (Latenz)</text>
+<circle cx="824" cy="478" r="11" fill="none" stroke="#7FA7FF" stroke-width="2.5"/>
+<circle cx="824" cy="478" r="6" fill="#7FA7FF"/>
+<text x="846" y="484" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="700" fill="#F2F2F2" text-anchor="start" >Automatisch</text>
+<rect x="952.1" y="468" width="79" height="21" rx="10" fill="#2F3550" />
+<text x="991.6" y="483" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#7FA7FF" text-anchor="middle" >empfohlen</text>
+<text x="846" y="504" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8E8E93" text-anchor="start" >aus den Geräten ermittelt: 23 ms</text>
+<circle cx="824" cy="532" r="11" fill="none" stroke="#6E6E75" stroke-width="2.5"/>
+<text x="846" y="538" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="500" fill="#F2F2F2" text-anchor="start" >Von Hand</text>
+<rect x="952" y="514" width="100" height="36" rx="10" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<text x="1002" y="538" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#8E8E93" text-anchor="middle" >– ms</text>
+<text x="812" y="572" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="400" fill="#8E8E93" text-anchor="start" >Wird nach Geräte-/System-Wechsel neu berechnet.</text>
+<rect x="788" y="602" width="464" height="174" rx="14" fill="#FF9F0A" fill-opacity="0.09" stroke="#FF9F0A" stroke-opacity="0.40" stroke-width="1.5" />
+<path transform="translate(804,618) scale(1.0000)" d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01" fill="none" stroke="#FF9F0A" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="840" y="635" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="start" >Für gutes Looping</text>
+<text x="840" y="656" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >• Kabelgebundene Kinderkopfhörer mit eigener Begrenzung</text>
+<text x="840" y="677" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >• Bluetooth ist meist zu langsam für Aufnahmen</text>
+<text x="840" y="698" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >• Lautsprecher + Mikro = Echo/Rückkopplung</text>
+<text x="840" y="719" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >• ASIO4ALL ist nur ein Wrapper, kein echter Treiber</text>
+<text x="840" y="740" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >• Gerät fehlt? Systemstandard wird genutzt + Hinweis</text>
+<rect x="0" y="800" width="1280" height="116" fill="#F4F4F6"/><rect x="0" y="800" width="1280" height="4" fill="#7FA7FF"/><text x="24" y="834" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="20" font-weight="700" fill="#111114" text-anchor="start" >Mockup 10 · Elternbereich – Geräte (Mikrofon / Kopfhörer) und Audio-System</text><text x="1256" y="834" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="600" fill="#55555C" text-anchor="end" >Plan §8, §11.1, §12.1–12.2, §3.1</text><text x="24" y="858" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#3A3A41" text-anchor="start" >Eingang und Ausgang getrennt wählbar, nach Audio-System gruppiert, gespeichert nach Gerätename. Wechsel live (Stream startet kurz neu, wird angesagt).</text><text x="24" y="877" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#3A3A41" text-anchor="start" >Windows: WASAPI Shared = Standard; ASIO optional mit Warnung (exklusiv); DirectSound/MME nur Kompatibilität. Linux: ALSA (PipeWire/Pulse), macOS: CoreAudio.</text>
+</svg>
