@@ -57,6 +57,9 @@ class FakeAudio:
         self.sample_rate = sample_rate
         self.available_input = available_input
         self.voices: dict[int, tuple[np.ndarray, bool]] = {}
+        # (free, align) each pad was last played with (see ``AudioBackend.play``).
+        self.play_modes: dict[int, tuple[bool, bool]] = {}
+        self.record_align = True  # ``align`` of the last start_recording
         self.effects: list[np.ndarray] = []
         self.calls: list[tuple[Any, ...]] = []
         self._record_start: float | None = None
@@ -78,10 +81,11 @@ class FakeAudio:
         self.clips = 0
         self.clap_times: list[float] | None = None
 
-    def start_recording(self) -> bool:
+    def start_recording(self, align: bool = True) -> bool:
         if not self.available_input:
             return False
         self.calls.append(("start_recording",))
+        self.record_align = align
         self._record_start = self.clock()
         return True
 
@@ -114,9 +118,12 @@ class FakeAudio:
     def pending_pads(self) -> set[int]:
         return set(self.pending)
 
-    def play(self, pad: int, data: np.ndarray, loop: bool) -> None:
+    def play(
+        self, pad: int, data: np.ndarray, loop: bool, free: bool = False, align: bool = False
+    ) -> None:
         self.calls.append(("play", pad, loop))
         self.voices[pad] = (data, loop)
+        self.play_modes[pad] = (free, align)
 
     def stop(self, pad: int, at_boundary: bool = False) -> None:
         self.calls.append(("stop", pad, at_boundary))

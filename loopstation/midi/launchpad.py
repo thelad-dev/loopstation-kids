@@ -272,6 +272,14 @@ class LaunchpadController:
 
     def poll(self) -> list[int]:
         """Return pads pressed since the last call; rescan when disconnected."""
+        return [pad for pad, down in self.poll_events() if down]
+
+    def poll_events(self) -> list[tuple[int, bool]]:
+        """``(pad, down)`` for every press (note on) and release (note off, or note on with
+        velocity 0) since the last call, in order; rescan when disconnected.
+
+        The release is what tells a held pad (free mode) from a tap.
+        """
         now = self._clock()
         if not self.connected:
             if now >= self._next_scan:
@@ -284,17 +292,18 @@ class LaunchpadController:
                 log.info("Launchpad unplugged")
                 self._disconnect()
                 return []
-        pressed: list[int] = []
+        events: list[tuple[int, bool]] = []
         try:
             for message in self._inport.iter_pending():
-                if message.type == "note_on" and message.velocity > 0 and self._mapping:
+                is_on = message.type == "note_on"
+                if (is_on or message.type == "note_off") and self._mapping:
                     pad = self._mapping.pad_for(message.note)
                     if pad is not None:
-                        pressed.append(pad)
+                        events.append((pad, is_on and message.velocity > 0))
         except Exception as exc:
             log.warning("Launchpad read failed, treating it as unplugged: %s", exc)
             self._disconnect()
-        return pressed
+        return events
 
     def set_colors(self, colors: dict[int, str]) -> None:
         """Remember the wanted colours and send only what changed."""

@@ -42,6 +42,12 @@ SNAPSHOT = "snapshot"
 # recording was moved circularly to its first onset; the WAV already is moved).
 MASTER_SET = "master_set"
 SESSION_START = "session_start"
+# Free pad mode: ``pad_free {pad, data: {free: bool}}`` puts a pad into (or takes
+# it out of) the free mode, in which its sample keeps its own length and is
+# neither cut nor stretched to the loop grid. It can be undone like a content
+# change. A free pad that records while the session has no grid sets one:
+# ``master_set`` with ``source: "free_pad"`` (there is no second grid event).
+PAD_FREE = "pad_free"
 
 EVENT_TYPES = frozenset(
     {
@@ -58,12 +64,13 @@ EVENT_TYPES = frozenset(
         SNAPSHOT,
         MASTER_SET,
         SESSION_START,
+        PAD_FREE,
     }
 )
 
 # Events that change pad content and can therefore be undone. Playback and
 # flow events (play, loops, record_start) are skipped by undo on purpose.
-CONTENT_TYPES = frozenset({RECORD_STOP, DELETE_PAD, DELETE_ALL, RESTORE_PAD})
+CONTENT_TYPES = frozenset({RECORD_STOP, DELETE_PAD, DELETE_ALL, RESTORE_PAD, PAD_FREE})
 
 
 class EventFormatError(ValueError):

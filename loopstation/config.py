@@ -73,6 +73,11 @@ class Settings:
     metronome_tone: bool = False
     # Level of the tick in dB(FS) before the master volume (kept quiet on purpose).
     metronome_level_db: float = -20.0
+    # --- Free pad mode (W4-FREI) ---
+    # A loop on a free pad keeps its own length. On: it still begins on the next
+    # loop start of the other loops, so it falls in without losing length. Off:
+    # it begins at once.
+    free_pad_on_grid: bool = False
 
     @property
     def beats_per_bar(self) -> int:
@@ -201,6 +206,9 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
         values["metronome_level_db"] = _check_float(
             source, "metronome_level_db", raw["metronome_level_db"], -40, -6
         )
+    # Free pad mode (W4-FREI).
+    if "free_pad_on_grid" in raw:
+        values["free_pad_on_grid"] = _check_bool(source, "free_pad_on_grid", raw["free_pad_on_grid"])
     return Settings(**values)
 
 
@@ -276,6 +284,8 @@ SETTING_COMMENTS: dict[str, str] = {
                       "einzustellen, das Kind sieht nur den Puls). Wirkt sofort.",
     "metronome_level_db": "Pegel des Metronom-Tons in dB(FS) von -40 bis -6, vor Lautstärke und "
                           "Obergrenze. Wirkt sofort.",
+    "free_pad_on_grid": "true = ein Loop auf einem freien Pad beginnt am nächsten Loop-Anfang der anderen "
+                        "Loops und behält seine eigene Länge, false = er beginnt sofort. Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 

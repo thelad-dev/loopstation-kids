@@ -111,6 +111,20 @@ def draw_icon(painter: QPainter, name: str, rect: QRectF, color: QColor) -> None
         painter.scale(-1, 1)
         draw_icon(painter, "undo", rect, color)
 
+    elif name == "wave":
+        # A soft wave: the sign of a free pad (a hummed tune, no beat).
+        painter.setPen(_pen(color, max(3.0, s * 0.055)))
+        u = s / 24
+
+        def point(x: float, y: float) -> QPointF:
+            return QPointF(r.left() + x * u, r.top() + y * u)
+
+        wave = QPainterPath(point(2, 12))
+        wave.cubicTo(point(4.5, 6), point(7, 6), point(9, 12))
+        wave.cubicTo(point(11, 18), point(13.5, 18), point(16, 12))
+        wave.cubicTo(point(18.5, 6), point(20.5, 6), point(22, 12))
+        painter.drawPath(wave)
+
     elif name == "history":
         # Clock face.
         painter.setPen(_pen(color, s * 0.11))

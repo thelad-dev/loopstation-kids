@@ -21,7 +21,7 @@ class NullAudio:
         # pad -> end time (None = looping forever)
         self._voices: dict[int, float | None] = {}
 
-    def start_recording(self) -> bool:
+    def start_recording(self, align: bool = True) -> bool:
         return False
 
     def stop_recording(self) -> np.ndarray | None:
@@ -42,7 +42,9 @@ class NullAudio:
     def pending_pads(self) -> set[int]:
         return set()
 
-    def play(self, pad: int, data: np.ndarray, loop: bool) -> None:
+    def play(
+        self, pad: int, data: np.ndarray, loop: bool, free: bool = False, align: bool = False
+    ) -> None:
         duration = len(data) / self.sample_rate
         self._voices[pad] = None if loop else self._clock() + duration
 

@@ -18,6 +18,12 @@ what it replaced onto a redo stack (same entry shape, ``seq`` is the seq of the
 undo event); a ``redo`` event moves it back. Any new content change clears the
 redo stack. Like the undo stack it is part of every snapshot.
 
+A pad can be in the free mode (``PadState.free``, set by a ``pad_free``
+event). Switching it is a content change: its undo entry carries a ``"free"``
+key ``{pad_id: previous flag}`` next to the (unchanged) samples, and emptying a
+pad (``delete_pad``, ``delete_all``) puts the flag back to normal and keeps the
+old flag in the entry, so undo brings sample and mode back together.
+
 The loop grid ("master") is one bar, normally the length of the first sound of
 a session, ``{"frames": int, "rate": int}``; with the onset grid it may also
 carry ``source``, ``signature`` and ``pad`` (see ``parse_master``). A
@@ -50,6 +56,8 @@ class PadState:
 
     sample: str | None = None
     looping: bool = False
+    # Free mode: the sample keeps its own length, it is not fitted to the grid.
+    free: bool = False
     # Every sample ever recorded on this pad, oldest first, without duplicates.
     history: list[str] = field(default_factory=list)
 
@@ -92,14 +100,7 @@ class AppState:
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dict (pad ids become strings)."""
         return {
-            "pads": {
-                str(pad_id): {
-                    "sample": pad.sample,
-                    "looping": pad.looping,
-                    "history": list(pad.history),
-                }
-                for pad_id, pad in sorted(self.pads.items())
-            },
+            "pads": {str(pad_id): _pad_to_dict(pad) for pad_id, pad in sorted(self.pads.items())},
             "undo_stack": [_entry_to_dict(entry) for entry in self.undo_stack],
             "redo_stack": [_entry_to_dict(entry) for entry in self.redo_stack],
             "last_seq": self.last_seq,
@@ -113,6 +114,7 @@ class AppState:
             int(pad_id): PadState(
                 sample=pad.get("sample"),
                 looping=bool(pad.get("looping", False)),
+                free=bool(pad.get("free", False)),
                 history=list(pad.get("history", [])),
             )
             for pad_id, pad in raw.get("pads", {}).items()
@@ -131,6 +133,13 @@ class AppState:
     def has_content(self) -> bool:
         """True if at least one pad holds a sample."""
         return any(pad.sample is not None for pad in self.pads.values())
+
+
+def _pad_to_dict(pad: PadState) -> dict[str, Any]:
+    out: dict[str, Any] = {"sample": pad.sample, "looping": pad.looping, "history": list(pad.history)}
+    if pad.free:
+        out["free"] = True  # left out otherwise: snapshots of sessions without free pads stay as they were
+    return out
 
 
 def parse_master(raw: Any) -> dict[str, Any] | None:
@@ -173,6 +182,8 @@ def _entry_to_dict(entry: dict[str, Any]) -> dict[str, Any]:
     }
     if "master" in entry:
         out["master"] = None if entry["master"] is None else dict(entry["master"])
+    if "free" in entry:
+        out["free"] = {str(p): flag for p, flag in sorted(entry["free"].items())}
     return out
 
 
@@ -184,6 +195,9 @@ def _entry_from_dict(raw: dict[str, Any]) -> dict[str, Any]:
     # Only entries of events that changed the master carry the key.
     if "master" in raw:
         entry["master"] = parse_master(raw["master"])
+    # Only entries that switched the free mode of a pad carry the key.
+    if "free" in raw:
+        entry["free"] = {int(p): bool(flag) for p, flag in raw["free"].items()}
     return entry
 
 
@@ -216,9 +230,17 @@ def _push(stack: list[dict[str, Any]], entry: dict[str, Any]) -> None:
         del stack[: len(stack) - UNDO_LIMIT]
 
 
-def _push_undo(state: AppState, seq: int, previous: dict[int, str | None]) -> None:
-    """Push the undo entry of a new content change; that ends the redo chain."""
-    _push(state.undo_stack, {"seq": seq, "pads": dict(previous)})
+def _push_undo(
+    state: AppState, seq: int, previous: dict[int, str | None], free: dict[int, bool] | None = None
+) -> None:
+    """Push the undo entry of a new content change; that ends the redo chain.
+
+    ``free`` is given when the change also moved pads out of (or into) the free mode.
+    """
+    entry: dict[str, Any] = {"seq": seq, "pads": dict(previous)}
+    if free:
+        entry["free"] = dict(free)
+    _push(state.undo_stack, entry)
     state.redo_stack.clear()
 
 
@@ -249,6 +271,21 @@ def _entry_index(stack: list[dict[str, Any]], pad: int | None, target: int | Non
     return None
 
 
+def _entry_without(
+    entry: dict[str, Any], pads: dict[int, str | None], keep_master: bool = True
+) -> dict[str, Any]:
+    """``entry`` reduced to ``pads`` (what is left after one pad stepped out of it)."""
+    out: dict[str, Any] = {**entry, "pads": pads}
+    if not keep_master:
+        out.pop("master", None)
+    free = {p: flag for p, flag in entry.get("free", {}).items() if p in pads}
+    if free:
+        out["free"] = free
+    else:
+        out.pop("free", None)
+    return out
+
+
 def _travel(state: AppState, event: ev.Event, undoing: bool) -> None:
     """Undo (``undoing``) or redo one entry and keep both stacks in step.
 
@@ -270,21 +307,30 @@ def _travel(state: AppState, event: ev.Event, undoing: bool) -> None:
     if split:
         moved = {pad_id: entry["pads"][pad_id]}
         rest = {p: s for p, s in entry["pads"].items() if p != pad_id}
-        source[index] = {**entry, "pads": rest}
+        source[index] = _entry_without(entry, rest)
     else:
         moved = dict(entry["pads"])
         del source[index]
+    moved_free = {p: flag for p, flag in entry.get("free", {}).items() if p in moved}
 
     master_before = state.master
     replaced: dict[int, str | None] = {}
+    replaced_free: dict[int, bool] = {}
     for p, sample in moved.items():
         pad = _pad(state, p)
         replaced[p] = pad.sample
-        # A pad whose sound changes (or disappears) stops looping.
+        # A pad whose sound or mode changes (or whose sound disappears) stops looping.
         if pad.sample != sample or sample is None:
             pad.looping = False
         pad.sample = sample
+        if p in moved_free:
+            replaced_free[p] = pad.free
+            if pad.free != moved_free[p]:
+                pad.looping = False
+            pad.free = moved_free[p]
     twin: dict[str, Any] = {"seq": event.seq, "pads": replaced}
+    if replaced_free:
+        twin["free"] = replaced_free
 
     # The grid comes back with the entry whose event changed it. A step on a
     # single pad only restores a grid that is gone; it never replaces another.
@@ -296,7 +342,7 @@ def _travel(state: AppState, event: ev.Event, undoing: bool) -> None:
             state.master = entry["master"]
             twin["master"] = master_before
             if split:
-                source[index] = {"seq": entry["seq"], "pads": rest}
+                source[index] = _entry_without(entry, rest, keep_master=False)
     _push(other, twin)
 
 
@@ -325,18 +371,29 @@ def apply(state: AppState, event: ev.Event) -> AppState:
     elif event.type == ev.DELETE_PAD:
         if pad_id is not None:
             pad = _pad(new, pad_id)
-            if pad.sample is not None:
-                _push_undo(new, event.seq, {pad_id: pad.sample})
+            if pad.sample is not None or pad.free:
+                _push_undo(new, event.seq, {pad_id: pad.sample}, {pad_id: True} if pad.free else None)
                 pad.sample = None
             pad.looping = False
+            pad.free = False
 
     elif event.type == ev.DELETE_ALL:
-        previous = {p: pad.sample for p, pad in new.pads.items() if pad.sample is not None}
+        previous = {p: pad.sample for p, pad in new.pads.items() if pad.sample is not None or pad.free}
         if previous:
-            _push_undo(new, event.seq, previous)
+            _push_undo(new, event.seq, previous, {p: True for p, pad in new.pads.items() if pad.free})
         for pad in new.pads.values():
             pad.sample = None
             pad.looping = False
+            pad.free = False
+
+    elif event.type == ev.PAD_FREE:
+        if pad_id is not None:
+            pad = _pad(new, pad_id)
+            free = bool(event.data.get("free", True))
+            if free != pad.free:
+                _push_undo(new, event.seq, {pad_id: pad.sample}, {pad_id: pad.free})
+                pad.free = free
+                pad.looping = False  # it plays differently now: the loop has to be started again
 
     elif event.type == ev.RESTORE_PAD:
         sample = event.data.get("sample")

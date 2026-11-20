@@ -29,6 +29,11 @@ class PadButton(QAbstractButton):
     lights the pad up sky blue for the wave that shows a new session. ``badge``
     puts a round grey "back" badge in the top right corner (the latest change
     of this pad can be taken back); its button ``badge_button`` has its own click.
+    A ``free`` pad (its sound keeps its own length, no beat) is a circle with a
+    wave symbol instead of a rounded square, so it is told apart by shape and not
+    only by colour. While a pad is held (``hold`` = how far the ring has filled,
+    0..1) a ring with the wave symbol fills in the middle and the words "halten ..."
+    sit below it.
     """
 
     def __init__(self, index: int, parent: QWidget | None = None) -> None:
@@ -43,6 +48,8 @@ class PadButton(QAbstractButton):
         self.clip = False  # the microphone is too loud right now (recording pad)
         self.level = 0  # coarse input level 0..3 while recording
         self.badge = False  # "back" badge: the latest change of this pad can be undone
+        self.free = False  # free mode: a circle with a wave symbol
+        self.hold: float | None = None  # how far the ring of a held pad has filled
         # The badge is a child button that exists only while it is shown; a press
         # on it never reaches the pad. ``on_badge`` is called when it is clicked.
         self.badge_button: QPushButton | None = None
@@ -68,20 +75,24 @@ class PadButton(QAbstractButton):
         clip: bool = False,
         level: int = 0,
         badge: bool = False,
+        free: bool = False,
+        hold: float | None = None,
     ) -> None:
         # The countdown only needs whole seconds and a bar with ~200 steps.
         shown_remaining = None if remaining is None else max(1, math.ceil(remaining))
         sparkle = round(sparkle, 2)
+        hold = None if hold is None else round(hold, 2)
         new = (color, overlay, shown_remaining, round(fraction, 3), waiting, sparkle, clip, level,
-               badge)
+               badge, free, hold)
         old = (self.color, self.overlay, self.remaining, round(self.fraction, 3), self.waiting,
-               self.sparkle, self.clip, self.level, self.badge)
+               self.sparkle, self.clip, self.level, self.badge, self.free, self.hold)
         if new == old and waiting is None:
             self._sync_badge()
             return
         self.color, self.overlay, self.remaining, self.fraction = color, overlay, shown_remaining, fraction
         self.waiting, self.sparkle, self.clip, self.level = waiting, sparkle, clip, level
         self.badge = badge
+        self.free, self.hold = free, hold
         self._sync_badge()
         self.update()
 
@@ -153,7 +164,8 @@ class PadButton(QAbstractButton):
         glow = side * 0.05
         outer = QRectF((self.width() - side) / 2, (self.height() - side) / 2, side, side)
         rect = outer.adjusted(glow, glow, -glow, -glow)
-        radius = rect.width() * 0.12
+        # A free pad is round (mockup 04), the others are rounded squares.
+        radius = rect.width() / 2 if self.free else rect.width() * 0.12
         base = QColor(PAD_COLORS[self.color])
         if self.waiting is not None:
             base = base.darker(165)  # not yet (or no longer) what the colour says
@@ -189,8 +201,10 @@ class PadButton(QAbstractButton):
         painter.setFont(number_font)
         painter.setPen(ink)
         inset = rect.width() * 0.08
+        # On a round pad the number sits at the top centre (mockup 04).
+        across = Qt.AlignmentFlag.AlignHCenter if self.free else Qt.AlignmentFlag.AlignLeft
         painter.drawText(rect.adjusted(inset, inset * 0.7, -inset, -inset),
-                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop, str(self.index + 1))
+                         across | Qt.AlignmentFlag.AlignTop, str(self.index + 1))
 
         if self.remaining is not None:
             # Recording: big seconds countdown and a shrinking bar.
@@ -211,10 +225,12 @@ class PadButton(QAbstractButton):
             painter.setBrush(QColor("#FFFFFF"))
             painter.drawRoundedRect(done, bar_h / 2, bar_h / 2)
             self._paint_level(painter, rect, inset)
-        elif self.waiting is None and self.overlay:
+        elif self.waiting is None and self.hold is not None:
+            self._paint_hold(painter, rect, side)
+        elif self.waiting is None and (self.overlay or self.free):
             icon = rect.width() * 0.36
             center = QPointF(rect.center())
-            draw_icon(painter, self.overlay,
+            draw_icon(painter, self.overlay or "wave",
                       QRectF(center.x() - icon / 2, center.y() - icon / 2, icon, icon),
                       QColor(0, 0, 0, 105))
 
@@ -226,6 +242,37 @@ class PadButton(QAbstractButton):
         if self.clip:
             self._paint_clip(painter, rect, side)
         painter.end()
+
+    def _paint_hold(self, painter: QPainter, rect: QRectF, side: float) -> None:
+        """A ring that fills while the pad is held, the wave inside and "halten ..." below (mockup 04)."""
+        assert self.hold is not None
+        radius = rect.width() * 0.25
+        center = QPointF(rect.center().x(), rect.center().y() - rect.height() * 0.03)
+        width = rect.width() * 0.073
+        ring = QRectF(center.x() - radius, center.y() - radius, 2 * radius, 2 * radius)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(0, 0, 0, 48), width))
+        painter.drawEllipse(ring)
+        ink = QColor("#111114")
+        pen = QPen(ink, width)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        if self.hold > 0:
+            # Clockwise from the top; Qt angles are 1/16 degree, counter-clockwise from 3 o'clock.
+            painter.drawArc(ring, 90 * 16, -round(self.hold * 360 * 16))
+        icon = rect.width() * 0.22
+        draw_icon(painter, "wave", QRectF(center.x() - icon / 2, center.y() - icon / 2, icon, icon), ink)
+        pill_w, pill_h = rect.width() * 0.561, rect.height() * 0.1585
+        pill = QRectF(rect.center().x() - pill_w / 2, rect.top() + rect.height() * 0.78, pill_w, pill_h)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 84))
+        painter.drawRoundedRect(pill, pill_h / 2, pill_h / 2)
+        font = QFont()
+        font.setPixelSize(max(8, round(rect.width() * 0.0854)))
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor("#FFFFFF"))
+        painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, "halten …")
 
     def _paint_clip(self, painter: QPainter, rect: QRectF, side: float) -> None:
         """"zu laut": white pill with a red rim, a warning triangle and the words (shape, colour, word)."""

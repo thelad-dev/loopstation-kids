@@ -472,7 +472,7 @@ class SoundDeviceAudio:
 
     # ------------------------------------------------------------ recording
 
-    def start_recording(self) -> bool:
+    def start_recording(self, align: bool = True) -> bool:
         if not self.available_input:
             return False
         self._discard_input()
@@ -483,7 +483,7 @@ class SoundDeviceAudio:
             self._rec_aligned = False
             self._auto_db = 0.0
             self._input_peak = 0.0
-            if self._grid is not None and self._grid_running():
+            if align and self._grid is not None and self._grid_running():
                 self._rec_start = next_boundary(self._frame, self._origin, self._grid)
         try:
             stream = self._sd.InputStream(
@@ -547,13 +547,24 @@ class SoundDeviceAudio:
 
     # ------------------------------------------------------------- playback
 
-    def play(self, pad: int, data: np.ndarray, loop: bool) -> None:
+    def play(
+        self, pad: int, data: np.ndarray, loop: bool, free: bool = False, align: bool = False
+    ) -> None:
         data = np.asarray(data, dtype=np.float32)
         # Looped voices get the faded copy; built here, so the audio callback
         # never allocates. One-shots and the switch being off play unchanged.
         played = soften_seam(data, self.sample_rate) if loop and self._soft_seam else data
         with self._lock:
             now = self._frame
+            if free and loop:
+                # A free pad keeps its own length: its voice is not ``synced``, so it
+                # neither anchors the grid nor stops at a boundary. ``align`` only
+                # moves its start to the next loop start of the loops that run.
+                start = now
+                if align and self._grid is not None and self._grid_running(exclude=pad):
+                    start = next_boundary(now, self._origin, self._grid)
+                self._voices[pad] = _Voice(played, True, start=start, source=data)
+                return
             if not (loop and self._grid is not None):
                 self._voices[pad] = _Voice(played, loop, start=now, source=data)
                 return
