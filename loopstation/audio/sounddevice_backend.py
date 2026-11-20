@@ -15,6 +15,12 @@ started while loops play is cut to begin exactly on a boundary. Microphone
 blocks are mapped to output frames ("which frame could be heard when the
 microphone picked this up") with the input and output latency, so the new
 loop lines up with what the child heard while recording.
+
+Levels: the output is the sum of all voices times the master volume (which
+moves in a ramp, never in a jump), kept under the ceiling by a peak limiter
+(``dynamics.PeakLimiter``). The microphone gets a trim in dB, an optional
+auto gain and a soft clipper; its peak and clipped blocks are counted so the
+controller can warn about a recording that is too loud.
 """
 
 from __future__ import annotations
@@ -28,9 +34,28 @@ from typing import Any
 
 import numpy as np
 
+from loopstation.audio.dynamics import (
+    CLIP_LEVEL,
+    PeakLimiter,
+    auto_gain_step,
+    block_peak,
+    db_to_gain,
+    gain_to_db,
+    ramp_gain,
+    soft_clip,
+)
 from loopstation.audio.sync import next_boundary, soften_seam
 
 log = logging.getLogger(__name__)
+
+# The master volume needs this long to travel its whole range, whatever the block size.
+VOLUME_RAMP_SECONDS = 0.04
+# Input peaks above this are rounded off by the soft clipper.
+SOFT_CLIP_KNEE = 0.7
+# Smallest ceiling (about -80 dBFS) so the limiter never divides by zero.
+MIN_CEILING = 1e-4
+# Work buffers start at this block size and grow if the device asks for more.
+MIN_SCRATCH_FRAMES = 8192
 
 
 @dataclass
@@ -57,6 +82,10 @@ class SoundDeviceAudio:
         sd: Any = None,
         clock: Callable[[], float] = time.monotonic,
         soft_seam: bool = False,
+        volume: float = 1.0,
+        ceiling_db: float = 0.0,
+        input_gain_db: float = 0.0,
+        auto_gain: bool = False,
     ) -> None:
         if sd is None:
             import sounddevice as sd  # deferred on purpose, see module docstring
@@ -89,6 +118,23 @@ class SoundDeviceAudio:
         self._rec_aligned = False
         self._latency_frames = 0
         self._input: Any = None
+
+        # Level chain. Output: target volume (set from the GUI thread, read by
+        # the callback), the gain actually applied, the limiter and work
+        # buffers that are only touched by the output callback.
+        self._volume = min(1.0, max(0.0, volume))
+        self._ceiling = self._ceiling_linear(ceiling_db)
+        self._gain = self._volume
+        self._gain_step = 1.0 / (VOLUME_RAMP_SECONDS * sample_rate)
+        self._limiter = PeakLimiter(sample_rate)
+        self._grow_scratch(MIN_SCRATCH_FRAMES)
+        # Input: trim, auto gain (offset in dB, reset with every recording)
+        # and what the controller polls.
+        self._input_gain_db = input_gain_db
+        self._auto_gain = auto_gain
+        self._auto_db = 0.0
+        self._input_peak = 0.0
+        self._clip_count = 0
 
         # One output stream runs for the lifetime of the app and mixes all
         # voices; starting a sound is then just adding it to the table.
@@ -143,8 +189,16 @@ class SoundDeviceAudio:
             return False
         return alive
 
+    def _grow_scratch(self, frames: int) -> None:
+        self._mix = np.zeros(frames, dtype=np.float32)
+        self._ramp = np.arange(1, frames + 1, dtype=np.float32)
+        self._gains = np.empty(frames, dtype=np.float32)
+
     def _output_callback(self, outdata: np.ndarray, frames: int, _time: Any, status: Any) -> None:
-        mix = np.zeros(frames, dtype=np.float32)
+        if frames > len(self._mix):
+            self._grow_scratch(max(frames, 2 * len(self._mix)))  # rare: a larger block than ever
+        mix = self._mix[:frames]
+        mix.fill(0.0)
         with self._lock:
             start = self._frame
             self._block_start = start
@@ -154,7 +208,19 @@ class SoundDeviceAudio:
                 del self._voices[pad]
             self._effects = [e for e in self._effects if self._render(mix, e, start)]
             self._frame = start + frames
-        np.clip(mix, -1.0, 1.0, out=mix)
+            target, ceiling = self._volume, self._ceiling
+        # Master volume in a ramp, then the limiter (the only thing that
+        # decides what the peak may be; the final clip inside it is rounding).
+        end = ramp_gain(self._gain, target, frames, self._gain_step)
+        if end != self._gain:
+            gains = self._gains[:frames]
+            np.multiply(self._ramp[:frames], (end - self._gain) / frames, out=gains)
+            gains += self._gain
+            mix *= gains
+        elif end != 1.0:
+            mix *= end
+        self._gain = end
+        self._limiter.process(mix, ceiling)
         outdata[:, 0] = mix
 
     def _now_frame(self) -> int:
@@ -186,9 +252,61 @@ class SoundDeviceAudio:
             room = self._max_frames - self._recorded_frames
             if room <= 0:
                 return
-            chunk = block[:room].copy()
+            chunk = self._process_input(block[:room])
             self._chunks.append(chunk)
             self._recorded_frames += len(chunk)
+
+    def _process_input(self, part: np.ndarray) -> np.ndarray:
+        """Trim, auto gain and soft clip one block; note its peak and clipping (lock held).
+
+        Returns a new array, the microphone buffer itself is never kept.
+        """
+        raw_peak = block_peak(part)
+        trim = db_to_gain(self._input_gain_db)
+        gain = trim * db_to_gain(self._auto_db) if self._auto_gain else trim
+        loud = raw_peak * gain
+        clipped = raw_peak >= CLIP_LEVEL or loud >= CLIP_LEVEL
+        chunk = part * np.float32(gain)
+        if loud > SOFT_CLIP_KNEE:
+            soft_clip(chunk, SOFT_CLIP_KNEE)
+        if self._auto_gain and len(part):
+            mean_square = float(np.dot(part, part)) / len(part)
+            rms_db = gain_to_db(mean_square ** 0.5 * trim)
+            self._auto_db = auto_gain_step(
+                self._auto_db, rms_db, raw_peak * trim, clipped, len(part) / self.sample_rate
+            )
+        self._input_peak = max(self._input_peak, loud)
+        if clipped:
+            self._clip_count += 1
+        return chunk
+
+    # --------------------------------------------------------------- levels
+
+    @staticmethod
+    def _ceiling_linear(db: float) -> float:
+        return max(MIN_CEILING, min(1.0, db_to_gain(db)))
+
+    def set_volume(self, volume: float) -> None:
+        with self._lock:
+            self._volume = min(1.0, max(0.0, float(volume)))
+
+    def set_ceiling_db(self, db: float) -> None:
+        with self._lock:
+            self._ceiling = self._ceiling_linear(db)
+
+    def set_input_gain_db(self, db: float) -> None:
+        with self._lock:
+            self._input_gain_db = float(db)
+
+    def set_auto_gain(self, enabled: bool) -> None:
+        with self._lock:
+            self._auto_gain = bool(enabled)
+            self._auto_db = 0.0
+
+    def poll_input_level(self) -> tuple[float, int]:
+        with self._lock:
+            peak, self._input_peak = self._input_peak, 0.0
+            return peak, self._clip_count
 
     # ------------------------------------------------------------ loop grid
 
@@ -230,6 +348,8 @@ class SoundDeviceAudio:
             self._recorded_frames = 0
             self._rec_start = None
             self._rec_aligned = False
+            self._auto_db = 0.0
+            self._input_peak = 0.0
             if self._grid is not None and self._grid_running():
                 self._rec_start = next_boundary(self._frame, self._origin, self._grid)
         try:

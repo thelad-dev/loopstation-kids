@@ -24,6 +24,7 @@ from loopstation.controller import Controller, Mode
 from loopstation.gui.confirm_dialog import ConfirmDialog
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
+from loopstation.gui.volume_slider import VolumeSlider
 from loopstation.gui.widgets import (
     ACCENT_BLUE,
     ACCENT_GRAY,
@@ -135,6 +136,13 @@ class MainWindow(QMainWindow):
         self.frame = Frame()
         self.setCentralWidget(self.frame)
 
+        # Header: the volume control sits in the top right corner.
+        self.volume_slider = VolumeSlider()
+        self.volume_slider.volumeChanged.connect(self.controller.set_volume)
+        header = QHBoxLayout()
+        header.addStretch(1)
+        header.addWidget(self.volume_slider)
+
         # Mode bar.
         self.mode_buttons: dict[Mode, BigButton] = {}
         mode_bar = QHBoxLayout()
@@ -176,6 +184,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(self.frame)
         layout.setContentsMargins(24, 18, 24, 18)
         layout.setSpacing(14)
+        layout.addLayout(header)
         layout.addLayout(mode_bar)
         layout.addWidget(self.grid, 1)
         layout.addLayout(actions)
@@ -276,6 +285,8 @@ class MainWindow(QMainWindow):
         waiting = controller.waiting_pads()
         progress = controller.loop_progress() if waiting else None
         session = controller.session_shown()
+        self.volume_slider.set_state(controller.volume, controller.volume_limit)
+        clipping = controller.input_clipping()
         for pad in self.grid.pads:
             color = colors.get(pad.index, "white")
             sparkle = 0.0 if session is None else self._session_wave(pad.index, session)
@@ -283,7 +294,8 @@ class MainWindow(QMainWindow):
                 # Waits for the next loop start: pulsing frame, filling bar, no text.
                 pad.set_look(color, None, None, 0.0, progress if progress is not None else 0.0, sparkle)
             elif pad.index == controller.recording_pad and remaining is not None:
-                pad.set_look(color, None, remaining, min(1.0, remaining / limit), None, sparkle)
+                pad.set_look(color, None, remaining, min(1.0, remaining / limit), None, sparkle,
+                             clip=clipping)
             else:
                 pad.set_look(color, self._overlay(controller.mode, color, pad.index), None, 0.0,
                              None, sparkle)

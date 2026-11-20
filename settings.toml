@@ -42,3 +42,25 @@ data_dir = "."
 # damit es beim Sprung vom Ende zum Anfang nicht knackt. Die Loop-Länge bleibt gleich.
 # false = harter Sprung wie bisher.
 soft_seam = true
+
+# --- Pegel: Lautstärke, Obergrenze, Aufnahmepegel ---
+
+# Lautstärke der Loopstation von 0 (still) bis 1. Der Regler rechts oben im
+# Fenster stellt denselben Wert ein. Sie bleibt immer unter der Obergrenze.
+volume = 0.5
+
+# Obergrenze in dB(FS) von -30 bis 0: Die Ausgabe wird nie lauter als das,
+# auch nicht bei vielen Loops und Pieptönen zugleich. Das ist eine Grenze im
+# Rechner; den Schalldruck am Ohr bestimmen auch Systemlautstärke und Kopfhörer.
+max_level_db = -6
+
+# Mikrofonpegel in dB von -24 bis 24 (0 = unverändert). Kurze Spitzen werden
+# weich begrenzt, statt hart zu verzerren.
+input_gain_db = 0
+
+# true = der Aufnahmepegel wird langsam ausgeglichen (nie lauter, solange das
+# Mikrofon übersteuert). Schützt nicht vor einem übersteuerten Mikrofon.
+auto_gain = false
+
+# true = Pegelanzeige der Aufnahme für Eltern.
+peak_meter = false

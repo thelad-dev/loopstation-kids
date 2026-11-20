@@ -210,7 +210,8 @@ def test_second_loop_lands_on_the_first_one_on_a_real_engine(tmp_path, clock):
     """
     device = FakeSoundDevice(block=100, delay=80, loopback=True)
     audio = SoundDeviceAudio(SR, 10, latency_seconds=0.01, sd=device, clock=lambda: 0.0)
-    controller, _ = build(tmp_path, clock, audio=audio, sound_effects=False)
+    # Unity volume and no ceiling: this test is about timing, not levels.
+    controller, _ = build(tmp_path, clock, audio=audio, sound_effects=False, volume=1.0, max_level_db=0.0)
 
     device.voice = lambda frames: (0.2 * np.sin(frames * 0.37)).astype(np.float32)
     controller.press(0)

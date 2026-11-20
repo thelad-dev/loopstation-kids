@@ -6,7 +6,7 @@ import math
 import time
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPaintEvent, QPen
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPaintEvent, QPen, QPolygonF
 from PySide6.QtWidgets import QAbstractButton, QWidget
 
 from loopstation.gui.icons import draw_icon
@@ -37,6 +37,7 @@ class PadButton(QAbstractButton):
         self.fraction = 0.0  # share of the recording time that is left
         self.waiting: float | None = None  # progress towards the next loop start
         self.sparkle = 0.0  # new-session wave
+        self.clip = False  # the microphone is too loud right now (recording pad)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setAccessibleName(f"Pad {index + 1}")
@@ -55,17 +56,18 @@ class PadButton(QAbstractButton):
         fraction: float,
         waiting: float | None = None,
         sparkle: float = 0.0,
+        clip: bool = False,
     ) -> None:
         # The countdown only needs whole seconds and a bar with ~200 steps.
         shown_remaining = None if remaining is None else max(1, math.ceil(remaining))
         sparkle = round(sparkle, 2)
-        new = (color, overlay, shown_remaining, round(fraction, 3), waiting, sparkle)
+        new = (color, overlay, shown_remaining, round(fraction, 3), waiting, sparkle, clip)
         old = (self.color, self.overlay, self.remaining, round(self.fraction, 3), self.waiting,
-               self.sparkle)
+               self.sparkle, self.clip)
         if new == old and waiting is None:
             return
         self.color, self.overlay, self.remaining, self.fraction = color, overlay, shown_remaining, fraction
-        self.waiting, self.sparkle = waiting, sparkle
+        self.waiting, self.sparkle, self.clip = waiting, sparkle, clip
         self.update()
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
@@ -144,7 +146,32 @@ class PadButton(QAbstractButton):
         if self.sparkle > 0:
             # New session: the pad lights up sky blue with a soft glow.
             self._paint_sparkle(painter, rect, radius, glow)
+        if self.clip:
+            self._paint_clip(painter, rect, side)
         painter.end()
+
+    def _paint_clip(self, painter: QPainter, rect: QRectF, side: float) -> None:
+        """"Too loud": a white badge with a red warning triangle and a bar (colour and shape)."""
+        size = rect.width() * 0.30
+        badge = QRectF(rect.right() - size - rect.width() * 0.03, rect.top() + rect.width() * 0.03,
+                       size, size)
+        painter.setPen(QPen(QColor("#111114"), max(2.0, side * 0.015)))
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.drawRoundedRect(badge, size * 0.2, size * 0.2)
+        red = QColor("#D70015")
+        top = QPointF(badge.center().x(), badge.top() + size * 0.14)
+        left = QPointF(badge.left() + size * 0.14, badge.bottom() - size * 0.16)
+        right = QPointF(badge.right() - size * 0.14, badge.bottom() - size * 0.16)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(red)
+        painter.drawPolygon(QPolygonF([top, right, left]))
+        mark = QColor("#FFFFFF")
+        painter.setBrush(mark)
+        cx = badge.center().x()
+        bar_w = size * 0.10
+        painter.drawRoundedRect(QRectF(cx - bar_w / 2, badge.top() + size * 0.40, bar_w, size * 0.26),
+                                bar_w / 2, bar_w / 2)
+        painter.drawEllipse(QPointF(cx, badge.top() + size * 0.76), bar_w * 0.62, bar_w * 0.62)
 
     def _paint_sparkle(self, painter: QPainter, rect: QRectF, radius: float, glow: float) -> None:
         painter.setBrush(Qt.BrushStyle.NoBrush)

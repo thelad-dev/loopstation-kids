@@ -60,5 +60,20 @@ class NullAudio:
     def play_effect(self, data: np.ndarray) -> None:
         pass
 
+    def set_volume(self, volume: float) -> None:
+        pass
+
+    def set_ceiling_db(self, db: float) -> None:
+        pass
+
+    def set_input_gain_db(self, db: float) -> None:
+        pass
+
+    def set_auto_gain(self, enabled: bool) -> None:
+        pass
+
+    def poll_input_level(self) -> tuple[float, int]:
+        return 0.0, 0
+
     def close(self) -> None:
         self._voices.clear()

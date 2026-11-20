@@ -32,6 +32,13 @@ class Settings:
     # --- Loop seam (W1-NAHT) ---
     # Fade the first and last few milliseconds of every loop so it does not click.
     soft_seam: bool = True
+    # Level chain: master volume (linear gain 0..1, never above the ceiling),
+    # the parents' ceiling in dB(FS), microphone trim in dB, auto gain, peak meter.
+    volume: float = 0.5
+    max_level_db: float = -6.0
+    input_gain_db: float = 0.0
+    auto_gain: bool = False
+    peak_meter: bool = False
 
     @property
     def pad_count(self) -> int:
@@ -109,6 +116,16 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
     # --- Loop seam (W1-NAHT) ---
     if "soft_seam" in raw:
         values["soft_seam"] = _check_bool(source, "soft_seam", raw["soft_seam"])
+    # Level chain (volume, ceiling, trim, auto gain, peak meter).
+    if "volume" in raw:
+        values["volume"] = _check_float(source, "volume", raw["volume"], 0, 1)
+    if "max_level_db" in raw:
+        values["max_level_db"] = _check_float(source, "max_level_db", raw["max_level_db"], -30, 0)
+    if "input_gain_db" in raw:
+        values["input_gain_db"] = _check_float(source, "input_gain_db", raw["input_gain_db"], -24, 24)
+    for key in ("auto_gain", "peak_meter"):
+        if key in raw:
+            values[key] = _check_bool(source, key, raw[key])
     return Settings(**values)
 
 
