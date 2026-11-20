@@ -10,6 +10,14 @@ pushes ``{"seq": <event seq>, "pads": {pad_id: previous_sample}}`` and an
 the stack is part of every snapshot, undo keeps working after old events have
 been moved to the archive.
 
+An ``undo`` with a ``pad`` takes back the latest entry that touches that pad,
+even when other pads changed afterwards. An entry that covers several pads
+(``delete_all``) only gives up that pad and stays on the stack for the rest,
+so a later global undo neither repeats nor loses anything. Every undo moves
+what it replaced onto a redo stack (same entry shape, ``seq`` is the seq of the
+undo event); a ``redo`` event moves it back. Any new content change clears the
+redo stack. Like the undo stack it is part of every snapshot.
+
 The loop grid ("master") is the length of the first sound of a session,
 ``{"frames": int, "rate": int}``. A ``master_set`` event sets it; it is
 cleared as soon as no pad holds a sample any more (a ``session_start`` event
@@ -52,6 +60,9 @@ class AppState:
     # Entries: {"seq": int, "pads": {pad_id (int): previous sample or None}}.
     # Entries are treated as immutable, so copies of the list may share them.
     undo_stack: list[dict[str, Any]] = field(default_factory=list)
+    # Undone changes that can be redone, same entry shape: {"seq": seq of the
+    # undo event, "pads": {pad_id: sample the undo replaced}}.
+    redo_stack: list[dict[str, Any]] = field(default_factory=list)
     last_seq: int = 0
     # Loop grid {"frames": int, "rate": int}, or None while recordings are free.
     master: dict[str, int] | None = None
@@ -70,6 +81,7 @@ class AppState:
         return AppState(
             pads={pad_id: replace(pad) for pad_id, pad in self.pads.items()},
             undo_stack=list(self.undo_stack),
+            redo_stack=list(self.redo_stack),
             last_seq=self.last_seq,
             master=self.master,
         )
@@ -86,6 +98,7 @@ class AppState:
                 for pad_id, pad in sorted(self.pads.items())
             },
             "undo_stack": [_entry_to_dict(entry) for entry in self.undo_stack],
+            "redo_stack": [_entry_to_dict(entry) for entry in self.redo_stack],
             "last_seq": self.last_seq,
             "master": None if self.master is None else dict(self.master),
         }
@@ -102,9 +115,12 @@ class AppState:
             for pad_id, pad in raw.get("pads", {}).items()
         }
         undo_stack = [_entry_from_dict(entry) for entry in raw.get("undo_stack", [])]
+        # Snapshots written before redo existed have no redo stack.
+        redo_stack = [_entry_from_dict(entry) for entry in raw.get("redo_stack", [])]
         return cls(
             pads=pads,
             undo_stack=undo_stack,
+            redo_stack=redo_stack,
             last_seq=int(raw.get("last_seq", 0)),
             master=parse_master(raw.get("master")),
         )
@@ -168,11 +184,95 @@ def _pad(state: AppState, pad_id: int) -> PadState:
     return state.pads[pad_id]
 
 
+def _push(stack: list[dict[str, Any]], entry: dict[str, Any]) -> None:
+    """Push an entry and enforce the stack limit."""
+    stack.append(entry)
+    if len(stack) > UNDO_LIMIT:
+        del stack[: len(stack) - UNDO_LIMIT]
+
+
 def _push_undo(state: AppState, seq: int, previous: dict[int, str | None]) -> None:
-    """Push an undo entry and enforce the stack limit."""
-    state.undo_stack.append({"seq": seq, "pads": dict(previous)})
-    if len(state.undo_stack) > UNDO_LIMIT:
-        del state.undo_stack[: len(state.undo_stack) - UNDO_LIMIT]
+    """Push the undo entry of a new content change; that ends the redo chain."""
+    _push(state.undo_stack, {"seq": seq, "pads": dict(previous)})
+    state.redo_stack.clear()
+
+
+def find_entry(stack: list[dict[str, Any]], pad: int | None = None) -> dict[str, Any] | None:
+    """The entry an undo/redo takes: the top one, or the latest one touching ``pad``."""
+    if pad is None:
+        return stack[-1] if stack else None
+    index = _entry_index(stack, pad, None)
+    return None if index is None else stack[index]
+
+
+def _entry_index(stack: list[dict[str, Any]], pad: int | None, target: int | None) -> int | None:
+    """Index of the entry an event with ``pad`` and ``target`` refers to, else None.
+
+    Without a pad only the top entry qualifies and ``target`` must name it.
+    With a pad it is the latest entry that touches the pad; ``target``, if
+    given, must name exactly that entry.
+    """
+    if pad is None:
+        if stack and target is not None and stack[-1]["seq"] == target:
+            return len(stack) - 1
+        return None
+    for index in range(len(stack) - 1, -1, -1):
+        if pad in stack[index]["pads"]:
+            if target is not None and stack[index]["seq"] != target:
+                return None
+            return index
+    return None
+
+
+def _travel(state: AppState, event: ev.Event, undoing: bool) -> None:
+    """Undo (``undoing``) or redo one entry and keep both stacks in step.
+
+    The pads of the entry get its samples back; what they held before goes onto
+    the other stack, so the step can be taken back again. A step on one pad of
+    an entry with several pads only moves that pad and leaves the rest.
+    """
+    source, other = ((state.undo_stack, state.redo_stack) if undoing
+                     else (state.redo_stack, state.undo_stack))
+    pad_id = event.pad
+    target = event.data.get("target")
+    index = _entry_index(source, pad_id, target)
+    if index is None:
+        log.warning("%s seq=%s: target %r (pad %r) is not on the stack; ignored",
+                    event.type, event.seq, target, pad_id)
+        return
+    entry = source[index]
+    split = pad_id is not None and len(entry["pads"]) > 1
+    if split:
+        moved = {pad_id: entry["pads"][pad_id]}
+        rest = {p: s for p, s in entry["pads"].items() if p != pad_id}
+        source[index] = {**entry, "pads": rest}
+    else:
+        moved = dict(entry["pads"])
+        del source[index]
+
+    master_before = state.master
+    replaced: dict[int, str | None] = {}
+    for p, sample in moved.items():
+        pad = _pad(state, p)
+        replaced[p] = pad.sample
+        # A pad whose sound changes (or disappears) stops looping.
+        if pad.sample != sample or sample is None:
+            pad.looping = False
+        pad.sample = sample
+    twin: dict[str, Any] = {"seq": event.seq, "pads": replaced}
+
+    # The grid comes back with the entry whose event changed it. A step on a
+    # single pad only restores a grid that is gone; it never replaces another.
+    if "master" in entry:
+        if pad_id is None:
+            state.master = entry["master"]
+            twin["master"] = master_before
+        elif state.master is None and entry["master"] is not None:
+            state.master = entry["master"]
+            twin["master"] = master_before
+            if split:
+                source[index] = {"seq": entry["seq"], "pads": rest}
+    _push(other, twin)
 
 
 def apply(state: AppState, event: ev.Event) -> AppState:
@@ -226,21 +326,8 @@ def apply(state: AppState, event: ev.Event) -> AppState:
             pad.sample = sample
             pad.looping = False
 
-    elif event.type == ev.UNDO:
-        target = event.data.get("target")
-        if not new.undo_stack or new.undo_stack[-1]["seq"] != target:
-            log.warning("undo seq=%s: target %r is not on top of the undo stack; ignored",
-                        event.seq, target)
-            return new
-        entry = new.undo_stack.pop()
-        for p, previous_sample in entry["pads"].items():
-            pad = _pad(new, p)
-            # A pad whose sound changes (or disappears) stops looping.
-            if pad.sample != previous_sample or previous_sample is None:
-                pad.looping = False
-            pad.sample = previous_sample
-        if "master" in entry:
-            new.master = entry["master"]
+    elif event.type in (ev.UNDO, ev.REDO):
+        _travel(new, event, undoing=event.type == ev.UNDO)
 
     elif event.type == ev.LOOP_ON:
         if pad_id is not None:

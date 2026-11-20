@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 import zipfile
 from pathlib import Path
@@ -295,29 +294,6 @@ def test_commit_refuses_a_staging_that_is_gone(running):
 # ------------------------------------------------------------------- redo
 
 
-def test_open_clears_the_redo_stack_and_keeps_the_undo_stack(running, tmp_path, monkeypatch):
-    """The redo stack comes with the undo package; here a state that carries one stands in for it."""
-    two_takes(running)
-    target = running.sets_folder / "a.loopset"
-    running.session.save(target)
-    original = AppState.to_dict
-
-    def with_redo(self):
-        raw = original(self)
-        raw.setdefault("redo_stack", [{"seq": 5, "pads": {"0": None}}])
-        return raw
-
-    monkeypatch.setattr(AppState, "to_dict", with_redo)
-    work = tmp_path / "work"
-    sets.open_set(target, work)
-    lines = (work / "data" / "events.jsonl").read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 1
-    event = json.loads(lines[0])
-    assert event["type"] == "snapshot"
-    assert event["data"]["state"]["redo_stack"] == []
-    assert event["data"]["state"]["undo_stack"] == original(running.store.state)["undo_stack"]
-
-
 def test_open_leaves_a_set_without_redo_untouched(running, tmp_path):
     two_takes(running)
     target = running.sets_folder / "a.loopset"
@@ -429,3 +405,23 @@ def test_list_sets_marks_a_too_new_set(running):
 
 def test_list_sets_of_a_missing_folder_is_empty(tmp_path):
     assert list_sets(tmp_path / "nope") == []
+
+
+def test_open_empties_a_real_redo_stack_and_keeps_undo(running, tmp_path):
+    two_takes(running)
+    running.controller.undo()
+    assert running.store.state.redo_stack and running.controller.can_redo()
+    undo_before = [e["seq"] for e in running.store.state.undo_stack]
+    target = running.sets_folder / "redo.loopset"
+    running.session.save(target)
+    running.close()
+    shutil.rmtree(running.settings.data_dir)
+    running.settings.data_dir.mkdir()
+    commit_open(running.settings.data_dir,
+                prepare_open(running.settings.data_dir, target, pad_count=12, sample_rate=8000))
+    running.open_store()
+    state = running.store.state
+    assert state.redo_stack == [] and not running.controller.can_redo()
+    assert [e["seq"] for e in state.undo_stack] == undo_before
+    running.controller.undo()  # the undo steps still work
+    assert len(running.store.state.undo_stack) == len(undo_before) - 1

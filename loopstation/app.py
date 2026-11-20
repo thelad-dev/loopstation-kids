@@ -121,6 +121,7 @@ def _run_session(
     from PySide6.QtCore import QLockFile, QTimer
 
     from loopstation.audio import create_audio
+    from loopstation.clips import ClipLog
     from loopstation.controller import Controller
     from loopstation.gui.main_window import MainWindow
     from loopstation.midi.launchpad import LaunchpadController, MidoPorts
@@ -146,7 +147,7 @@ def _run_session(
 
     audio, audio_status = create_audio(settings)
     launchpad = make_launchpad(settings)
-    controller = Controller(store, audio, settings)
+    controller = Controller(store, audio, settings, clip_log=ClipLog(settings.log_dir / "clips.jsonl"))
     controller.startup()
 
     requested: list[PreparedOpen] = []

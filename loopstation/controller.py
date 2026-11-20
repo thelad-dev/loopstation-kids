@@ -13,17 +13,19 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 import numpy as np
 
 from loopstation import events as ev
 from loopstation.audio.base import PREVIEW_VOICE, AudioBackend
-from loopstation.audio.dynamics import db_to_gain
+from loopstation.audio.dynamics import db_to_gain, gain_to_db
 from loopstation.audio.effects import start_beep, stop_beep
 from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, save_wav
 from loopstation.audio.sync import fit_to_grid, grace_frames, max_grid_frames
+from loopstation.clips import ClipEvent, ClipLog
 from loopstation.config import Settings, restart_keys_changed
-from loopstation.state import PadState
+from loopstation.state import PadState, find_entry
 from loopstation.store import EventStore
 
 log = logging.getLogger(__name__)
@@ -38,6 +40,8 @@ SESSION_SHOW_SECONDS = 1.6
 CLIP_HOLD_SECONDS = 1.5
 # Peaks (linear) where the coarse three-step level display moves up a step.
 LEVEL_QUIET, LEVEL_MEDIUM, LEVEL_LOUD = 0.02, 0.25, 0.7
+# A recording that came this close to full scale (dB(FS)) is noted for the parents.
+NEAR_CLIP_DB = -3.0
 # Range of the parents' ceiling in dB(FS), as in settings.toml.
 MIN_MAX_LEVEL_DB, MAX_MAX_LEVEL_DB = -30.0, 0.0
 
@@ -97,6 +101,7 @@ class Controller:
         audio: AudioBackend,
         settings: Settings,
         clock: Callable[[], float] = time.time,
+        clip_log: ClipLog | None = None,
     ) -> None:
         self.store = store
         self.audio = audio
@@ -126,6 +131,11 @@ class Controller:
         self._clips_seen = 0
         self._clip_count = 0
         self._clip_at: float | None = None
+        # Peak and clipping of the running (or last) recording; the clip log
+        # keeps the loud ones for the parents.
+        self._rec_peak = 0.0
+        self._rec_clipped = False
+        self.clip_log = clip_log if clip_log is not None else ClipLog()
         self._push_levels()
 
     # ------------------------------------------------------------ listeners
@@ -271,8 +281,12 @@ class Controller:
         return self._input_peak
 
     def input_level_stage(self) -> int:
-        """Coarse input level for the child while recording: 0 (silent) to 3 (very loud)."""
-        if self._recording is None:
+        """Coarse input level for the child while recording: 0 (silent) to 3 (very loud).
+
+        Always 0 while the ``peak_meter`` switch is off; the "too loud" sign
+        (``input_clipping``) does not depend on it.
+        """
+        if self._recording is None or not self._peak_meter:
             return 0
         peak = self._input_peak
         return 3 if peak >= LEVEL_LOUD else 2 if peak >= LEVEL_MEDIUM else 1 if peak >= LEVEL_QUIET else 0
@@ -290,13 +304,36 @@ class Controller:
             and self._clock() - self._clip_at < CLIP_HOLD_SECONDS
         )
 
+    def meter_levels(self) -> tuple[float, float]:
+        """``(level, hold)`` for the parents' scale, linear after the trim.
+
+        While recording: the current microphone peak and the highest peak so
+        far. Afterwards both stay at the peak of the last recording (the
+        microphone is only open while recording).
+        """
+        if self._recording is not None:
+            return self._input_peak, self._rec_peak
+        return self._rec_peak, self._rec_peak
+
+    def clip_events(self) -> list[ClipEvent]:
+        """Loud recordings kept for the parents, newest first."""
+        return self.clip_log.events()
+
     def _poll_input_level(self) -> None:
         peak, clips = self.audio.poll_input_level()
         self._input_peak = peak
+        self._rec_peak = max(self._rec_peak, peak)
         if clips > self._clips_seen:
             self._clip_count += clips - self._clips_seen
             self._clip_at = self._clock()
+            self._rec_clipped = True
         self._clips_seen = clips
+
+    def _note_loud_recording(self, pad: int) -> None:
+        """Keep a recording that clipped or came close to full scale in the clip log."""
+        peak_db = gain_to_db(self._rec_peak) if self._rec_peak > 0 else -120.0
+        if self._rec_clipped or peak_db >= NEAR_CLIP_DB:
+            self.clip_log.add(ClipEvent(self._clock(), pad, peak_db, self._rec_clipped))
 
     # ------------------------------------------------------------- loop grid
 
@@ -345,8 +382,24 @@ class Controller:
     def _set_notice(self, text: str) -> None:
         self._notice = (text, self._clock() + NOTICE_SECONDS)
 
-    def can_undo(self) -> bool:
-        return bool(self.store.state.undo_stack)
+    def can_undo(self, pad: int | None = None) -> bool:
+        """Is there a change to take back (of ``pad`` only, if given)?"""
+        return find_entry(self.store.state.undo_stack, pad) is not None
+
+    def last_change_pad(self) -> int | None:
+        """The pad of the latest change if that change touched just one pad, else None.
+
+        The pad shows its "back" badge for this change; a change of many pads
+        ("Alle löschen") has no single pad and is left to the big "Zurück".
+        """
+        entry = find_entry(self.store.state.undo_stack)
+        if entry is None or len(entry["pads"]) != 1:
+            return None
+        return next(iter(entry["pads"]))
+
+    def can_redo(self, pad: int | None = None) -> bool:
+        """Is there an undone change to bring back? Not while recording."""
+        return self._recording is None and find_entry(self.store.state.redo_stack, pad) is not None
 
     def pad_colors(self) -> dict[int, str]:
         """Colour of every pad on the grid."""
@@ -464,6 +517,8 @@ class Controller:
         self._clips_seen = self.audio.poll_input_level()[1]
         self._clip_at = None
         self._input_peak = 0.0
+        self._rec_peak = 0.0
+        self._rec_clipped = False
         if self.settings.sound_effects:
             self.audio.play_effect(start_beep(self.audio.sample_rate))
         self.store.append(ev.RECORD_START, pad, {"stamp": stamp})
@@ -477,6 +532,7 @@ class Controller:
         self._recording = None
         data = self.audio.stop_recording()
         self._poll_input_level()  # count clips of the last blocks, too
+        self._note_loud_recording(recording.pad)
         rate = self.audio.sample_rate
         if self.settings.sound_effects:
             self.audio.play_effect(stop_beep(rate))
@@ -575,25 +631,43 @@ class Controller:
         if changed:
             self._changed()
 
-    def undo(self) -> None:
-        """Undo the last content change (Strg+Z)."""
+    def undo(self, pad: int | None = None) -> None:
+        """Undo the last content change (Strg+Z), or the last one of ``pad`` only."""
         # Undo during a recording cancels it: stop, then undo the new sample.
         # A recording that was too short leaves nothing to undo.
         if self._recording is not None and not self._stop_recording():
             self._changed()
             return
-        stack = self.store.state.undo_stack
-        if not stack:
-            self._set_notice("Nichts mehr zum Zurücknehmen")
+        entry = find_entry(self.store.state.undo_stack, pad)
+        if entry is None:
+            self._set_notice("Nichts mehr zum Zurücknehmen" if pad is None
+                             else "Hier gibt es nichts zum Zurücknehmen")
             self._changed()
             return
-        top = stack[-1]
-        for pad_id, previous in top["pads"].items():
-            if self.pad(pad_id).sample != previous:
+        self._travel(ev.UNDO, entry, pad)
+
+    def redo(self, pad: int | None = None) -> None:
+        """Bring back what was just undone (Strg+Y), or the last undone change of ``pad``."""
+        entry = find_entry(self.store.state.redo_stack, pad)
+        if self._recording is not None or entry is None:
+            self._set_notice("Nichts zum Wiederholen")
+            self._changed()
+            return
+        self._travel(ev.REDO, entry, pad)
+
+    def _travel(self, kind: str, entry: dict[str, Any], pad: int | None) -> None:
+        """Log an undo or redo of ``entry`` and stop the pads whose sound changes."""
+        affected = [pad] if pad is not None else list(entry["pads"])
+        for pad_id in affected:
+            if self.pad(pad_id).sample != entry["pads"][pad_id]:
                 self.audio.stop(pad_id)
         had_content = self.store.state.has_content()
-        self.store.append(ev.UNDO, None, {"target": top["seq"]})
+        self.store.append(kind, pad, {"target": entry["seq"]})
         self._content_changed(had_content)
+        if kind == ev.REDO or pad is not None:
+            # A sound brought back into an empty session sets the loop length again.
+            for pad_id in affected:
+                self._set_master_from(pad_id)
         self._changed()
 
     def restore(self, pad: int, sample: str) -> None:

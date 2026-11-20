@@ -28,7 +28,6 @@ from loopstation.gui.export_dialog import ExportDialog
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
 from loopstation.gui.parent_gate import ENTRY_SIZE, ParentEntryButton, ParentGate
-from loopstation.gui.peak_meter import PeakMeter
 from loopstation.gui.sets_page import SetsDialog
 from loopstation.gui.settings_page import ParentAction, SettingsDialog
 from loopstation.gui.volume_slider import VolumeSlider
@@ -50,8 +49,13 @@ from loopstation.session import PreparedOpen, SetSession
 TICK_MS = 30
 SESSION_WAVE_WIDTH = 0.3  # seconds a pad stays lit while the new-session wave passes
 MODE_BAR_HEIGHT = 104  # mode buttons and volume control share one row of this height
-MODE_FONT_PT = 15
+MODE_FONT_PT = 13
 PAD_GAP = 8  # visible gap is larger: each pad keeps a margin for its glow
+# The action row (with "Wiederholen") stays inside a 1024 px wide window at
+# this size (checked by a test).
+BAR_FONT_PT = 17
+BAR_PAD_X = 14
+ACTION_HEIGHT = 92  # as in the mockups
 
 # (mode, icon, word, accent colour)
 MODES = [
@@ -124,6 +128,7 @@ class PadGrid(QWidget):
         for index, pad in enumerate(self.pads):
             row, col = divmod(index, self.cols)
             pad.setGeometry(left + col * (side + PAD_GAP), top + row * (side + PAD_GAP), side, side)
+            pad.layout_badge()
 
 
 class MainWindow(QMainWindow):
@@ -183,13 +188,20 @@ class MainWindow(QMainWindow):
         self.grid = PadGrid(rows, cols)
         for pad in self.grid.pads:
             pad.clicked.connect(lambda _checked=False, i=pad.index: self.press(i))
+            pad.on_badge = lambda i=pad.index: self.undo_pad(i)
 
         # Action buttons. "Alle löschen" sits apart on the right.
-        self.undo_button = BigButton("undo", "Zurück", ACCENT_GRAY)
+        self.undo_button = BigButton("undo", "Zurück", ACCENT_GRAY, font_pt=BAR_FONT_PT, pad_x=BAR_PAD_X,
+                                   min_height=ACTION_HEIGHT)
         self.undo_button.clicked.connect(self.undo)
-        self.stop_button = BigButton("stop", "Alles still", ACCENT_GRAY)
+        self.redo_button = BigButton("redo", "Wiederholen", ACCENT_GRAY, font_pt=BAR_FONT_PT, pad_x=BAR_PAD_X,
+                                   min_height=ACTION_HEIGHT)
+        self.redo_button.clicked.connect(self.redo)
+        self.stop_button = BigButton("stop", "Alles still", ACCENT_GRAY, font_pt=BAR_FONT_PT, pad_x=BAR_PAD_X,
+                                   min_height=ACTION_HEIGHT)
         self.stop_button.clicked.connect(self.stop_all)
-        self.delete_all_button = BigButton("trash", "Alle löschen", ACCENT_RED)
+        self.delete_all_button = BigButton("trash", "Alle löschen", ACCENT_RED, font_pt=BAR_FONT_PT,
+                                     pad_x=BAR_PAD_X, min_height=ACTION_HEIGHT)
         self.delete_all_button.clicked.connect(self.confirm_delete_all)
         # Small, unobtrusive status text in the gap between the buttons.
         self.status_label = QLabel("")
@@ -199,14 +211,11 @@ class MainWindow(QMainWindow):
         self.status_label.setWordWrap(True)
         self.status_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
-        self.peak_meter = PeakMeter()
-        self.peak_meter.hide()
-
         actions = QHBoxLayout()
         actions.setSpacing(14)
         actions.addWidget(self.undo_button, 2)
+        actions.addWidget(self.redo_button, 2)
         actions.addWidget(self.stop_button, 2)
-        actions.addWidget(self.peak_meter, 2)
         actions.addWidget(self.status_label, 2)
         actions.addWidget(self.delete_all_button, 2)
 
@@ -221,9 +230,13 @@ class MainWindow(QMainWindow):
         self.parent_entry = ParentEntryButton(self.frame)
         self.parent_entry.held.connect(self.open_parent_area)
 
-        # Keyboard: Strg+Z undo, ESC leaves the mode. No menus.
+        # Keyboard: Strg+Z undo, Strg+Y / Strg+Umschalt+Z redo, ESC leaves the mode. No menus.
         self.undo_shortcut = QShortcut(QKeySequence.StandardKey.Undo, self)
         self.undo_shortcut.activated.connect(self.undo)
+        self.redo_shortcuts = [QShortcut(QKeySequence(keys), self)
+                               for keys in ("Ctrl+Y", "Ctrl+Shift+Z")]
+        for shortcut in self.redo_shortcuts:
+            shortcut.activated.connect(self.redo)
         self.escape_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         self.escape_shortcut.activated.connect(self.escape)
 
@@ -253,6 +266,14 @@ class MainWindow(QMainWindow):
 
     def undo(self) -> None:
         self.controller.undo()
+
+    def undo_pad(self, pad: int) -> None:
+        """The "back" badge of a pad: take back the latest change of that pad only."""
+        if not self._dialog_open:
+            self.controller.undo(pad)
+
+    def redo(self) -> None:
+        self.controller.redo()
 
     def escape(self) -> None:
         self.controller.escape()
@@ -292,12 +313,12 @@ class MainWindow(QMainWindow):
         try:
             if self.gate_factory(self).exec() != QDialog.DialogCode.Accepted:
                 return
-            extra = {"open_sets": self.open_sets} if self.set_session is not None else {}
+            actions = [ParentAction("download", "Export", self.open_export)]
+            if self.set_session is not None:
+                actions.append(ParentAction("save", "Sets", self.open_sets))
             dialog = self.settings_factory(
                 self.config_path, self.controller.settings, self.apply_settings,
-                self.settings_template, self,
-                [ParentAction("download", "Export", self.open_export)],
-                **extra,
+                self.settings_template, self, actions,
             )
             self._settings_dialog = dialog
             dialog.exec()
@@ -309,15 +330,14 @@ class MainWindow(QMainWindow):
     def open_export(self, parent: QWidget) -> None:
         """Export page, opened from the parents' area (the pads are already locked)."""
         self.export_factory(self.controller, parent).exec()
-    def open_sets(self) -> None:
-        """The sets page (from the settings page). A set that was opened ends the parents' area."""
+    def open_sets(self, parent: QWidget) -> None:
+        """The sets page, opened from the parents' area. A set that was opened ends the parents' area."""
         if self.set_session is None:
             return
-        parent = self._settings_dialog if self._settings_dialog is not None else self
         dialog = self.sets_factory(self.set_session, self.on_open_set, parent)
         dialog.exec()
-        if getattr(dialog, "opened", None) is not None and self._settings_dialog is not None:
-            self._settings_dialog.accept()
+        if getattr(dialog, "opened", None) is not None and isinstance(parent, QDialog):
+            parent.accept()
 
     def apply_settings(self, settings: Settings) -> list[str]:
         """Live-apply ``settings``; returns the keys that need a restart."""
@@ -376,10 +396,7 @@ class MainWindow(QMainWindow):
         self.volume_slider.set_state(controller.volume, controller.volume_limit)
         clipping = controller.input_clipping()
         level = controller.input_level_stage()
-        metering = controller.peak_meter and controller.recording_pad is not None
-        self.peak_meter.setVisible(metering)
-        if metering:
-            self.peak_meter.set_state(controller.input_peak(), clipping)
+        badge_pad = None if controller.recording_pad is not None else controller.last_change_pad()
         for pad in self.grid.pads:
             color = colors.get(pad.index, "white")
             sparkle = 0.0 if session is None else self._session_wave(pad.index, session)
@@ -391,12 +408,13 @@ class MainWindow(QMainWindow):
                              clip=clipping, level=level)
             else:
                 pad.set_look(color, self._overlay(controller.mode, color, pad.index), None, 0.0,
-                             None, sparkle)
+                             None, sparkle, badge=pad.index == badge_pad)
 
         for mode, button in self.mode_buttons.items():
             button.setChecked(mode == controller.mode)
         self.frame.set_accent(None if controller.mode == Mode.PLAY else MODE_ACCENT[controller.mode])
         self.undo_button.setEnabled(controller.can_undo() or controller.recording_pad is not None)
+        self.redo_button.setEnabled(controller.can_redo())
 
         parts = [controller.notice(), *self.device_status]
         if self.launchpad is not None and self.launchpad.status_text:

@@ -298,9 +298,9 @@ def test_the_settings_page_gets_a_sets_button_only_with_a_session(running, qapp)
         seen = []
 
         class Settings(QDialog):
-            def __init__(self, *args, open_sets=None, **kwargs):
+            def __init__(self, *args, **kwargs):
                 super().__init__()
-                seen.append(open_sets)
+                seen.append([a.label for a in args[5]])
 
             def exec(self):
                 return QDialog.DialogCode.Accepted
@@ -309,7 +309,7 @@ def test_the_settings_page_gets_a_sets_button_only_with_a_session(running, qapp)
             window.gate_factory = lambda _parent: type("G", (QDialog,), {"exec": lambda self: 1})()
             window.settings_factory = Settings
             window.open_parent_area()
-        assert seen[0] is not None and seen[1] is None
+        assert "Sets" in seen[0] and "Sets" not in seen[1]
     finally:
         for window in (with_session, without):
             window.timer.stop()
@@ -325,12 +325,12 @@ def test_opening_a_set_closes_the_parents_area(running, qapp):
         closed = []
 
         class Settings(QDialog):
-            def __init__(self, *args, open_sets=None, **kwargs):
+            def __init__(self, *args, **kwargs):
                 super().__init__()
-                self.open_sets = open_sets
+                self.actions = args[5]
 
             def exec(self):
-                self.open_sets()
+                next(a for a in self.actions if a.label == "Sets").open(self)
                 return self.result()
 
             def accept(self):

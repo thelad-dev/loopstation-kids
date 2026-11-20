@@ -66,5 +66,6 @@ input_gain_db = 0
 # Mikrofon übersteuert). Schützt nicht vor einem übersteuerten Mikrofon.
 auto_gain = false
 
-# true = Pegelanzeige der Aufnahme für Eltern.
-peak_meter = false
+# true = Pegelanzeige bei der Aufnahme: drei Balken am Pad und die Skala im
+# Eltern-Bereich. Das rote "zu laut"-Zeichen erscheint immer. Wirkt sofort.
+peak_meter = true
