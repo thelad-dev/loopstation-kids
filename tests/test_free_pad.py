@@ -314,6 +314,30 @@ def test_a_free_pad_without_a_grid_gives_the_session_its_bar_unchanged(tmp_path,
     assert wav_frames(tmp_path, controller, 7) == 13600
 
 
+def test_a_too_short_free_pad_recording_is_dropped_and_sets_no_bar(tmp_path, clock):
+    controller, _ = build(tmp_path, clock, auto_grid=True)
+    hold(controller, clock, 6)
+    record(controller, clock, 6, 0.2)
+    assert controller.pad(6).sample is None and controller.store.state.master is None
+
+
+def test_a_free_pad_sound_that_is_no_plausible_bar_leaves_the_session_without_a_grid(tmp_path, clock):
+    controller, audio = build(tmp_path, clock, auto_grid=True)
+    hold(controller, clock, 6)
+    record(controller, clock, 6, 15.0)
+    assert controller.pad(6).sample is not None and controller.is_free(6)
+    assert controller.store.state.master is None
+    assert not [e for e in events(controller) if e["type"] == "master_set"]
+    stop = [e for e in events(controller) if e["type"] == "record_stop"][-1]
+    assert stop["data"]["grid"] == "none" and stop["data"]["sample"] == controller.pad(6).sample
+    assert controller.last_grid is not None and controller.last_grid.reason == "too_long"
+    assert controller.grid_info() is None and audio.grid is None
+    # Putting it back (undo, redo) does not turn it into a bar either.
+    controller.undo()
+    controller.redo()
+    assert controller.store.state.master is None
+
+
 def test_a_free_pad_gives_the_bar_even_with_the_onset_grid_off(tmp_path, clock):
     controller, _ = build(tmp_path, clock, auto_grid=False)
     hold(controller, clock, 0)
@@ -658,6 +682,38 @@ def connect_launchpad():
     launchpad = LaunchpadController(lambda: ports, 3, 4, clock=pad_clock, message_factory=fake_message)
     launchpad.poll_events()
     return launchpad, ports.opened["in:" + MINI_LINUX[1]]
+
+
+def test_a_hold_whose_key_up_is_lost_with_the_launchpad_does_not_switch_the_free_mode(
+    qapp, tmp_path, clock
+):
+    from loopstation.gui.main_window import MainWindow
+
+    settings = make_settings(tmp_path)
+    store = EventStore(settings.log_dir, settings.pad_count, clock=clock)
+    controller = Controller(store, FakeAudio(clock), settings, clock=clock)
+    ports = FakeMidiPorts(MINI_LINUX)
+    pad_clock = FakeClock(0.0)
+    launchpad = LaunchpadController(lambda: ports, 3, 4, clock=pad_clock, message_factory=fake_message)
+    launchpad.poll_events()
+    inport = ports.opened["in:" + MINI_LINUX[1]]
+    win = MainWindow(controller, launchpad, [])
+    win.timer.stop()
+    try:
+        inport.pending += [FakeMessage("note_on", note=81, velocity=100)]
+        win._tick()
+        assert controller.hold_progress(0) is not None
+        ports.outputs.clear()  # unplugged: the note off never comes
+        pad_clock.advance(60.0)
+        win._tick()
+        assert not launchpad.connected and controller.hold_progress(0) is None
+        clock.advance(FREE_HOLD_SECONDS + 0.5)
+        win._tick()
+        assert not controller.is_free(0)
+        assert controller.press_up(0) is False
+    finally:
+        win.close()
+        store.close()
 
 
 def test_the_launchpad_reports_presses_and_releases_in_order():

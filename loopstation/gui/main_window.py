@@ -148,6 +148,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.controller = controller
         self.launchpad = launchpad
+        self._launchpad_down: set[int] = set()
         self.config_path = config_path if config_path is not None else Path(DEFAULT_CONFIG_NAME).resolve()
         self.launchpad_factory = launchpad_factory
         self.settings_template = settings_template
@@ -377,6 +378,7 @@ class MainWindow(QMainWindow):
         if wanted.launchpad != (self.launchpad is not None) and self.launchpad_factory is not None:
             if self.launchpad is not None:
                 self.launchpad.close()
+            self._release_launchpad_holds()
             self.launchpad = self.launchpad_factory(wanted)
         if wanted.fullscreen != self.isFullScreen():
             if wanted.fullscreen:
@@ -392,10 +394,23 @@ class MainWindow(QMainWindow):
         if self.launchpad is not None:
             for pad, down in self.launchpad.poll_events():
                 if down and not self._dialog_open:
+                    self._launchpad_down.add(pad)
                     self.controller.press_down(pad)
-                elif not down and self.controller.press_up(pad):
-                    self.press(pad)
+                elif not down:
+                    self._launchpad_down.discard(pad)
+                    if self.controller.press_up(pad):
+                        self.press(pad)
+            if not self.launchpad.connected:
+                self._release_launchpad_holds()
+        elif self._launchpad_down:
+            self._release_launchpad_holds()
         self.refresh()
+
+    def _release_launchpad_holds(self) -> None:
+        """No note off will come for keys that were down when the Launchpad went away."""
+        for pad in self._launchpad_down:
+            self.controller.cancel_hold(pad)
+        self._launchpad_down.clear()
 
     def _overlay(self, mode: Mode, color: str, pad: int) -> str | None:
         """Small hint icon on a pad that shows what a press will do."""

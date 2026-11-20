@@ -448,11 +448,29 @@ class Controller:
         event: dict[str, object] = {"frames": len(data), "rate": self.audio.sample_rate}
         if free:
             # A free pad that comes first gives the session its bar: the length of its
-            # sound, untouched. The log says so, there is no second grid event.
+            # sound, untouched, if that length passes the same check as any other bar.
+            # The log says so, there is no second grid event.
+            if not self._free_grid(data, self.audio.sample_rate).has_grid:
+                return
             event.update(source="free_pad", signature=self.settings.time_signature, pad=pad)
         elif self.settings.auto_grid:
             event.update(source=origin or "duration", signature=self.settings.time_signature, pad=pad)
         self.store.append(ev.MASTER_SET, None, event)
+
+    def _grid_limits(self, rate: int) -> dict[str, float | int]:
+        settings = self.settings
+        seam = 2 * SEAM_FADE_MAX_SECONDS + 0.05 if settings.soft_seam else 0.0
+        return {
+            "bpm_min": settings.grid_bpm_min,
+            "bpm_max": settings.grid_bpm_max,
+            "beats_per_bar": settings.beats_per_bar,
+            "min_frames": round(max(MIN_RECORD_SECONDS, seam) * rate),
+            "max_frames": int(settings.max_record_seconds * rate),
+        }
+
+    def _free_grid(self, data: np.ndarray, rate: int) -> GridResult:
+        """Is the length of a free sound a plausible bar? Same limits as ``_seed_grid``."""
+        return derive_grid([], len(data), rate, **self._grid_limits(rate))
 
     def _seed_grid(self, data: np.ndarray, rate: int) -> tuple[np.ndarray, GridResult]:
         """Onset analysis of the grid-setting recording (before ``fit_to_grid``).
@@ -461,18 +479,7 @@ class Controller:
         cut to one bar if the bar came from onset distances) together with the
         decision. Without a grid (``none``) the recording stays as it is.
         """
-        settings = self.settings
-        seam = 2 * SEAM_FADE_MAX_SECONDS + 0.05 if settings.soft_seam else 0.0
-        result = derive_grid(
-            detect_onsets(data, rate),
-            len(data),
-            rate,
-            bpm_min=settings.grid_bpm_min,
-            bpm_max=settings.grid_bpm_max,
-            beats_per_bar=settings.beats_per_bar,
-            min_frames=round(max(MIN_RECORD_SECONDS, seam) * rate),
-            max_frames=int(settings.max_record_seconds * rate),
-        )
+        result = derive_grid(detect_onsets(data, rate), len(data), rate, **self._grid_limits(rate))
         if not result.has_grid:
             return data, result
         if result.start_frame > 0:
@@ -691,6 +698,11 @@ class Controller:
         self._changed()
         return hold.state != "done"
 
+    def cancel_hold(self, pad: int) -> None:
+        """Forget a press whose release will never come (the Launchpad was unplugged)."""
+        if self._holds.pop(pad, None) is not None:
+            self._changed()
+
     def hold_progress(self, pad: int) -> float | None:
         """How far the ring of a pad that is being held has filled (0..1), None if not held."""
         hold = self._holds.get(pad)
@@ -768,6 +780,7 @@ class Controller:
         info: dict[str, object] = {}
         seeded: GridResult | None = None
         parent_seeded = False
+        free_grid: GridResult | None = None
         if data is not None and duration >= MIN_RECORD_SECONDS:
             grid = self._grid() if recording.synced else None
             if grid is not None:
@@ -791,7 +804,8 @@ class Controller:
                 # A free sound keeps its length and its start; the session has no grid
                 # yet if it is the first sound, and then the length becomes the bar.
                 if self.settings.loop_sync and self.store.state.master is None:
-                    info["grid"] = "free_pad"
+                    free_grid = self._free_grid(data, rate)
+                    info["grid"] = "free_pad" if free_grid.has_grid else "none"
             elif self.settings.auto_grid and self.settings.loop_sync and self.store.state.master is None:
                 # Only the recording that sets the grid is shifted to its first
                 # onset; recordings on an existing grid keep their latency-
@@ -812,8 +826,10 @@ class Controller:
                     self.last_grid = seeded
                 if parent_seeded:
                     self._sample_grid[name] = PARENT_BPM
-                elif info.get("grid") == "free_pad":
-                    self._sample_grid[name] = "free_pad"
+                elif free_grid is not None:
+                    self._sample_grid[name] = str(info["grid"])
+                    if not free_grid.has_grid:
+                        self.last_grid = free_grid
             except OSError as exc:
                 log.error("saving %s failed: %s", name, exc)
                 self._set_notice("Aufnahme konnte nicht gespeichert werden")
