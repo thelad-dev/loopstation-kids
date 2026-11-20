@@ -67,6 +67,12 @@ class Settings:
     # A recording on the grid that is within 10 % of a whole number of loops is
     # stretched to exactly that length instead of padded or cut.
     stretch_to_grid: bool = True
+    # --- Metronome (W3-ERWEITERT) ---
+    # A quiet tick on every beat of the session grid, through the master and
+    # its ceiling. The child's page only ever shows the pulse.
+    metronome_tone: bool = False
+    # Level of the tick in dB(FS) before the master volume (kept quiet on purpose).
+    metronome_level_db: float = -20.0
 
     @property
     def beats_per_bar(self) -> int:
@@ -188,6 +194,13 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
     # Stretch into the grid (W3-STRETCH-INT).
     if "stretch_to_grid" in raw:
         values["stretch_to_grid"] = _check_bool(source, "stretch_to_grid", raw["stretch_to_grid"])
+    # Metronome (W3-ERWEITERT).
+    if "metronome_tone" in raw:
+        values["metronome_tone"] = _check_bool(source, "metronome_tone", raw["metronome_tone"])
+    if "metronome_level_db" in raw:
+        values["metronome_level_db"] = _check_float(
+            source, "metronome_level_db", raw["metronome_level_db"], -40, -6
+        )
     return Settings(**values)
 
 
@@ -259,6 +272,10 @@ SETTING_COMMENTS: dict[str, str] = {
             "Wirkt erst nach einem Neustart.",
     "stretch_to_grid": "true = eine Aufnahme knapp neben einem ganzen Takt wird weich auf den Takt gezogen, "
                        "false = immer mit Stille aufgefüllt oder geschnitten. Wirkt sofort.",
+    "metronome_tone": "true = leiser Metronom-Ton auf jedem Schlag des Takts (nur im Elternbereich "
+                      "einzustellen, das Kind sieht nur den Puls). Wirkt sofort.",
+    "metronome_level_db": "Pegel des Metronom-Tons in dB(FS) von -40 bis -6, vor Lautstärke und "
+                          "Obergrenze. Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 

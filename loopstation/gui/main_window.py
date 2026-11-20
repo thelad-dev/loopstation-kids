@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from loopstation.config import DEFAULT_CONFIG_NAME, Settings
 from loopstation.controller import Controller, Mode
+from loopstation.gui.advanced_page import AdvancedDialog
 from loopstation.gui.confirm_dialog import ConfirmDialog
 from loopstation.gui.export_dialog import ExportDialog
 from loopstation.gui.history_dialog import HistoryDialog
@@ -163,6 +164,7 @@ class MainWindow(QMainWindow):
         self.settings_factory: Callable[..., QDialog] = SettingsDialog
         self.export_factory: Callable[[Controller, QWidget], QDialog] = ExportDialog
         self.sets_factory: Callable[..., QDialog] = SetsDialog
+        self.advanced_factory: Callable[[Controller, QWidget], QDialog] = AdvancedDialog
 
         self.setWindowTitle("Loopstation")
         self.frame = Frame()
@@ -314,7 +316,8 @@ class MainWindow(QMainWindow):
         try:
             if self.gate_factory(self).exec() != QDialog.DialogCode.Accepted:
                 return
-            actions = [ParentAction("download", "Export", self.open_export)]
+            actions = [ParentAction("layers", "Erweitert", self.open_advanced),
+                       ParentAction("download", "Export", self.open_export)]
             if self.set_session is not None:
                 actions.append(ParentAction("save", "Sets", self.open_sets))
             dialog = self.settings_factory(
@@ -327,6 +330,10 @@ class MainWindow(QMainWindow):
             self._settings_dialog = None
             self._dialog_open = False
             self.refresh()
+
+    def open_advanced(self, parent: QWidget) -> None:
+        """Waveform, the parents' tempo and the metronome, opened from the parents' area."""
+        self.advanced_factory(self.controller, parent).exec()
 
     def open_export(self, parent: QWidget) -> None:
         """Export page, opened from the parents' area (the pads are already locked)."""

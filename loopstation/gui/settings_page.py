@@ -667,3 +667,13 @@ register_field(Field("stretch_to_grid", "Aufnahmen weich in den Takt ziehen", "b
                      hint="Knapp neben einem ganzen Takt: auf den Takt ziehen statt auffüllen oder "
                           "schneiden. Aus = immer auffüllen oder schneiden."),
                before="soft_seam")
+
+
+# --- Metronome (W3-ERWEITERT) ---
+register_field(Field("metronome_tone", "Metronom-Ton (leise)", "bool",
+                     hint="Ein leiser Ton auf jedem Schlag des Takts. "
+                          "Mit Lautsprecher hört ihn das Mikrofon mit."),
+               before="latency_ms")
+register_field(Field("metronome_level_db", "Pegel des Metronom-Tons", "float", -40, -6, suffix=" dB",
+                     hint="Vor Lautstärke und Obergrenze; leise gewählt, damit er nie scharf klickt."),
+               before="latency_ms")
