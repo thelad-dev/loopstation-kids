@@ -24,6 +24,7 @@ from loopstation.audio.dynamics import db_to_gain, gain_to_db
 from loopstation.audio.effects import start_beep, stop_beep
 from loopstation.audio.onset import GridResult, derive_grid, detect_onsets, rotate_to_onset
 from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, save_wav
+from loopstation.audio.stretch import stretch_target, stretch_to_grid
 from loopstation.audio.sync import SEAM_FADE_MAX_SECONDS, fit_to_grid, grace_frames, max_grid_frames
 from loopstation.clips import ClipEvent, ClipLog
 from loopstation.config import SIGNATURES, Settings, restart_keys_changed
@@ -63,6 +64,7 @@ LIVE_SETTINGS = (
     "time_signature",
     "grid_bpm_min",
     "grid_bpm_max",
+    "stretch_to_grid",
 )
 
 # Audio devices: the streams are opened again when one of these changes.
@@ -644,7 +646,7 @@ class Controller:
             grid = self._grid() if recording.synced else None
             if grid is not None:
                 limit = int(self.settings.max_record_seconds * rate)
-                data = fit_to_grid(data, grid, grace_frames(grid, rate), limit)
+                data = self._fit_recording(data, grid, rate, limit)
                 duration = len(data) / rate
             elif self.settings.auto_grid and self.settings.loop_sync and self.store.state.master is None:
                 # Only the recording that sets the grid is shifted to its first
@@ -675,6 +677,24 @@ class Controller:
         if sample is not None:
             self._set_master_from(recording.pad)
         return sample is not None
+
+    def _fit_recording(self, data: np.ndarray, grid: int, rate: int, limit: int) -> np.ndarray:
+        """A recording on the grid: stretched when it is just off a whole number of loops.
+
+        Runs once at stop, outside the audio callback. Anything further off, a
+        stop within the grace window after a boundary, a result over the
+        recording limit, or ``stretch_to_grid`` off falls back to
+        ``fit_to_grid``, so the length is always a multiple of the grid.
+        """
+        grace = grace_frames(grid, rate)
+        if self.settings.stretch_to_grid:
+            target = stretch_target(len(data), grid)
+            over = len(data) - target
+            if target <= max_grid_frames(grid, limit) and not 0 < over <= grace:
+                stretched = stretch_to_grid(data, grid)
+                if stretched is not None:
+                    return stretched
+        return fit_to_grid(data, grid, grace, limit)
 
     def _load(self, sample: str) -> np.ndarray | None:
         """Sample data from the cache or from disk (None if unreadable)."""

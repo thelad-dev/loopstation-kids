@@ -63,6 +63,10 @@ class Settings:
     audio_hostapi: str = ""
     # Windows only: load the PortAudio build with ASIO (needs a restart).
     asio: bool = False
+    # --- Stretch into the grid (W3-STRETCH-INT) ---
+    # A recording on the grid that is within 10 % of a whole number of loops is
+    # stretched to exactly that length instead of padded or cut.
+    stretch_to_grid: bool = True
 
     @property
     def beats_per_bar(self) -> int:
@@ -181,6 +185,9 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
             values[key] = _check_text(source, key, raw[key])
     if "asio" in raw:
         values["asio"] = _check_bool(source, "asio", raw["asio"])
+    # Stretch into the grid (W3-STRETCH-INT).
+    if "stretch_to_grid" in raw:
+        values["stretch_to_grid"] = _check_bool(source, "stretch_to_grid", raw["stretch_to_grid"])
     return Settings(**values)
 
 
@@ -250,6 +257,8 @@ SETTING_COMMENTS: dict[str, str] = {
                      "Wirkt sofort.",
     "asio": "Nur Windows: ASIO-Treiber zulassen (für Audio-Interfaces, oft exklusiv). "
             "Wirkt erst nach einem Neustart.",
+    "stretch_to_grid": "true = eine Aufnahme knapp neben einem ganzen Takt wird weich auf den Takt gezogen, "
+                       "false = immer mit Stille aufgefüllt oder geschnitten. Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 
