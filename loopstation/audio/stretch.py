@@ -7,8 +7,11 @@ further off returns ``None`` and the caller keeps the hard grid behaviour of
 ``fit_to_grid`` (pad with silence, cut to a multiple). A single clap in a
 standing grid must stay a clap, not become a smeared stretch.
 
-The stretching itself sits behind the ``StretchEngine`` protocol so a better
-engine (Rubber Band) can replace the fallback without touching callers.
+The stretching itself sits behind the ``StretchEngine`` protocol. Two engines
+exist: ``RubberBandEngine`` (Rubber Band through the ``pylibrb`` wheel, better
+quality, GPL) and ``WsolaEngine`` (built in, always there). ``resolve_engine``
+picks one by the ``stretch_engine`` setting and falls back to ``WsolaEngine``
+whenever Rubber Band is missing or fails, so a stretch never breaks a recording.
 
 ``WsolaEngine`` is the built-in fallback: a simple pitch-preserving WSOLA
 (waveform similarity overlap-add) in plain numpy, no native dependency. It is
@@ -23,9 +26,13 @@ with the total length unchanged.
 
 from __future__ import annotations
 
+import functools
+import logging
 from typing import Protocol
 
 import numpy as np
+
+log = logging.getLogger(__name__)
 
 # Plan section 1.1: apply only for a deviation below 8-10 % of the target.
 DEFAULT_MAX_DEVIATION = 0.10
@@ -35,6 +42,9 @@ class StretchEngine(Protocol):
     """Anything that can stretch mono float32 ``data`` to exactly ``target`` frames."""
 
     def stretch(self, data: np.ndarray, target: int) -> np.ndarray: ...
+
+
+RUBBERBAND_BLOCK = 4096  # frames per study/process call (keeps Rubber Band's buffers from growing)
 
 
 class WsolaEngine:
@@ -94,6 +104,113 @@ class WsolaEngine:
             out[k * hop : k * hop + frame] += chunk * (first_window if k == 0 else window)
             previous_end = start + hop
         return out
+
+
+class RubberBandEngine:
+    """Rubber Band (R3, offline mode) through the ``pylibrb`` wheel.
+
+    Offline mode studies the whole recording first and delivers an exact start and
+    length. The result is cut or padded to ``target`` frames if it is off by a
+    few, and never louder than the loudest frame of the input, so the master
+    ceiling is not approached by the engine. Anything the library raises falls
+    back to ``WsolaEngine`` for that one stretch.
+    """
+
+    def __init__(self, sample_rate: int = 44100, fallback: StretchEngine | None = None) -> None:
+        self.sample_rate = sample_rate
+        self.fallback = fallback or WsolaEngine()
+
+    def stretch(self, data: np.ndarray, target: int) -> np.ndarray:
+        if target <= 0:
+            raise ValueError("target must be positive")
+        data = np.asarray(data, dtype=np.float32)
+        if len(data) == target:
+            return data
+        if len(data) == 0:
+            return np.zeros(target, dtype=np.float32)
+        try:
+            out = self._run(data, target)
+        except Exception as exc:  # a broken library must not lose the recording
+            log.warning("Rubber Band failed (%s), using the simple stretch", exc)
+            return self.fallback.stretch(data, target)
+        out = _exact_length(out, target)
+        peak_in = float(np.max(np.abs(data)))
+        peak_out = float(np.max(np.abs(out)))
+        if peak_out > peak_in > 0:
+            out = out * np.float32(peak_in / peak_out)
+        return out
+
+    def _run(self, data: np.ndarray, target: int) -> np.ndarray:
+        import pylibrb as rb
+
+        options = rb.Option.PROCESS_OFFLINE | rb.Option.ENGINE_FINER
+        stretcher = rb.RubberBandStretcher(self.sample_rate, 1, options, target / len(data), 1.0)
+        stretcher.set_max_process_size(RUBBERBAND_BLOCK)
+        stretcher.set_expected_input_duration(len(data))
+        samples_axis = rb.SAMPLES_AXIS
+        audio = np.ascontiguousarray(data.reshape(-1, 1) if samples_axis == 0 else data.reshape(1, -1))
+        starts = range(0, len(data), RUBBERBAND_BLOCK)
+
+        def block(start: int) -> np.ndarray:
+            end = start + RUBBERBAND_BLOCK
+            return np.ascontiguousarray(audio[start:end] if samples_axis == 0 else audio[:, start:end])
+
+        for start in starts:
+            stretcher.study(block(start), start + RUBBERBAND_BLOCK >= len(data))
+        pieces: list[np.ndarray] = []
+        for start in starts:
+            stretcher.process(block(start), start + RUBBERBAND_BLOCK >= len(data))
+            while stretcher.available() > 0:
+                pieces.append(stretcher.retrieve_available())
+        while stretcher.available() > 0:
+            pieces.append(stretcher.retrieve_available())
+        if not pieces:
+            raise RuntimeError("no output")
+        result = np.concatenate(pieces, axis=samples_axis).reshape(-1)
+        return np.nan_to_num(result, copy=False).astype(np.float32, copy=False)
+
+
+@functools.cache
+def rubberband_status() -> tuple[bool, str]:
+    """Whether Rubber Band can be used, and a short detail (version or the reason it cannot).
+
+    Checked once per run: imports ``pylibrb`` and stretches a few frames, so a
+    wheel that is present but cannot load its library counts as missing.
+    """
+    try:
+        import pylibrb
+    except ImportError:
+        return False, "pylibrb ist nicht installiert"
+    except Exception as exc:  # a broken native library
+        return False, f"pylibrb lässt sich nicht laden ({exc})"
+    try:
+        probe = np.sin(np.arange(16384, dtype=np.float32) * 0.05)
+        RubberBandEngine(44100)._run(probe, 16384 + 512)
+    except Exception as exc:
+        return False, f"Rubber Band läuft nicht ({exc})"
+    return True, f"pylibrb {getattr(pylibrb, '__version__', '?')}"
+
+
+def rubberband_available() -> bool:
+    return rubberband_status()[0]
+
+
+def resolve_engine(choice: str, sample_rate: int) -> StretchEngine:
+    """The engine for the ``stretch_engine`` setting; the simple one whenever Rubber Band cannot run."""
+    if choice != "simple" and rubberband_available():
+        return RubberBandEngine(sample_rate)
+    return WsolaEngine()
+
+
+def engine_notice(choice: str) -> str:
+    """One sentence for the parents' settings: which engine runs and why."""
+    available, detail = rubberband_status()
+    if choice == "simple":
+        return "Der einfache, eingebaute Stretch wird benutzt."
+    if available:
+        return f"Rubber Band ist da ({detail}) und wird benutzt."
+    wanted = "Rubber Band ist gewählt, aber nicht nutzbar" if choice == "rubberband" else "Rubber Band fehlt"
+    return f"{wanted}: {detail}. Es läuft der einfache Stretch, etwas weniger sauber."
 
 
 def _resample_tail(data: np.ndarray, target: int) -> np.ndarray:

@@ -140,3 +140,12 @@ free_pad_on_grid = false
 # WAV-Datei. Klappt das nicht, liegt eine Begleitdatei (.markers.json) daneben;
 # das Sichern scheitert daran nie. Wirkt sofort.
 export_cue_points = true
+
+# --- Stretch-Engine (Rubber Band) ---
+
+# Womit eine Aufnahme auf den Takt gezogen wird. "auto" = Rubber Band, wenn es
+# installiert ist und läuft, sonst der einfache eingebaute Stretch. "rubberband"
+# = Rubber Band bevorzugt (ist es nicht nutzbar, sagt der Elternbereich das und
+# es läuft der einfache Stretch). "simple" = immer der einfache Stretch. Rubber
+# Band steht unter der GPL, siehe README. Wirkt sofort.
+stretch_engine = "auto"

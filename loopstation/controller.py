@@ -27,6 +27,9 @@ from loopstation.audio.onset import GridResult, derive_grid, detect_onsets, rota
 from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, save_wav
 from loopstation.audio.stretch import (
     MarkerStretchError,
+    StretchEngine,
+    engine_notice,
+    resolve_engine,
     stretch_between_markers,
     stretch_target,
     stretch_to_grid,
@@ -99,6 +102,7 @@ LIVE_SETTINGS = (
     "grid_bpm_min",
     "grid_bpm_max",
     "stretch_to_grid",
+    "stretch_engine",
     "metronome_tone",
     "metronome_level_db",
     "free_pad_on_grid",
@@ -197,6 +201,9 @@ class Controller:
         self.mode = Mode.PLAY
         self._recording: _Recording | None = None
         self._cache: dict[str, np.ndarray] = {}
+        # Stretch engine of the ``stretch_engine`` setting, kept per (setting, rate).
+        self._engine: tuple[tuple[str, int], StretchEngine] | None = None
+        log.info("stretch engine: %s", engine_notice(settings.stretch_engine))
         # Samples fitted to a grid for loop playback, keyed by (sample, grid).
         self._fitted: dict[tuple[str, int], np.ndarray] = {}
         self._grid_sent: int | None = None
@@ -927,6 +934,13 @@ class Controller:
             self._set_master_from(recording.pad)
         return sample is not None
 
+    def _stretch_engine(self) -> StretchEngine:
+        """The engine the parents chose (Rubber Band if it runs, else the simple stretch)."""
+        key = (self.settings.stretch_engine, self.audio.sample_rate)
+        if self._engine is None or self._engine[0] != key:
+            self._engine = (key, resolve_engine(*key))
+        return self._engine[1]
+
     def _fit_recording(self, data: np.ndarray, grid: int, rate: int, limit: int) -> np.ndarray:
         """A recording on the grid: stretched when it is just off a whole number of loops.
 
@@ -940,7 +954,7 @@ class Controller:
             target = stretch_target(len(data), grid)
             over = len(data) - target
             if target <= max_grid_frames(grid, limit) and not 0 < over <= grace:
-                stretched = stretch_to_grid(data, grid)
+                stretched = stretch_to_grid(data, grid, engine=self._stretch_engine())
                 if stretched is not None:
                     return stretched
         return fit_to_grid(data, grid, grace, limit)
@@ -1373,7 +1387,9 @@ class Controller:
         if data is None:
             return MARKER_STRETCH_REFUSALS["unreadable"]
         try:
-            result, targets = stretch_between_markers(data, marks, grid / info.beats)
+            result, targets = stretch_between_markers(
+                data, marks, grid / info.beats, engine=self._stretch_engine()
+            )
         except MarkerStretchError as exc:
             return MARKER_STRETCH_REFUSALS[exc.reason]
         if np.array_equal(result, data):

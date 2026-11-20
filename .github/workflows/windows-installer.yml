@@ -64,7 +64,7 @@ jobs:
       - name: Check bundle contents
         run: |
           $internal = "dist/Loopstation/_internal"
-          foreach ($pattern in @("libportaudio*.dll", "libsndfile*.dll", "_rtmidi*.pyd", "qwindows.dll", "settings.toml")) {
+          foreach ($pattern in @("libportaudio*.dll", "libsndfile*.dll", "_rtmidi*.pyd", "pylibrb_ext*.pyd", "qwindows.dll", "settings.toml")) {
             if (-not (Get-ChildItem $internal -Recurse -Filter $pattern)) { throw "missing in bundle: $pattern" }
           }
           # sounddevice >= 0.5.1 ships two PortAudio DLLs: the default one and one with ASIO.
@@ -90,6 +90,10 @@ jobs:
           Stop-Process -Id $proc.Id -Force
           foreach ($file in @("settings.toml", "data/events.jsonl")) {
             if (-not (Test-Path (Join-Path $data $file))) { throw "not created in data folder: $file" }
+          }
+          # The bundled Rubber Band must load and stretch (the controller logs this at start).
+          if (-not (Test-Path $log) -or -not (Select-String -Path $log -Pattern "stretch engine: Rubber Band ist da" -Quiet)) {
+            throw "Rubber Band is not usable in the bundle, see log above"
           }
           if ((Test-Path $log) -and (Select-String -Path $log -Pattern "Traceback|No module named|PortAudio library not found|MIDI not available" -Quiet)) {
             throw "bundle problem, see log above"

@@ -15,6 +15,9 @@ DEFAULT_CONFIG_NAME = "settings.toml"
 # 6/8 counts two dotted-quarter beats).
 SIGNATURES: dict[str, int] = {"2/4": 2, "3/4": 3, "4/4": 4, "6/8": 2}
 
+# Stretch engines the ``stretch_engine`` setting can name (see audio/stretch.py).
+STRETCH_ENGINES = ("auto", "rubberband", "simple")
+
 
 class ConfigError(ValueError):
     """Invalid configuration; the message names the file and the key."""
@@ -67,6 +70,11 @@ class Settings:
     # A recording on the grid that is within 10 % of a whole number of loops is
     # stretched to exactly that length instead of padded or cut.
     stretch_to_grid: bool = True
+    # --- Stretch engine (W3-RUBBERBAND) ---
+    # auto = Rubber Band when it is installed and runs, else the simple built-in
+    # stretch; rubberband = the same, but the parents' page says so when it is
+    # missing; simple = always the built-in stretch.
+    stretch_engine: str = "auto"
     # --- Metronome (W3-ERWEITERT) ---
     # A quiet tick on every beat of the session grid, through the master and
     # its ceiling. The child's page only ever shows the pulse.
@@ -203,6 +211,14 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
     # Stretch into the grid (W3-STRETCH-INT).
     if "stretch_to_grid" in raw:
         values["stretch_to_grid"] = _check_bool(source, "stretch_to_grid", raw["stretch_to_grid"])
+    # Stretch engine (W3-RUBBERBAND).
+    if "stretch_engine" in raw:
+        if raw["stretch_engine"] not in STRETCH_ENGINES:
+            raise ConfigError(
+                f"{source}: Schlüssel 'stretch_engine' muss einer der Werte "
+                f"{', '.join(STRETCH_ENGINES)} sein, ist aber {raw['stretch_engine']!r}"
+            )
+        values["stretch_engine"] = raw["stretch_engine"]
     # Metronome (W3-ERWEITERT).
     if "metronome_tone" in raw:
         values["metronome_tone"] = _check_bool(source, "metronome_tone", raw["metronome_tone"])
@@ -288,6 +304,9 @@ SETTING_COMMENTS: dict[str, str] = {
             "Wirkt erst nach einem Neustart.",
     "stretch_to_grid": "true = eine Aufnahme knapp neben einem ganzen Takt wird weich auf den Takt gezogen, "
                        "false = immer mit Stille aufgefüllt oder geschnitten. Wirkt sofort.",
+    "stretch_engine": 'Stretch-Engine: "auto" = Rubber Band, wenn vorhanden, sonst der einfache Stretch; '
+                      '"rubberband" = Rubber Band bevorzugt; "simple" = immer der einfache Stretch. '
+                      "Wirkt sofort.",
     "metronome_tone": "true = leiser Metronom-Ton auf jedem Schlag des Takts (nur im Elternbereich "
                       "einzustellen, das Kind sieht nur den Puls). Wirkt sofort.",
     "metronome_level_db": "Pegel des Metronom-Tons in dB(FS) von -40 bis -6, vor Lautstärke und "

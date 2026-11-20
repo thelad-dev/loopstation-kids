@@ -698,6 +698,12 @@ install_app() {
         die "$EXIT_ERROR" "pip konnte die Loopstation nicht installieren (Ausgabe oben). Internetverbindung prüfen; bei Compiler-Fehlern fehlen Systempakete."
     fi
 
+    # Rubber Band (GPL) ist optional: es gibt ein Wheel mit eingebauter Bibliothek
+    # nur für x86_64 (manylinux). Fehlt es, läuft der einfache Stretch.
+    if ! run "$pip_python" -m pip install --disable-pip-version-check --only-binary=:all: "pylibrb>=0.1.2"; then
+        warn "Rubber Band (pylibrb) ist hier nicht installierbar: die Loopstation benutzt den einfachen Stretch, etwas weniger sauber"
+    fi
+
     step "Installation prüfen"
     if ! run "$pip_python" -c 'import PySide6.QtWidgets, numpy, soundfile, mido, rtmidi, loopstation.app'; then
         run rm -rf "$venv_dir"

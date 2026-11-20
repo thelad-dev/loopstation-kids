@@ -87,6 +87,7 @@ Was sich für Bestandsnutzer ändert:
 - **Leiser als vorher:** neu sind ein Lautstärke-Regler (`volume`, Standard 0.5) und eine Obergrenze (`max_level_db`, Standard -6 dB(FS)) mit Limiter. Version 1.0.0 gab die Summe ungebremst bis zur digitalen Vollaussteuerung aus. Wer es lauter braucht, stellt beides im Elternbereich ein.
 - **Takt aus Klatschen** (`auto_grid`) ist standardmäßig aus: die erste Aufnahme bestimmt den Takt wie bisher über ihre Länge.
 - **Standardmäßig an** sind die weiche Loop-Naht (`soft_seam`), das Strecken knapp neben dem Takt (`stretch_to_grid`) und die Pegelanzeige (`peak_meter`).
+- **Rubber Band als Stretch-Engine** (`stretch_engine = "auto"`): ist `pylibrb` da, wird damit gestreckt, sonst läuft wie bisher der einfache Stretch. Der Windows-Installer bringt es mit, die Linux-Installation holt es, wenn ein Wheel passt. Rubber Band steht unter der GPL; wer einen Installer weitergibt, beachte [Drittanbieter-Lizenzen](#drittanbieter-lizenzen). Mit `stretch_engine = "simple"` bleibt alles wie in 1.0.0.
 - **Neuer Elternbereich** hinter der Kachel „Eltern“ unten rechts (zwei Sekunden halten, Rechenaufgabe), mit sieben Bereichen: Lautstärke & Pegel, Geräte & Audio, Takt & Loop (mit Eltern-Takt und Metronom), Verlauf & Undo, Erweitert (Wellenform, Marker), Sets sichern und öffnen, Export als WAV.
 - **„Alle löschen“ ist von der Kinderseite in den Elternbereich gewandert** (Verlauf & Undo, „Alle Pads löschen …“, mit Rückfrage; „Zurück“ holt alles wieder). Kinder können so nicht mehr versehentlich alles leeren.
 - **Auf der Kinderseite neu:** „Wiederholen“, das Zurück-Abzeichen am Pad, der freie Modus per langem Halten und das rote „zu laut“-Zeichen. Am Launchpad wirkt ein kurzer Tipp jetzt beim Loslassen.
@@ -178,7 +179,7 @@ Die Launchpad-Anbindung ist bisher nur mit nachgebauten MIDI-Ports getestet, noc
 
 ## Einstellungen
 
-In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne, Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Lautstärke (`volume`) mit Obergrenze (`max_level_db`), Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`), Pegelanzeige der Aufnahme für Eltern (`peak_meter`), Takt aus der ersten Aufnahme (`auto_grid`, `time_signature`, `grid_bpm_min`, `grid_bpm_max`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), freie Pads am Takt-Punkt starten (`free_pad_on_grid`), Marker als Cue-Punkte im Export (`export_cue_points`), Strecken knapp neben dem Takt (`stretch_to_grid`), Aufnahme- und Wiedergabegerät (`input_device`, `output_device`) und Audio-System (`audio_hostapi`, Standard WASAPI unter Windows, ALSA unter Linux) sowie ASIO (`asio`), leiser Metronom-Ton (`metronome_tone`, `metronome_level_db`), Datenordner. Fehlt die Datei, gelten die Standardwerte.
+In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne, Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Lautstärke (`volume`) mit Obergrenze (`max_level_db`), Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`), Pegelanzeige der Aufnahme für Eltern (`peak_meter`), Takt aus der ersten Aufnahme (`auto_grid`, `time_signature`, `grid_bpm_min`, `grid_bpm_max`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), freie Pads am Takt-Punkt starten (`free_pad_on_grid`), Marker als Cue-Punkte im Export (`export_cue_points`), Strecken knapp neben dem Takt (`stretch_to_grid`), Aufnahme- und Wiedergabegerät (`input_device`, `output_device`) und Audio-System (`audio_hostapi`, Standard WASAPI unter Windows, ALSA unter Linux) sowie ASIO (`asio`), leiser Metronom-Ton (`metronome_tone`, `metronome_level_db`), Stretch-Engine (`stretch_engine`, siehe [Stretch-Engine](#stretch-engine-rubber-band)), Datenordner. Fehlt die Datei, gelten die Standardwerte.
 
 ## Elternbereich
 
@@ -217,6 +218,27 @@ Erwachsene frieren die laufende Sitzung als Set ein und öffnen gespeicherte Set
 - Beim Öffnen wird das Set vollständig geprüft, bevor etwas ersetzt wird: zu neue Formatversion, falsche Padzahl oder Abtastrate, beschädigte Dateien. Ist die aktuelle Sitzung nicht gesichert, fragt die Seite zuerst („Erst sichern, dann öffnen“, „Ohne sichern“). Die Zurück-Schritte des Sets bleiben, „Wiederholen“ startet leer.
 - Die eigenen Einstellungen des Rechners bleiben maßgeblich. Fehlt ein Gerät aus dem Set, wird der Systemstandard benutzt und die Sets-Seite sagt es.
 - Das Öffnen ersetzt `data/` und `samples/` zwischen zwei Sitzungen im selben Prozess (die Loopstation baut Fenster, Protokoll und Audio neu auf). Wird das mittendrin abgebrochen, schließt der nächste Start den Tausch ab (`loopstation/session.py`).
+
+## Stretch-Engine (Rubber Band)
+
+Eine Aufnahme knapp neben einem ganzen Takt (unter 10 %) wird beim Stopp auf genau diese Länge gezogen, die Tonhöhe bleibt (`stretch_to_grid`). Dafür gibt es zwei Engines hinter derselben Schnittstelle (`loopstation/audio/stretch.py`):
+
+- **Rubber Band** über das Python-Paket `pylibrb` (Wheel mit eingebauter Bibliothek): sauberer, vor allem bei Stimmen. Es gibt dieses Wheel auf PyPI für Windows (x64) und Linux (x86_64), außerdem für macOS. Die Loopstation prüft beim Start, ob es sich laden und rechnen lässt, und schreibt das Ergebnis ins Protokoll (`stretch engine: ...`).
+- **Einfacher Stretch** (WSOLA, nur numpy): immer eingebaut. Er läuft, wenn Rubber Band fehlt, nicht lädt oder bei einem einzelnen Stretch einen Fehler meldet. Eine Aufnahme geht deshalb nie verloren.
+
+Die Einstellung `stretch_engine` (im Elternbereich „Stretch-Engine“) wählt: `auto` (Standard) nimmt Rubber Band, wenn es nutzbar ist, sonst den einfachen Stretch; `rubberband` bevorzugt Rubber Band und der Elternbereich sagt ausdrücklich, wenn es nicht nutzbar ist; `simple` nimmt immer den einfachen Stretch. Der Elternbereich zeigt zur Auswahl, welche Engine gerade läuft und warum. Der Windows-Installer bringt `pylibrb` mit; `scripts/install-linux.sh` installiert es zusätzlich, wenn pip ein Wheel dafür findet (sonst gibt es einen Hinweis und der einfache Stretch läuft). Von Hand: `pip install pylibrb` (steht für Windows und Linux x86_64 auch in `requirements.txt`).
+
+## Drittanbieter-Lizenzen
+
+Dieses Projekt hat selbst noch keine Lizenzdatei; das ist eine offene Entscheidung. Die Programme und Bibliotheken, die es benutzt, haben ihre eigenen Lizenzen:
+
+| Bestandteil | Lizenz | Hinweis |
+|---|---|---|
+| Rubber Band (über `pylibrb`) | GPL (Rubber Band: GPL-2.0 oder neuer, `pylibrb`: GPL-2.0), kommerzielle Lizenz beim Hersteller möglich | siehe unten |
+| PortAudio (über `sounddevice`) | MIT-ähnlich | wird mit dem Windows-Installer ausgeliefert |
+| Qt / PySide6 | LGPL-3.0 (Qt for Python), Qt zusätzlich auch GPL und kommerziell | wird mit dem Windows-Installer ausgeliefert; die LGPL verlangt u. a. den Lizenztext und die Möglichkeit, die Bibliothek auszutauschen |
+
+Ehrlicher Hinweis zu Rubber Band: Rubber Band steht unter der GPL. Wer einen Installer oder ein anderes Paket weitergibt, in dem Rubber Band steckt, löst damit die Pflichten der GPL aus, vor allem das Angebot des vollständigen Quellcodes des Gesamtwerks unter GPL-Bedingungen. Das gilt, solange keine kommerzielle Lizenz für Rubber Band vorliegt. Wer den Installer nur für sich oder die eigene Familie baut und nicht weitergibt, ist davon nicht betroffen. Ohne `pylibrb` (Einstellung `simple` und das Paket nicht installiert) steckt kein Rubber Band im Paket. Rechtlich bewertet das hier niemand; vor einer Weitergabe also Lizenzen prüfen oder die kommerzielle Lizenz klären.
 
 ## Daten
 
