@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="916" viewBox="0 0 1280 916">
+<title>Mockup 15 – Elternbereich – Set öffnen</title>
+<defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#2E2E34"/><line x1="0" y1="0" x2="0" y2="10" stroke="#4A4A52" stroke-width="4"/></pattern><filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter></defs>
+<rect width="1280" height="800" fill="#0E0E10"/>
+<rect x="6" y="6" width="1268" height="788" rx="26" fill="none" stroke="#7FA7FF" stroke-opacity="0.75" stroke-width="4"/>
+<rect x="28" y="24" width="260" height="104" rx="20" fill="#26262B" />
+<path transform="translate(48,60) scale(1.3333)" d="M19 12H5 M12 19l-7-7 7-7" fill="none" stroke="#F2F2F2" stroke-width="2.60" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="92" y="70" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F2F2" text-anchor="start" >Zur Kinderseite</text>
+<text x="92" y="96" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Eltern-Modus beenden</text>
+<path transform="translate(312,50) scale(1.4167)" d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M7 11V7a5 5 0 0 1 9.9-1" fill="none" stroke="#7FA7FF" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="360" y="72" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="30" font-weight="800" fill="#F2F2F2" text-anchor="start" >Elternbereich</text>
+<text x="360" y="102" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >Änderungen gelten sofort · gespeichert in settings.toml</text>
+<rect x="868" y="24" width="384" height="104" rx="20" fill="#26262B" />
+<path transform="translate(886,60.0) scale(1.3333)" d="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07" fill="none" stroke="#F2F2F2" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<path transform="translate(1200,60.0) scale(1.3333)" d="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07 M19.07 4.93a10 10 0 0 1 0 14.14" fill="none" stroke="#F2F2F2" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<rect x="1123.0" y="73.0" width="63.0" height="22" rx="11" fill="url(#hatch)"/>
+<rect x="934" y="73.0" width="195.0" height="22" rx="11" fill="#3A3A41"/>
+<rect x="934" y="73.0" width="138.6" height="22" rx="11" fill="#5AC8FA"/>
+<line x1="1123.0" y1="64.0" x2="1123.0" y2="104.0" stroke="#AEAEB2" stroke-width="3" stroke-linecap="round"/>
+<path transform="translate(1115.0,102.0) scale(0.6667)" d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="#AEAEB2" stroke-width="2.00" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<circle cx="1072.6" cy="84.0" r="27" fill="#FFFFFF" stroke="#5AC8FA" stroke-width="5"/>
+<text x="934" y="50" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="start" >Lautstärke 62 %</text>
+<text x="1186" y="50" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#AEAEB2" text-anchor="end" >Grenze −6 dBFS</text>
+<rect x="28" y="148" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,166) scale(1.0000)" d="M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="185" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Lautstärke &amp; Pegel</text>
+<rect x="28" y="218" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,236) scale(1.0000)" d="M3 18v-6a9 9 0 0 1 18 0v6 M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="255" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Geräte &amp; Audio</text>
+<rect x="28" y="288" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,306) scale(1.0000)" d="M22 12h-4l-3 9L9 3l-3 9H2" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="325" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Takt &amp; Loop</text>
+<rect x="28" y="358" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,376) scale(1.0000)" d="M12 2a10 10 0 1 0 0.01 0 M12 6v6l4 2" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="395" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Verlauf &amp; Undo</text>
+<rect x="28" y="428" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,446) scale(1.0000)" d="M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="465" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Erweitert</text>
+<rect x="28" y="498" width="260" height="60" rx="14" fill="#2F3550" stroke="#7FA7FF" stroke-width="2" />
+<path transform="translate(46,516) scale(1.0000)" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z M17 21v-8H7v8 M7 3v5h8" fill="none" stroke="#7FA7FF" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="535" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#F2F2F2" text-anchor="start" >Sets</text>
+<rect x="28" y="568" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,586) scale(1.0000)" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="605" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Export</text>
+<text x="40" y="676" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >Lokal · ohne Konto · ohne Internet</text>
+<text x="40" y="698" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >Neustart nötig nur für:</text>
+<text x="40" y="718" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >sample_rate, rows, cols, data_dir</text>
+<rect x="312" y="148" width="300" height="60" rx="12" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<path transform="translate(381.65,167.0) scale(0.9167)" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z M17 21v-8H7v8 M7 3v5h8" fill="none" stroke="#F2F2F2" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="413.65" y="184.48" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F2F2" text-anchor="start" >Set speichern</text>
+<rect x="628" y="148" width="300" height="60" rx="12" fill="#7FA7FF" />
+<path transform="translate(702.6,167.0) scale(0.9167)" d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="none" stroke="#111114" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="734.6" y="184.48" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#111114" text-anchor="start" >Set öffnen …</text>
+<rect x="312" y="228" width="540" height="548" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<text x="334" y="264" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Gespeicherte Sets</text>
+<text x="334" y="288" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8E8E93" text-anchor="start" >Dokumente/Loopstation/Sets</text>
+<rect x="334" y="300" width="496" height="76" rx="14" fill="#2F3550" stroke="#7FA7FF" stroke-width="2" />
+<path transform="translate(352,324) scale(1.1667)" d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="none" stroke="#7FA7FF" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="396" y="332" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#F2F2F2" text-anchor="start" >Mias Trommel-Lied</text>
+<text x="396" y="356" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >20.11.2026 · 16:48 · 7 Pads · 96 BPM</text>
+<rect x="334" y="388" width="496" height="76" rx="14" fill="#26262B" />
+<path transform="translate(352,412) scale(1.1667)" d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="none" stroke="#7FA7FF" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="396" y="420" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#F2F2F2" text-anchor="start" >Regen-Geräusche</text>
+<text x="396" y="444" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >18.11.2026 · 17:20 · 4 Pads · frei</text>
+<rect x="334" y="476" width="496" height="76" rx="14" fill="#26262B" />
+<path transform="translate(352,500) scale(1.1667)" d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="none" stroke="#7FA7FF" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="396" y="508" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#F2F2F2" text-anchor="start" >Geburtstags-Beat</text>
+<text x="396" y="532" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >02.11.2026 · 11:05 · 9 Pads · 120 BPM</text>
+<rect x="334" y="564" width="496" height="76" rx="14" fill="#26262B" />
+<path transform="translate(352,588) scale(1.1667)" d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="none" stroke="#FF9F0A" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="396" y="596" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#F2F2F2" text-anchor="start" >Opas Set (anderer PC)</text>
+<text x="396" y="620" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#FF9F0A" text-anchor="start" >Gerät „Focusrite“ fehlt → Systemstandard</text>
+<rect x="334" y="652" width="496" height="76" rx="14" fill="#26262B" />
+<path transform="translate(352,676) scale(1.1667)" d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="none" stroke="#FF3B30" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="396" y="684" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#8E8E93" text-anchor="start" >Neues Set von Laptop</text>
+<text x="396" y="708" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#FF8A80" text-anchor="start" >Format v3 – neuere Loopstation nötig</text>
+<rect x="872" y="228" width="380" height="300" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<text x="894" y="264" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Mias Trommel-Lied</text>
+<text x="894" y="290" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >Gespeichert</text>
+<text x="1230" y="290" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="end" >20.11.2026, 16:48</text>
+<text x="894" y="326" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >Pads mit Aufnahme</text>
+<text x="1230" y="326" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="end" >7</text>
+<text x="894" y="362" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >Takt</text>
+<text x="1230" y="362" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="end" >96 BPM · 4/4</text>
+<text x="894" y="398" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >Zurück-Schritte</text>
+<text x="1230" y="398" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="end" >14 (bleiben)</text>
+<text x="894" y="434" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >Wiederholen</text>
+<text x="1230" y="434" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="end" >startet leer</text>
+<text x="894" y="470" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >Format</text>
+<text x="1230" y="470" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="end" >v1 · passt</text>
+<rect x="872" y="544" width="380" height="232" rx="18" fill="#2A2414" stroke="#FF9F0A" stroke-width="2" />
+<path transform="translate(892,566) scale(1.1667)" d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01" fill="none" stroke="#FF9F0A" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="932" y="588" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#F2F2F2" text-anchor="start" >Aktuelle Sitzung ist nicht gesichert</text>
+<text x="894" y="622" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#E5E5EA" text-anchor="start" >Öffnen ersetzt, was gerade auf den Pads ist.</text>
+<text x="894" y="642" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#E5E5EA" text-anchor="start" >Jetzt zuerst als Set sichern?</text>
+<rect x="894" y="664" width="336" height="46" rx="12" fill="#7FA7FF" />
+<text x="1062.0" y="692.4" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#111114" text-anchor="middle" >Erst sichern, dann öffnen</text>
+<rect x="894" y="718" width="160" height="44" rx="12" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<text x="974.0" y="745.04" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="middle" >Ohne sichern</text>
+<rect x="1070" y="718" width="160" height="44" rx="12" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<text x="1150.0" y="745.04" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="middle" >Abbrechen</text>
+<rect x="0" y="800" width="1280" height="116" fill="#F4F4F6"/><rect x="0" y="800" width="1280" height="4" fill="#7FA7FF"/><text x="24" y="834" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="20" font-weight="700" fill="#111114" text-anchor="start" >Mockup 15 · Elternbereich – Set öffnen</text><text x="1256" y="834" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="600" fill="#55555C" text-anchor="end" >Plan §10.3, §10.1 (Format-Version)</text><text x="24" y="858" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#3A3A41" text-anchor="start" >Liste gespeicherter Sets mit Datum und Inhalt. Vor dem Öffnen Rückfrage, wenn die aktuelle Sitzung ungesichert ist. Zurück-Schritte des Sets bleiben erhalten, Wiederholen</text><text x="24" y="877" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#3A3A41" text-anchor="start" >startet leer.</text><text x="24" y="896" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#3A3A41" text-anchor="start" >Versionsprüfung: zu neue Sets werden mit klarer Meldung abgelehnt. Fehlt ein Gerät aus dem Set, wird der Systemstandard genutzt und hier angezeigt.</text>
+</svg>

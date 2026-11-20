@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="916" viewBox="0 0 1280 916">
+<title>Mockup 16 – Elternbereich – Export der Summe (N Takte als WAV)</title>
+<defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#2E2E34"/><line x1="0" y1="0" x2="0" y2="10" stroke="#4A4A52" stroke-width="4"/></pattern><filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter></defs>
+<rect width="1280" height="800" fill="#0E0E10"/>
+<rect x="6" y="6" width="1268" height="788" rx="26" fill="none" stroke="#7FA7FF" stroke-opacity="0.75" stroke-width="4"/>
+<rect x="28" y="24" width="260" height="104" rx="20" fill="#26262B" />
+<path transform="translate(48,60) scale(1.3333)" d="M19 12H5 M12 19l-7-7 7-7" fill="none" stroke="#F2F2F2" stroke-width="2.60" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="92" y="70" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F2F2" text-anchor="start" >Zur Kinderseite</text>
+<text x="92" y="96" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Eltern-Modus beenden</text>
+<path transform="translate(312,50) scale(1.4167)" d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M7 11V7a5 5 0 0 1 9.9-1" fill="none" stroke="#7FA7FF" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="360" y="72" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="30" font-weight="800" fill="#F2F2F2" text-anchor="start" >Elternbereich</text>
+<text x="360" y="102" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#8E8E93" text-anchor="start" >Änderungen gelten sofort · gespeichert in settings.toml</text>
+<rect x="868" y="24" width="384" height="104" rx="20" fill="#26262B" />
+<path transform="translate(886,60.0) scale(1.3333)" d="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07" fill="none" stroke="#F2F2F2" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<path transform="translate(1200,60.0) scale(1.3333)" d="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07 M19.07 4.93a10 10 0 0 1 0 14.14" fill="none" stroke="#F2F2F2" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<rect x="1123.0" y="73.0" width="63.0" height="22" rx="11" fill="url(#hatch)"/>
+<rect x="934" y="73.0" width="195.0" height="22" rx="11" fill="#3A3A41"/>
+<rect x="934" y="73.0" width="138.6" height="22" rx="11" fill="#5AC8FA"/>
+<line x1="1123.0" y1="64.0" x2="1123.0" y2="104.0" stroke="#AEAEB2" stroke-width="3" stroke-linecap="round"/>
+<path transform="translate(1115.0,102.0) scale(0.6667)" d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="#AEAEB2" stroke-width="2.00" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<circle cx="1072.6" cy="84.0" r="27" fill="#FFFFFF" stroke="#5AC8FA" stroke-width="5"/>
+<text x="934" y="50" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="start" >Lautstärke 62 %</text>
+<text x="1186" y="50" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="600" fill="#AEAEB2" text-anchor="end" >Grenze −6 dBFS</text>
+<rect x="28" y="148" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,166) scale(1.0000)" d="M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="185" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Lautstärke &amp; Pegel</text>
+<rect x="28" y="218" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,236) scale(1.0000)" d="M3 18v-6a9 9 0 0 1 18 0v6 M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="255" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Geräte &amp; Audio</text>
+<rect x="28" y="288" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,306) scale(1.0000)" d="M22 12h-4l-3 9L9 3l-3 9H2" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="325" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Takt &amp; Loop</text>
+<rect x="28" y="358" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,376) scale(1.0000)" d="M12 2a10 10 0 1 0 0.01 0 M12 6v6l4 2" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="395" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Verlauf &amp; Undo</text>
+<rect x="28" y="428" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,446) scale(1.0000)" d="M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="465" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Erweitert</text>
+<rect x="28" y="498" width="260" height="60" rx="14" fill="#1B1B1F" />
+<path transform="translate(46,516) scale(1.0000)" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z M17 21v-8H7v8 M7 3v5h8" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="535" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="500" fill="#C7C7CC" text-anchor="start" >Sets</text>
+<rect x="28" y="568" width="260" height="60" rx="14" fill="#2F3550" stroke="#7FA7FF" stroke-width="2" />
+<path transform="translate(46,586) scale(1.0000)" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3" fill="none" stroke="#7FA7FF" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="84" y="605" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#F2F2F2" text-anchor="start" >Export</text>
+<text x="40" y="676" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >Lokal · ohne Konto · ohne Internet</text>
+<text x="40" y="698" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >Neustart nötig nur für:</text>
+<text x="40" y="718" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#6E6E75" text-anchor="start" >sample_rate, rows, cols, data_dir</text>
+<rect x="312" y="148" width="580" height="628" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<text x="334" y="184" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Summe exportieren</text>
+<text x="334" y="208" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#8E8E93" text-anchor="start" >Session · 96 BPM · 4/4 · Quelle Klatschen</text>
+<text x="334" y="240" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#F2F2F2" text-anchor="start" >Wie viele Takte?</text>
+<rect x="334" y="256" width="100" height="64" rx="14" fill="#26262B" />
+<text x="384" y="296" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="24" font-weight="800" fill="#F2F2F2" text-anchor="middle" >4</text>
+<rect x="446" y="256" width="100" height="64" rx="14" fill="#2F3550" stroke="#7FA7FF" stroke-width="2" />
+<text x="496" y="296" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="24" font-weight="800" fill="#F2F2F2" text-anchor="middle" >8</text>
+<rect x="558" y="256" width="100" height="64" rx="14" fill="#26262B" />
+<text x="608" y="296" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="24" font-weight="800" fill="#F2F2F2" text-anchor="middle" >16</text>
+<rect x="670" y="256" width="100" height="64" rx="14" fill="#26262B" />
+<text x="720" y="296" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="24" font-weight="800" fill="#F2F2F2" text-anchor="middle" >32</text>
+<rect x="782" y="256" width="88" height="64" rx="14" fill="#26262B" />
+<text x="826" y="294" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="22" font-weight="700" fill="#8E8E93" text-anchor="middle" >…</text>
+<rect x="334" y="336" width="536" height="64" rx="14" fill="#141418" />
+<text x="352" y="362" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Länge</text>
+<text x="352" y="388" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="18" font-weight="800" fill="#F2F2F2" text-anchor="start" >8 Takte × 2,50 s = 20,0 s</text>
+<text x="852" y="388" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="500" fill="#8E8E93" text-anchor="end" >960 000 Frames · 48 kHz</text>
+<text x="334" y="440" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#F2F2F2" text-anchor="start" >Welche Pads?</text>
+<circle cx="346" cy="466" r="11" fill="none" stroke="#7FA7FF" stroke-width="2.5"/>
+<circle cx="346" cy="466" r="6" fill="#7FA7FF"/>
+<text x="368" y="472" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="700" fill="#F2F2F2" text-anchor="start" >Nur was gerade loopt</text>
+<text x="368" y="492" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8E8E93" text-anchor="start" >5 Pads</text>
+<circle cx="624" cy="466" r="11" fill="none" stroke="#6E6E75" stroke-width="2.5"/>
+<text x="646" y="472" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="500" fill="#F2F2F2" text-anchor="start" >Alle belegten Pads als Loop</text>
+<text x="646" y="492" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8E8E93" text-anchor="start" >7 Pads</text>
+<rect x="334" y="516" width="64" height="36" rx="18" fill="#48484F" />
+<circle cx="352" cy="534" r="14" fill="#FFFFFF"/>
+<text x="414" y="532" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >Einmal-Pads am Anfang einrechnen</text>
+<text x="414" y="552" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >Standard: weglassen</text>
+<rect x="334" y="572" width="64" height="36" rx="18" fill="#32D74B" />
+<circle cx="380" cy="590" r="14" fill="#FFFFFF"/>
+<text x="414" y="588" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >Kurzer Ausklang am Ende</text>
+<text x="414" y="608" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >15 ms Fade gegen Knacken</text>
+<text x="334" y="648" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#F2F2F2" text-anchor="start" >Format</text>
+<circle cx="346" cy="674" r="11" fill="none" stroke="#7FA7FF" stroke-width="2.5"/>
+<circle cx="346" cy="674" r="6" fill="#7FA7FF"/>
+<text x="368" y="680" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="700" fill="#F2F2F2" text-anchor="start" >WAV</text>
+<rect x="410.55" y="664" width="72" height="21" rx="10" fill="#2F3550" />
+<text x="446.55" y="679" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11.5" font-weight="700" fill="#7FA7FF" text-anchor="middle" >Standard</text>
+<text x="368" y="700" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8E8E93" text-anchor="start" >mono, 48 kHz</text>
+<circle cx="624" cy="674" r="11" fill="none" stroke="#6E6E75" stroke-width="2.5"/>
+<text x="646" y="680" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15.5" font-weight="500" fill="#6E6E75" text-anchor="start" >MP3</text>
+<text x="646" y="700" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="400" fill="#8E8E93" text-anchor="start" >braucht ffmpeg – nicht gefunden</text>
+<rect x="334" y="708" width="536" height="56" rx="12" fill="#7FA7FF" />
+<path transform="translate(469.125,725.0) scale(0.9167)" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3" fill="none" stroke="#111114" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="501.125" y="742.12" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="700" fill="#111114" text-anchor="start" >Summe als WAV exportieren</text>
+<rect x="912" y="148" width="340" height="360" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<text x="934" y="184" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#F2F2F2" text-anchor="start" >Vorschau: was wiederholt wird</text>
+<text x="932" y="226" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#F2F2F2" text-anchor="start" >Pad 1</text>
+<rect x="989" y="208" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1020.0" y="208" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1051.0" y="208" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1082.0" y="208" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1113.0" y="208" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1144.0" y="208" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1175.0" y="208" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1206.0" y="208" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<text x="932" y="278" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#F2F2F2" text-anchor="start" >Pad 2</text>
+<rect x="989" y="260" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1020.0" y="260" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1051.0" y="260" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1082.0" y="260" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1113.0" y="260" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1144.0" y="260" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1175.0" y="260" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1206.0" y="260" width="29.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<text x="932" y="330" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#F2F2F2" text-anchor="start" >Pad 5</text>
+<rect x="989" y="312" width="60.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1051.0" y="312" width="60.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1113.0" y="312" width="60.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1175.0" y="312" width="60.0" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<text x="932" y="382" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#F2F2F2" text-anchor="start" >Pad 10</text>
+<rect x="989" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1004.5" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1020.0" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1035.5" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1051.0" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1066.5" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1082.0" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1097.5" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1113.0" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1128.5" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1144.0" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1159.5" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1175.0" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1190.5" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1206.0" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<rect x="1221.5" y="364" width="13.5" height="28" rx="6" fill="#32D74B" opacity="0.85"/>
+<text x="932" y="434" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#F2F2F2" text-anchor="start" >Pad 7</text>
+<rect x="989" y="416" width="40.470000000000006" height="28" rx="14" fill="#5AC8FA" opacity="0.85"/>
+<rect x="1031.47" y="416" width="40.470000000000006" height="28" rx="14" fill="#5AC8FA" opacity="0.85"/>
+<rect x="1073.94" y="416" width="40.470000000000006" height="28" rx="14" fill="#5AC8FA" opacity="0.85"/>
+<rect x="1116.41" y="416" width="40.470000000000006" height="28" rx="14" fill="#5AC8FA" opacity="0.85"/>
+<rect x="1158.88" y="416" width="40.470000000000006" height="28" rx="14" fill="#5AC8FA" opacity="0.85"/>
+<rect x="1201.3500000000001" y="416" width="33.649999999999864" height="28" rx="14" fill="#5AC8FA" opacity="0.85"/>
+<line x1="988.0" y1="196" x2="988.0" y2="462" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="1"/>
+<line x1="1019.0" y1="196" x2="1019.0" y2="462" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1"/>
+<line x1="1050.0" y1="196" x2="1050.0" y2="462" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1"/>
+<line x1="1081.0" y1="196" x2="1081.0" y2="462" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1"/>
+<line x1="1112.0" y1="196" x2="1112.0" y2="462" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="1"/>
+<line x1="1143.0" y1="196" x2="1143.0" y2="462" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1"/>
+<line x1="1174.0" y1="196" x2="1174.0" y2="462" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1"/>
+<line x1="1205.0" y1="196" x2="1205.0" y2="462" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1"/>
+<line x1="1236.0" y1="196" x2="1236.0" y2="462" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="1"/>
+<text x="988" y="484" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11" font-weight="400" fill="#8E8E93" text-anchor="start" >Takt 1</text>
+<text x="1236" y="484" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11" font-weight="400" fill="#8E8E93" text-anchor="end" >8</text>
+<text x="932" y="500" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11.5" font-weight="400" fill="#5AC8FA" text-anchor="start" >Blau = freies Pad: eigene Länge, am Ende geschnitten</text>
+<rect x="912" y="524" width="340" height="252" rx="14" fill="#7FA7FF" fill-opacity="0.09" stroke="#7FA7FF" stroke-opacity="0.40" stroke-width="1.5" />
+<path transform="translate(928,540) scale(1.0000)" d="M12 2a10 10 0 1 0 0.01 0 M12 16v-4 M12 8h.01" fill="none" stroke="#7FA7FF" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="964" y="557" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="700" fill="#F2F2F2" text-anchor="start" >Eltern-Grenze gilt auch hier</text>
+<text x="964" y="578" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >Lautstärke + Limiter wie live</text>
+<text x="964" y="599" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >auf die Summe (−6 dBFS).</text>
+<text x="964" y="620" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" ></text>
+<text x="964" y="641" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >Kein Takt in der Sitzung?</text>
+<text x="964" y="662" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >→ BPM unter „Takt &amp; Loop“ setzen</text>
+<text x="964" y="683" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >oder Notbehelf „N × längstes</text>
+<text x="964" y="704" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="400" fill="#C7C7CC" text-anchor="start" >Sample“ ausdrücklich wählen.</text>
+<rect x="0" y="800" width="1280" height="116" fill="#F4F4F6"/><rect x="0" y="800" width="1280" height="4" fill="#7FA7FF"/><text x="24" y="834" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="20" font-weight="700" fill="#111114" text-anchor="start" >Mockup 16 · Elternbereich – Export der Summe (N Takte als WAV)</text><text x="1256" y="834" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="600" fill="#55555C" text-anchor="end" >Plan §5.1–5.3, §4, §13</text><text x="24" y="858" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#3A3A41" text-anchor="start" >Alles, was gerade zusammen klingt, N Takte lang als eine Datei. Keine Zeitachse: Loops wiederholen sich wie live; Länge = N × Takt (ganze Frames).</text><text x="24" y="877" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13.5" font-weight="400" fill="#3A3A41" text-anchor="start" >Gleiche Lautstärke-Kette wie live inkl. Eltern-Grenze auf die Summe. Optional kurzer Ausklang. Ohne Takt: Eltern-BPM setzen oder Notbehelf ausdrücklich wählen.</text>
+</svg>
