@@ -217,7 +217,9 @@ def test_restart_values_are_not_applied_but_reported(controller):
 
 def test_backend_without_configure_is_fine_and_with_it_gets_the_values(controller):
     seen = []
-    controller.audio.configure = lambda seconds, latency, soft_seam: seen.append((seconds, latency, soft_seam))
+    controller.audio.configure = lambda seconds, latency, soft_seam: seen.append(
+        (seconds, latency, soft_seam)
+    )
     controller.apply_settings(replace(controller.settings, max_record_seconds=7.0, latency_ms=250.0))
     controller.apply_settings(replace(controller.settings, latency_ms=None, soft_seam=False))
     assert seen == [(7.0, 0.25, True), (7.0, None, False)]

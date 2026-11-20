@@ -45,7 +45,15 @@ WHITE, YELLOW, GREEN, RED = "white", "yellow", "green", "red"
 
 # Settings that ``apply_settings`` takes over while the app runs; the rest of
 # ``Settings`` (see ``config.RESTART_KEYS``) keeps its running value.
-LIVE_SETTINGS = ("max_record_seconds", "sound_effects", "fullscreen", "launchpad", "loop_sync", "latency_ms", "soft_seam")
+LIVE_SETTINGS = (
+    "max_record_seconds",
+    "sound_effects",
+    "fullscreen",
+    "launchpad",
+    "loop_sync",
+    "latency_ms",
+    "soft_seam",
+)
 
 
 class Mode(Enum):
