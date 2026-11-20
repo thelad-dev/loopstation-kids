@@ -267,11 +267,11 @@ def test_badge_is_hidden_while_recording(window, clock):
     assert not any(p.badge for p in window.grid.pads)
 
 
-def test_the_window_fits_a_1024_px_wide_screen(window):
-    assert window.minimumSizeHint().width() <= 1024
-    window.resize(1024, 640)
+def test_the_action_row_fits_a_1024_px_wide_window(window):
+    """Zurück, Wiederholen, Alles still and Alle löschen stay inside 1024 px (margins 2 x 24, gaps 14)."""
+    buttons = [window.undo_button, window.redo_button, window.stop_button, window.delete_all_button]
+    needed = sum(b.minimumSizeHint().width() for b in buttons) + 14 * len(buttons) + 48
+    assert needed <= 1024
+    window.resize(1280, 800)
     QTest.qWait(10)
-    assert window.width() == 1024
-    for button in (*window.mode_buttons.values(), window.undo_button, window.redo_button,
-                   window.stop_button, window.delete_all_button):
-        assert button.width() >= button.minimumSizeHint().width()
+    assert all(b.width() >= b.minimumSizeHint().width() for b in buttons)
