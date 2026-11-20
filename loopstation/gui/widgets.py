@@ -48,7 +48,7 @@ class BigButton(QAbstractButton):
     Unchecked: dark surface, icon in the accent colour. Checked: filled with
     the accent colour so the active mode is obvious from across the room.
     ``stacked`` puts the icon above the word (used for the mode bar, so all
-    five modes fit side by side even on small screens).
+    modes fit side by side even on small screens).
     """
 
     def __init__(
@@ -61,10 +61,12 @@ class BigButton(QAbstractButton):
         min_height: int = 76,
         font_pt: int = BUTTON_FONT_PT,
         stacked: bool = False,
+        pad_x: int = 26,
     ) -> None:
         super().__init__(parent)
         self.icon_name = icon
         self.stacked = stacked
+        self.PAD_X = pad_x  # sides of the button; less of it keeps a crowded bar narrow
         self.accent = QColor(accent)
         self.setText(text)
         self.setCheckable(checkable)

@@ -105,6 +105,12 @@ def draw_icon(painter: QPainter, name: str, rect: QRectF, color: QColor) -> None
         _arrow_head(painter, QPointF(r.left() + s * 0.10, r.top() + s * 0.38),
                     QPointF(-1.0, 0.0), s * 0.26, color)
 
+    elif name == "redo":
+        # The undo hook arrow, mirrored: points right.
+        painter.translate(r.left() * 2 + s, 0)
+        painter.scale(-1, 1)
+        draw_icon(painter, "undo", rect, color)
+
     elif name == "history":
         # Clock face.
         painter.setPen(_pen(color, s * 0.11))

@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 import numpy as np
 
@@ -24,7 +25,7 @@ from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, sa
 from loopstation.audio.sync import fit_to_grid, grace_frames, max_grid_frames
 from loopstation.clips import ClipEvent, ClipLog
 from loopstation.config import Settings, restart_keys_changed
-from loopstation.state import PadState
+from loopstation.state import PadState, find_entry
 from loopstation.store import EventStore
 
 log = logging.getLogger(__name__)
@@ -381,8 +382,24 @@ class Controller:
     def _set_notice(self, text: str) -> None:
         self._notice = (text, self._clock() + NOTICE_SECONDS)
 
-    def can_undo(self) -> bool:
-        return bool(self.store.state.undo_stack)
+    def can_undo(self, pad: int | None = None) -> bool:
+        """Is there a change to take back (of ``pad`` only, if given)?"""
+        return find_entry(self.store.state.undo_stack, pad) is not None
+
+    def last_change_pad(self) -> int | None:
+        """The pad of the latest change if that change touched just one pad, else None.
+
+        The pad shows its "back" badge for this change; a change of many pads
+        ("Alle löschen") has no single pad and is left to the big "Zurück".
+        """
+        entry = find_entry(self.store.state.undo_stack)
+        if entry is None or len(entry["pads"]) != 1:
+            return None
+        return next(iter(entry["pads"]))
+
+    def can_redo(self, pad: int | None = None) -> bool:
+        """Is there an undone change to bring back? Not while recording."""
+        return self._recording is None and find_entry(self.store.state.redo_stack, pad) is not None
 
     def pad_colors(self) -> dict[int, str]:
         """Colour of every pad on the grid."""
@@ -614,25 +631,43 @@ class Controller:
         if changed:
             self._changed()
 
-    def undo(self) -> None:
-        """Undo the last content change (Strg+Z)."""
+    def undo(self, pad: int | None = None) -> None:
+        """Undo the last content change (Strg+Z), or the last one of ``pad`` only."""
         # Undo during a recording cancels it: stop, then undo the new sample.
         # A recording that was too short leaves nothing to undo.
         if self._recording is not None and not self._stop_recording():
             self._changed()
             return
-        stack = self.store.state.undo_stack
-        if not stack:
-            self._set_notice("Nichts mehr zum Zurücknehmen")
+        entry = find_entry(self.store.state.undo_stack, pad)
+        if entry is None:
+            self._set_notice("Nichts mehr zum Zurücknehmen" if pad is None
+                             else "Hier gibt es nichts zum Zurücknehmen")
             self._changed()
             return
-        top = stack[-1]
-        for pad_id, previous in top["pads"].items():
-            if self.pad(pad_id).sample != previous:
+        self._travel(ev.UNDO, entry, pad)
+
+    def redo(self, pad: int | None = None) -> None:
+        """Bring back what was just undone (Strg+Y), or the last undone change of ``pad``."""
+        entry = find_entry(self.store.state.redo_stack, pad)
+        if self._recording is not None or entry is None:
+            self._set_notice("Nichts zum Wiederholen")
+            self._changed()
+            return
+        self._travel(ev.REDO, entry, pad)
+
+    def _travel(self, kind: str, entry: dict[str, Any], pad: int | None) -> None:
+        """Log an undo or redo of ``entry`` and stop the pads whose sound changes."""
+        affected = [pad] if pad is not None else list(entry["pads"])
+        for pad_id in affected:
+            if self.pad(pad_id).sample != entry["pads"][pad_id]:
                 self.audio.stop(pad_id)
         had_content = self.store.state.has_content()
-        self.store.append(ev.UNDO, None, {"target": top["seq"]})
+        self.store.append(kind, pad, {"target": entry["seq"]})
         self._content_changed(had_content)
+        if kind == ev.REDO or pad is not None:
+            # A sound brought back into an empty session sets the loop length again.
+            for pad_id in affected:
+                self._set_master_from(pad_id)
         self._changed()
 
     def restore(self, pad: int, sample: str) -> None:

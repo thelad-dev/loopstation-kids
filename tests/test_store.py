@@ -198,3 +198,40 @@ def test_crash_before_snapshot_is_repaired_on_load(tmp_path, clock):
     again = EventStore(tmp_path, 12, snapshot_interval=5, max_active_events=40, clock=clock)
     assert read_lines(again.log_path)[-1]["type"] == "snapshot"
     again.close()
+
+
+@pytest.mark.usefixtures("fsync_off")
+def test_pad_undo_and_redo_survive_snapshots_and_archiving(tmp_path, clock):
+    def run(store: EventStore) -> None:
+        record(store, 0, "a.wav")
+        record(store, 1, "b.wav")
+        record(store, 2, "c.wav")
+        store.append(ev.UNDO, 0, {"target": store.state.undo_stack[0]["seq"]})
+        store.append(ev.UNDO, None, {"target": store.state.undo_stack[-1]["seq"]})
+        for _ in range(120):  # snapshots in between, the first segments get archived
+            store.append(ev.PLAY, 0)
+
+    store = EventStore(tmp_path, 12, snapshot_interval=5, max_active_events=20, clock=clock)
+    run(store)
+    assert store.archive_dir.is_dir() and list(store.archive_dir.glob("events-*.jsonl"))
+    expected = store.state.to_dict()
+    assert [e["pads"] for e in expected["redo_stack"]] == [{"0": "a.wav"}, {"2": "c.wav"}]
+    # Live state == replay of the active log (starts at a snapshot) == restart.
+    assert replay([ev.Event.from_json(json.dumps(x)) for x in read_lines(store.log_path)],
+                  12).to_dict() == expected
+    store.close()
+
+    store = EventStore(tmp_path, 12, snapshot_interval=5, max_active_events=20, clock=clock)
+    assert store.state.to_dict() == expected
+    # Redo and a further pad undo reach events that live in the archive.
+    store.append(ev.REDO, 0, {"target": store.state.redo_stack[0]["seq"]})
+    assert store.state.pads[0].sample == "a.wav"
+    assert [e["pads"] for e in store.state.redo_stack] == [{2: "c.wav"}]
+    store.append(ev.UNDO, 1, {"target": store.state.undo_stack[0]["seq"]})
+    assert store.state.pads[1].sample is None and store.state.pads[2].sample is None
+    final = store.state.to_dict()
+    store.close()
+
+    store = EventStore(tmp_path, 12, snapshot_interval=5, max_active_events=20, clock=clock)
+    assert store.state.to_dict() == final
+    store.close()
