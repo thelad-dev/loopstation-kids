@@ -677,3 +677,8 @@ register_field(Field("metronome_tone", "Metronom-Ton (leise)", "bool",
 register_field(Field("metronome_level_db", "Pegel des Metronom-Tons", "float", -40, -6, suffix=" dB",
                      hint="Vor Lautstärke und Obergrenze; leise gewählt, damit er nie scharf klickt."),
                before="latency_ms")
+# --- Free pad mode (W4-FREI) ---
+register_field(Field("free_pad_on_grid", "Freie Pads am Takt-Punkt starten", "bool",
+                     hint="Ein freies Pad behält seine eigene Länge. An: es beginnt am nächsten Loop-Anfang, "
+                          "aus: sofort."),
+               before="soft_seam")

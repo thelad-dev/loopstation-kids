@@ -122,3 +122,10 @@ metronome_tone = false
 # Pegel des Metronom-Tons in dB(FS) von -40 bis -6, vor Lautstärke und
 # Obergrenze. Wirkt sofort.
 metronome_level_db = -20
+# --- Freier Pad-Modus ---
+
+# true = ein Loop auf einem freien Pad (lange halten, das Pad wird rund) beginnt
+# erst am nächsten Loop-Anfang der anderen Loops, damit er sich einordnet. Er
+# behält dabei seine eigene Länge und wird nie in den Takt geschnitten oder
+# gezogen. false = er beginnt sofort. Wirkt sofort.
+free_pad_on_grid = false

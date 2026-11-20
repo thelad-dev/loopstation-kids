@@ -21,8 +21,12 @@ class AudioBackend(Protocol):
     sample_rate: int
     available_input: bool
 
-    def start_recording(self) -> bool:
-        """Start capturing from the microphone; False if that is not possible."""
+    def start_recording(self, align: bool = True) -> bool:
+        """Start capturing from the microphone; False if that is not possible.
+
+        With a grid and loops running a recording begins on the next loop start;
+        ``align=False`` (a free pad) starts it at once instead.
+        """
         ...
 
     def stop_recording(self) -> np.ndarray | None:
@@ -54,8 +58,15 @@ class AudioBackend(Protocol):
         """Pads whose loop waits for the next loop start to begin or to end."""
         ...
 
-    def play(self, pad: int, data: np.ndarray, loop: bool) -> None:
-        """Play ``data`` on ``pad`` once (at once) or as a loop (on the grid, if one is set)."""
+    def play(
+        self, pad: int, data: np.ndarray, loop: bool, free: bool = False, align: bool = False
+    ) -> None:
+        """Play ``data`` on ``pad`` once (at once) or as a loop (on the grid, if one is set).
+
+        ``free``: a loop of a free pad. It keeps its own length, never defines
+        or keeps up the grid and stops at once. It begins at once, or, with
+        ``align`` and loops already running on the grid, on their next loop start.
+        """
         ...
 
     def stop(self, pad: int, at_boundary: bool = False) -> None:

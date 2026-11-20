@@ -57,6 +57,10 @@ PARENT_BPM = "parent_bpm"
 
 WHITE, YELLOW, GREEN, RED = "white", "yellow", "green", "red"
 
+# How long a pad has to be held to switch its free mode (the ring on the pad
+# fills in this time). A tap is far shorter; the parents' lock needs 2 s.
+FREE_HOLD_SECONDS = 0.8
+
 # Settings that ``apply_settings`` takes over while the app runs; the rest of
 # ``Settings`` (see ``config.RESTART_KEYS``) keeps its running value.
 LIVE_SETTINGS = (
@@ -74,6 +78,7 @@ LIVE_SETTINGS = (
     "stretch_to_grid",
     "metronome_tone",
     "metronome_level_db",
+    "free_pad_on_grid",
 )
 
 # Audio devices: the streams are opened again when one of these changes.
@@ -106,6 +111,18 @@ class _Recording:
     started: float
     # Cut to the loop grid when it stops (the session already has a loop length).
     synced: bool = False
+    # Recorded on a free pad: kept as it is, neither cut nor stretched.
+    free: bool = False
+
+
+@dataclass
+class _Hold:
+    """A pad that is being pressed. ``state``: ``armed`` (the ring fills towards a switch of
+    the free mode), ``plain`` (only a tap can come of it) or ``done`` (it has switched, or was
+    called off; letting go does nothing)."""
+
+    since: float
+    state: str
 
 
 @dataclass(frozen=True)
@@ -163,6 +180,8 @@ class Controller:
         # engine, and the bar start the free-running beat counts from.
         self._tick_at: float | None = None
         self._bar_origin: float | None = None
+        # Pads that are being pressed now (screen, Launchpad), see ``press_down``.
+        self._holds: dict[int, _Hold] = {}
         self._listeners: list[Callable[[], None]] = []
         self._history_listeners: list[Callable[[int], None]] = []
         self._last_playing: set[int] = set()
@@ -422,11 +441,16 @@ class Controller:
         origin = self._sample_grid.get(sample)
         if origin == "none":
             return
+        free = self.pad(pad).free
         data = self._load(sample)
         if data is None or len(data) == 0:
             return
         event: dict[str, object] = {"frames": len(data), "rate": self.audio.sample_rate}
-        if self.settings.auto_grid:
+        if free:
+            # A free pad that comes first gives the session its bar: the length of its
+            # sound, untouched. The log says so, there is no second grid event.
+            event.update(source="free_pad", signature=self.settings.time_signature, pad=pad)
+        elif self.settings.auto_grid:
             event.update(source=origin or "duration", signature=self.settings.time_signature, pad=pad)
         self.store.append(ev.MASTER_SET, None, event)
 
@@ -599,10 +623,14 @@ class Controller:
             elif state.looping:
                 self._stop_pad(pad, at_boundary=True)
             else:
-                data = self._loop_data(state.sample)
+                data = self._loop_data(state.sample, pad)
                 if data is not None:
                     self.store.append(ev.LOOP_ON, pad)
-                    self.audio.play(pad, data, loop=True)
+                    if state.free:
+                        self.audio.play(pad, data, loop=True, free=True,
+                                        align=self.settings.free_pad_on_grid)
+                    else:
+                        self.audio.play(pad, data, loop=True)
         elif self.mode == Mode.DELETE:
             self.audio.stop(pad)
             if state.sample is not None:
@@ -617,6 +645,75 @@ class Controller:
             else:
                 self._set_notice("Hier gibt es noch keine Aufnahmen")
         self._changed()
+
+    # ------------------------------------------------------ free mode and hold
+
+    def is_free(self, pad: int) -> bool:
+        """Is ``pad`` in the free mode (its sound keeps its own length)?"""
+        return self.pad(pad).free
+
+    def set_free(self, pad: int, free: bool) -> None:
+        """Put ``pad`` into (or out of) the free mode. Undoable; not while recording.
+
+        A pad that plays is stopped: it has to be started again, because it now plays
+        with a different length.
+        """
+        if not 0 <= pad < self.pad_count or self._recording is not None:
+            return
+        if self.pad(pad).free == free:
+            return
+        self._stop_pad(pad)
+        self.store.append(ev.PAD_FREE, pad, {"free": free})
+        self._changed()
+
+    def press_down(self, pad: int) -> None:
+        """A pad is pressed (finger down, Launchpad note on).
+
+        Holding it for ``FREE_HOLD_SECONDS`` (``tick`` counts) switches its free mode; a
+        short press ends in ``press_up`` returning True and the caller then calls ``press``.
+        The hold only counts in the play, record and loop modes and while nothing records.
+        """
+        if not 0 <= pad < self.pad_count:
+            return
+        armed = self._recording is None and self.mode in (Mode.PLAY, Mode.RECORD, Mode.LOOP)
+        self._holds[pad] = _Hold(self._clock(), "armed" if armed else "plain")
+        self._changed()
+
+    def press_up(self, pad: int) -> bool:
+        """The pad is let go. True if that was a tap (the caller presses the pad now).
+
+        False when the hold already switched the free mode (nothing more to do) or when
+        this release has no press before it.
+        """
+        hold = self._holds.pop(pad, None)
+        if hold is None:
+            return False
+        self._changed()
+        return hold.state != "done"
+
+    def hold_progress(self, pad: int) -> float | None:
+        """How far the ring of a pad that is being held has filled (0..1), None if not held."""
+        hold = self._holds.get(pad)
+        if hold is None or hold.state != "armed":
+            return None
+        return min(1.0, max(0.0, (self._clock() - hold.since) / FREE_HOLD_SECONDS))
+
+    def _advance_holds(self) -> bool:
+        """Switch the free mode of pads held long enough; True while a ring is still moving."""
+        moving = False
+        for pad, hold in list(self._holds.items()):
+            if hold.state != "armed":
+                continue
+            if self._recording is not None or self.mode not in (Mode.PLAY, Mode.RECORD, Mode.LOOP):
+                hold.state = "done"  # something else took over: letting go does nothing
+                moving = True
+            elif self._clock() - hold.since >= FREE_HOLD_SECONDS:
+                hold.state = "done"
+                self.set_free(pad, not self.pad(pad).free)
+                moving = True
+            else:
+                moving = True
+        return moving
 
     def _stop_pad(self, pad: int, at_boundary: bool = False) -> None:
         """Stop a pad; ``at_boundary`` lets a loop on the grid finish up to the next loop start."""
@@ -637,8 +734,11 @@ class Controller:
             stamp += 1
         # Once the session has a loop length every recording is cut to it,
         # even a new take of the first pad; the first one is free and sets it.
-        synced = self._apply_grid() is not None
-        if not self.audio.start_recording():
+        # A free pad is neither cut nor waits for a loop start: it records at once.
+        free = self.pad(pad).free
+        synced = self._apply_grid() is not None and not free
+        started = self.audio.start_recording(align=False) if free else self.audio.start_recording()
+        if not started:
             self._set_notice("Mikrofon lässt sich nicht öffnen")
             return
         self._clips_seen = self.audio.poll_input_level()[1]
@@ -649,7 +749,7 @@ class Controller:
         if self.settings.sound_effects:
             self.audio.play_effect(start_beep(self.audio.sample_rate))
         self.store.append(ev.RECORD_START, pad, {"stamp": stamp})
-        self._recording = _Recording(pad, stamp, self._clock(), synced)
+        self._recording = _Recording(pad, stamp, self._clock(), synced, free)
 
     def _stop_recording(self) -> bool:
         """Stop the running recording; return True if a sample was kept."""
@@ -687,6 +787,11 @@ class Controller:
                     info["shift"] = shift
                 parent_seeded = True
                 duration = len(data) / rate
+            elif recording.free:
+                # A free sound keeps its length and its start; the session has no grid
+                # yet if it is the first sound, and then the length becomes the bar.
+                if self.settings.loop_sync and self.store.state.master is None:
+                    info["grid"] = "free_pad"
             elif self.settings.auto_grid and self.settings.loop_sync and self.store.state.master is None:
                 # Only the recording that sets the grid is shifted to its first
                 # onset; recordings on an existing grid keep their latency-
@@ -707,6 +812,8 @@ class Controller:
                     self.last_grid = seeded
                 if parent_seeded:
                     self._sample_grid[name] = PARENT_BPM
+                elif info.get("grid") == "free_pad":
+                    self._sample_grid[name] = "free_pad"
             except OSError as exc:
                 log.error("saving %s failed: %s", name, exc)
                 self._set_notice("Aufnahme konnte nicht gespeichert werden")
@@ -748,15 +855,16 @@ class Controller:
                 return None
         return self._cache[sample]
 
-    def _loop_data(self, sample: str) -> np.ndarray | None:
+    def _loop_data(self, sample: str, pad: int | None = None) -> np.ndarray | None:
         """Sample data for loop playback, fitted to the grid if there is one.
 
         Recordings made on the grid already fit; older versions (or a changed
         sample rate) are padded or cut here, the file itself stays untouched.
+        A free pad (``pad`` given) keeps its own length: no fitting at all.
         """
         data = self._load(sample)
         grid = self._apply_grid()
-        if data is None or grid is None:
+        if data is None or grid is None or (pad is not None and self.pad(pad).free):
             return data
         key = (sample, grid)
         if key not in self._fitted:
@@ -930,9 +1038,9 @@ class Controller:
         """Loop length in frames, None while recordings are free (no bars to count)."""
         return self._grid()
 
-    def loop_audio(self, sample: str) -> np.ndarray | None:
-        """A sample as it plays in a loop (fitted to the grid), None if unreadable."""
-        return self._loop_data(sample)
+    def loop_audio(self, sample: str, pad: int | None = None) -> np.ndarray | None:
+        """A sample as it plays in a loop (fitted to the grid, a free ``pad`` as recorded), or None."""
+        return self._loop_data(sample, pad)
 
     def sample_audio(self, sample: str) -> np.ndarray | None:
         """A sample as recorded, None if unreadable."""
@@ -950,6 +1058,8 @@ class Controller:
                 self._stop_recording()
             # The countdown on the recording pad changes continuously.
             changed = True
+        if self._holds and self._advance_holds():
+            changed = True  # the ring on a held pad fills continuously
         playing = self.audio.playing_pads()
         if playing != self._last_playing:
             self._last_playing = playing
@@ -989,8 +1099,11 @@ class Controller:
     def _travel(self, kind: str, entry: dict[str, Any], pad: int | None) -> None:
         """Log an undo or redo of ``entry`` and stop the pads whose sound changes."""
         affected = [pad] if pad is not None else list(entry["pads"])
+        free = entry.get("free", {})
         for pad_id in affected:
-            if self.pad(pad_id).sample != entry["pads"][pad_id]:
+            if self.pad(pad_id).sample != entry["pads"][pad_id] or self.pad(pad_id).free != free.get(
+                pad_id, self.pad(pad_id).free
+            ):
                 self.audio.stop(pad_id)
         had_content = self.store.state.has_content()
         self.store.append(kind, pad, {"target": entry["seq"]})

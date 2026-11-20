@@ -189,8 +189,14 @@ class MainWindow(QMainWindow):
         # Pads.
         rows, cols = controller.settings.rows, controller.settings.cols
         self.grid = PadGrid(rows, cols)
+        # Whether the last release of a pad was a tap (not the end of a long hold).
+        self._tap: dict[int, bool] = {}
         for pad in self.grid.pads:
-            pad.clicked.connect(lambda _checked=False, i=pad.index: self.press(i))
+            # A tap acts on release as before (clicked); the press and release in front of it
+            # let a long hold switch the free mode of the pad instead (see Controller.press_down).
+            pad.pressed.connect(lambda i=pad.index: self._pad_down(i))
+            pad.released.connect(lambda i=pad.index: self._pad_up(i))
+            pad.clicked.connect(lambda _checked=False, i=pad.index: self._pad_clicked(i))
             pad.on_badge = lambda i=pad.index: self.undo_pad(i)
 
         # Action buttons. "Alle löschen" sits apart on the right.
@@ -263,6 +269,17 @@ class MainWindow(QMainWindow):
     def press(self, pad: int) -> None:
         if not self._dialog_open:
             self.controller.press(pad)
+
+    def _pad_down(self, pad: int) -> None:
+        if not self._dialog_open:
+            self.controller.press_down(pad)
+
+    def _pad_up(self, pad: int) -> None:
+        self._tap[pad] = self.controller.press_up(pad)
+
+    def _pad_clicked(self, pad: int) -> None:
+        if self._tap.pop(pad, True):
+            self.press(pad)
 
     def _choose_mode(self, mode: Mode) -> None:
         self.controller.set_mode(mode)
@@ -373,8 +390,11 @@ class MainWindow(QMainWindow):
     def _tick(self) -> None:
         self.controller.tick()
         if self.launchpad is not None:
-            for pad in self.launchpad.poll():
-                self.press(pad)
+            for pad, down in self.launchpad.poll_events():
+                if down and not self._dialog_open:
+                    self.controller.press_down(pad)
+                elif not down and self.controller.press_up(pad):
+                    self.press(pad)
         self.refresh()
 
     def _overlay(self, mode: Mode, color: str, pad: int) -> str | None:
@@ -416,13 +436,15 @@ class MainWindow(QMainWindow):
             sparkle = 0.0 if session is None else self._session_wave(pad.index, session)
             if pad.index in waiting:
                 # Waits for the next loop start: pulsing frame, filling bar, no text.
-                pad.set_look(color, None, None, 0.0, progress if progress is not None else 0.0, sparkle)
+                pad.set_look(color, None, None, 0.0, progress if progress is not None else 0.0, sparkle,
+                             free=controller.is_free(pad.index))
             elif pad.index == controller.recording_pad and remaining is not None:
                 pad.set_look(color, None, remaining, min(1.0, remaining / limit), None, sparkle,
-                             clip=clipping, level=level)
+                             clip=clipping, level=level, free=controller.is_free(pad.index))
             else:
                 pad.set_look(color, self._overlay(controller.mode, color, pad.index), None, 0.0,
-                             None, sparkle, badge=pad.index == badge_pad)
+                             None, sparkle, badge=pad.index == badge_pad,
+                             free=controller.is_free(pad.index), hold=controller.hold_progress(pad.index))
 
         for mode, button in self.mode_buttons.items():
             button.setChecked(mode == controller.mode)

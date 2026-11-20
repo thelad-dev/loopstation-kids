@@ -10,7 +10,9 @@ the same ``PeakLimiter``. A looping voice gets the same soft seam as live. The
 render is exactly ``bars x grid`` frames long, so loops that are a multiple of
 the grid close without a click. There is no time line: every loop starts at
 the first frame and repeats unchanged, a loop that does not fit is cut at the
-end (plus an optional short fade-out).
+end (plus an optional short fade-out). A free pad keeps its own length (the
+controller hands it over unfitted), so it repeats in that length and the render
+cuts it off hard at the end like any other loop.
 
 Without a loop grid there is no bar to count. Nothing is guessed then:
 ``ExportError`` explains it, unless the caller chose the stand-in "bars times
@@ -264,7 +266,7 @@ def build_spec(
     def audio(pad: int, as_loop: bool) -> ExportPad:
         sample = controller.pad(pad).sample
         data = None if sample is None else (
-            controller.loop_audio(sample) if as_loop else controller.sample_audio(sample))
+            controller.loop_audio(sample, pad) if as_loop else controller.sample_audio(sample))
         if data is None:
             raise ExportError(f"Die Aufnahme von Pad {pad + 1} fehlt oder ist nicht lesbar.")
         return ExportPad(pad, data)
