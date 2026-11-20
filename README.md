@@ -115,7 +115,7 @@ Die Launchpad-Anbindung ist bisher nur mit nachgebauten MIDI-Ports getestet, noc
 
 ## Einstellungen
 
-In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne, Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), Datenordner. Fehlt die Datei, gelten die Standardwerte.
+In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne, Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Lautstärke (`volume`) mit Obergrenze (`max_level_db`), Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`), Pegelanzeige der Aufnahme für Eltern (`peak_meter`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), Datenordner. Fehlt die Datei, gelten die Standardwerte.
 
 ## Daten
 
