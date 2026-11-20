@@ -113,12 +113,23 @@ begin
     DelTree(Target, True, True, True);
     DownloadTemporaryFile('{#RubberBandUrl}', 'pylibrb.zip', '{#RubberBandSha256}', nil);
     Zip := ExpandConstant('{tmp}\pylibrb.zip');
-    Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath ''' +
-      Zip + ''' -DestinationPath ''' + Target + ''' -Force"';
+    // Entry by entry instead of Expand-Archive: Windows PowerShell 5.1 does not reliably map the
+    // forward-slash paths of a wheel onto folders. Creates the folders itself.
+    Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' +
+      'Add-Type -AssemblyName System.IO.Compression.FileSystem; ' +
+      '$z = [IO.Compression.ZipFile]::OpenRead(''' + Zip + '''); ' +
+      'try { foreach ($e in $z.Entries) { if ($e.Name) { ' +
+      '$p = Join-Path ''' + Target + ''' ($e.FullName -replace ''/'', ''\''); ' +
+      'New-Item -ItemType Directory -Force (Split-Path $p) | Out-Null; ' +
+      '[IO.Compression.ZipFileExtensions]::ExtractToFile($e, $p, $true) } } } finally { $z.Dispose() }"';
     if Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0) then
-      Result := FileExists(Target + '\pylibrb\__init__.py')
+    begin
+      Result := FileExists(Target + '\pylibrb\__init__.py');
+      if not Result then
+        Log('Rubber Band download failed: pylibrb\__init__.py missing after unpacking to ' + Target);
+    end
     else
-      Log('Expand-Archive failed, exit code ' + IntToStr(Code));
+      Log('Rubber Band download failed: unpacking exit code ' + IntToStr(Code));
   except
     Log('Rubber Band download failed: ' + GetExceptionMessage);
   end;
