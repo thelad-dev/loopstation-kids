@@ -55,6 +55,17 @@ LIVE_SETTINGS = (
     "soft_seam",
 )
 
+# Level settings: applied through their setters, and only when the new value
+# differs from the running settings, so saving the page never resets a volume
+# the child has set with the slider since the start.
+LIVE_LEVEL_SETTINGS = (
+    ("max_level_db", "set_max_level_db"),
+    ("volume", "set_volume"),
+    ("input_gain_db", "set_input_gain_db"),
+    ("auto_gain", "set_auto_gain"),
+    ("peak_meter", "set_peak_meter"),
+)
+
 
 class Mode(Enum):
     PLAY = "play"
@@ -623,6 +634,10 @@ class Controller:
         if configure is not None:
             latency = None if updated.latency_ms is None else updated.latency_ms / 1000
             configure(updated.max_record_seconds, latency, soft_seam=updated.soft_seam)
+        for key, setter in LIVE_LEVEL_SETTINGS:
+            if getattr(new, key) != getattr(self.settings, key):
+                getattr(self, setter)(getattr(new, key))
+        updated = replace(updated, **{key: getattr(new, key) for key, _ in LIVE_LEVEL_SETTINGS})
         self.settings = updated
         self._changed()
         return restart_keys_changed(updated, new)

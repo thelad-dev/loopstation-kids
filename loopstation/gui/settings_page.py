@@ -94,6 +94,13 @@ FIELDS: list[Field] = [
     Field("latency_ms", "Latenz Lautsprecher zu Mikrofon", "auto_float", 0, 1000, suffix=" ms",
           hint="Der Auto-Wert hängt vom Gerät ab. Mit Mikrofon und Kopfhörer gegenhören: "
                "klingen neue Loops zu spät, die Zahl erhöhen."),
+    Field("volume", "Lautstärke", "float", 0, 1,
+          hint="0 ist still, 1 ist die Obergrenze. Der Regler im Fenster stellt dasselbe ein."),
+    Field("max_level_db", "Obergrenze", "float", -30, 0, suffix=" dB",
+          hint="Die Ausgabe wird nie lauter als dieser Wert."),
+    Field("input_gain_db", "Mikrofonpegel", "float", -24, 24, suffix=" dB"),
+    Field("auto_gain", "Aufnahmepegel ausgleichen", "bool"),
+    Field("peak_meter", "Pegelanzeige bei Aufnahme", "bool"),
     Field("launchpad", "Launchpad benutzen", "bool"),
     Field("fullscreen", "Vollbild", "bool"),
     Field("rows", "Zeilen", "int", 1, 16),
