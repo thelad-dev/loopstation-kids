@@ -26,6 +26,7 @@ controller can warn about a recording that is too loud.
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -34,6 +35,7 @@ from typing import Any
 
 import numpy as np
 
+from loopstation.audio.devices import HostApiGroup, Kind, list_devices
 from loopstation.audio.dynamics import (
     CLIP_LEVEL,
     PeakLimiter,
@@ -44,6 +46,7 @@ from loopstation.audio.dynamics import (
     ramp_gain,
     soft_clip,
 )
+from loopstation.audio.selection import WASAPI, resolve_choice
 from loopstation.audio.sync import next_boundary, soften_seam
 
 log = logging.getLogger(__name__)
@@ -86,11 +89,16 @@ class SoundDeviceAudio:
         ceiling_db: float = 0.0,
         input_gain_db: float = 0.0,
         auto_gain: bool = False,
+        input_device: str = "",
+        output_device: str = "",
+        hostapi: str = "",
+        platform: str = sys.platform,
     ) -> None:
         if sd is None:
             import sounddevice as sd  # deferred on purpose, see module docstring
 
         self._sd = sd
+        self._platform = platform
         self._clock = clock
         self._soft_seam = soft_seam
         self.sample_rate = sample_rate
@@ -138,17 +146,142 @@ class SoundDeviceAudio:
 
         # One output stream runs for the lifetime of the app and mixes all
         # voices; starting a sound is then just adding it to the table.
-        self._output = sd.OutputStream(
-            samplerate=sample_rate, channels=1, dtype="float32", callback=self._output_callback
-        )
-        self._output.start()
+        # Devices: what the settings name, or the host API's default.
+        self._output: Any = None
+        self._input_index: int | None = None
+        self._output_index: int | None = None
+        self.device_notice = ""
+        self.available_input = False
+        self._apply_devices(input_device, output_device, hostapi)
 
+    # -------------------------------------------------------------- devices
+
+    def _extra_settings(self, index: int | None) -> Any:
+        """WASAPI in shared mode must convert the sample rate if the device runs at another one."""
+        wasapi = getattr(self._sd, "WasapiSettings", None)
+        if wasapi is None or index is None:
+            return None
         try:
-            sd.check_input_settings(samplerate=sample_rate, channels=1, dtype="float32")
-            self.available_input = True
+            info = self._sd.query_devices(index)
+            apis = self._sd.query_hostapis()
+            if apis[int(info["hostapi"])]["name"] != WASAPI:
+                return None
+            return wasapi(auto_convert=True)
+        except Exception as exc:
+            log.info("no WASAPI settings: %s", exc)
+            return None
+
+    def _stream_args(self, index: int | None) -> dict[str, Any]:
+        args: dict[str, Any] = {
+            "samplerate": self.sample_rate, "channels": 1, "dtype": "float32", "device": index,
+        }
+        extra = self._extra_settings(index)
+        if extra is not None:
+            args["extra_settings"] = extra
+        return args
+
+    def _start_output(self, index: int | None) -> Any:
+        stream = self._sd.OutputStream(callback=self._output_callback, **self._stream_args(index))
+        stream.start()
+        return stream
+
+    def _open_output(self, preferred: int | None, fallback: int | None) -> tuple[Any, int | None, str]:
+        """Open and start the output stream: ``preferred``, else the system default, else ``fallback``.
+
+        Returns the stream, the device it runs on and a hint if it is not the
+        preferred one. Raises if nothing can be opened.
+        """
+        tries = [preferred]
+        if preferred is not None:
+            tries.append(None)
+        if fallback not in tries:
+            tries.append(fallback)
+        error: Exception | None = None
+        for position, index in enumerate(tries):
+            try:
+                stream = self._start_output(index)
+            except Exception as exc:
+                log.warning("cannot open output device %s: %s", index, exc)
+                error = exc
+                continue
+            note = "Wiedergabegerät lässt sich nicht öffnen, Standard wird benutzt." if position else ""
+            return stream, index, note
+        raise error if error is not None else RuntimeError("no output device")
+
+    def _check_input(self, index: int | None) -> bool:
+        try:
+            self._sd.check_input_settings(**self._stream_args(index))
         except Exception as exc:  # no input device or unsupported format
-            log.info("no usable microphone: %s", exc)
-            self.available_input = False
+            log.info("microphone %s not usable: %s", index, exc)
+            return False
+        return True
+
+    def _apply_devices(self, input_name: str, output_name: str, hostapi: str) -> None:
+        """Resolve the saved devices and (re)open the output stream on them."""
+        wanted_in = resolve_choice(self._sd, input_name, hostapi, "input", self._platform)
+        wanted_out = resolve_choice(self._sd, output_name, hostapi, "output", self._platform)
+        notes = [wanted_in.note, wanted_out.note]
+        previous = self._output_index
+        opened = None
+        if self._output is not None and wanted_out.index != previous:
+            try:
+                opened = (self._start_output(wanted_out.index), wanted_out.index, "")
+            except Exception as exc:
+                log.info("opening the new output alongside the old one failed (%s), closing old first", exc)
+        if self._output is not None:
+            try:
+                self._output.stop()
+                self._output.close()
+            except Exception as exc:
+                log.warning("closing audio output failed: %s", exc)
+            self._output = None
+        if opened is None:
+            opened = self._open_output(wanted_out.index, previous)
+        self._output, self._output_index, note = opened
+        notes.append(note)
+        self._input_index = wanted_in.index
+        self.available_input = self._check_input(self._input_index)
+        if not self.available_input and self._input_index is not None:
+            notes.append("Aufnahmegerät lässt sich nicht öffnen, Standard wird benutzt.")
+            self._input_index = None
+            self.available_input = self._check_input(None)
+        self.device_notice = " ".join(n for n in notes if n)
+        with self._lock:
+            self._block_time = None  # the new stream has its own clock
+
+    def select_devices(self, input_name: str, output_name: str, hostapi: str) -> str:
+        """Switch to other devices or host API while the app runs; returns a hint ("" if all is as asked).
+
+        Playing voices and the loop grid go on (the frame counter just keeps
+        counting); the output stream and the microphone are closed and opened
+        again, which takes a moment. A recording that is running is dropped.
+        """
+        self._discard_input()
+        with self._lock:
+            self._chunks = []
+            self._recorded_frames = 0
+            self._rec_start = None
+            self._rec_aligned = False
+        self._apply_devices(input_name, output_name, hostapi)
+        return self.device_notice
+
+    def device_groups(self, kind: Kind) -> list[HostApiGroup]:
+        """Devices of ``kind`` grouped by host API, for the settings page."""
+        return list_devices(self._sd, kind)
+
+    def reported_latency_ms(self) -> float | None:
+        """Microphone plus speaker delay PortAudio reports for the devices now (what "auto" uses)."""
+        try:
+            speaker = float(self._output.latency)
+            if self._input_index is None:
+                mic_info = self._sd.query_devices(kind="input")
+            else:
+                mic_info = self._sd.query_devices(self._input_index)
+            mic = float(mic_info["default_low_input_latency"])
+        except Exception as exc:
+            log.info("latency not available: %s", exc)
+            return None
+        return (speaker + mic) * 1000
 
     # ------------------------------------------------------------ callbacks
 
@@ -354,8 +487,7 @@ class SoundDeviceAudio:
                 self._rec_start = next_boundary(self._frame, self._origin, self._grid)
         try:
             stream = self._sd.InputStream(
-                samplerate=self.sample_rate, channels=1, dtype="float32",
-                callback=self._input_callback,
+                callback=self._input_callback, **self._stream_args(self._input_index)
             )
             self._input = stream
             if self._latency_seconds is not None:

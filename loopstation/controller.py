@@ -65,6 +65,9 @@ LIVE_SETTINGS = (
     "grid_bpm_max",
 )
 
+# Audio devices: the streams are opened again when one of these changes.
+LIVE_DEVICE_SETTINGS = ("input_device", "output_device", "audio_hostapi")
+
 # Level settings: applied through their setters, and only when the new value
 # differs from the running settings, so saving the page never resets a volume
 # the child has set with the slider since the start.
@@ -833,6 +836,7 @@ class Controller:
         their running value here. Nothing changes if the audio engine refuses.
         """
         updated = replace(self.settings, **{key: getattr(new, key) for key in LIVE_SETTINGS})
+        updated = self._apply_devices(updated, new)
         configure = getattr(self.audio, "configure", None)
         if configure is not None:
             latency = None if updated.latency_ms is None else updated.latency_ms / 1000
@@ -844,6 +848,27 @@ class Controller:
         self.settings = updated
         self._changed()
         return restart_keys_changed(updated, new)
+
+    def _apply_devices(self, updated: Settings, new: Settings) -> Settings:
+        """Open the audio streams on the devices of ``new`` if they differ; ``updated`` with the result."""
+        if all(getattr(new, key) == getattr(self.settings, key) for key in LIVE_DEVICE_SETTINGS):
+            return updated
+        select = getattr(self.audio, "select_devices", None)
+        if select is None:
+            return updated
+        try:
+            select(new.input_device, new.output_device, new.audio_hostapi)
+        except Exception as exc:  # nothing could be opened again: keep the old names, tell the parents
+            log.warning("switching audio devices failed: %s", exc)
+            self._set_notice("Audio lässt sich nicht neu starten")
+            return updated
+        self._set_notice("Audio startet neu: Geräte gewechselt")
+        return replace(updated, **{key: getattr(new, key) for key in LIVE_DEVICE_SETTINGS})
+
+    @property
+    def device_notice(self) -> str:
+        """Hint about devices (a saved one is missing, the default is used instead), or ""."""
+        return str(getattr(self.audio, "device_notice", ""))
 
     # ------------------------------------------------------------ lifecycle
 

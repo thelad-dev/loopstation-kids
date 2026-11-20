@@ -11,6 +11,7 @@ in ``config.SETTING_COMMENTS``).
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -35,6 +36,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from loopstation.audio.devices import default_hostapi
 from loopstation.config import (
     RESTART_KEYS,
     SIGNATURES,
@@ -75,6 +77,14 @@ NOTES = (
 )
 
 RESTART_TEXT = "wirkt nach Neustart"
+
+# Words in a device name that make a poor recording and playback device (plan 8).
+BLUETOOTH_WORDS = ("bluetooth", "airpods", "bt-", "bt ", "a2dp", "hands-free")
+BLUETOOTH_WARNING = "⚠ Bluetooth ist für Aufnahmen meist zu langsam."
+STANDARD_TEXT = "Systemstandard"
+ASIO_WARNING = (
+    "ASIO ist für Audio-Interfaces gedacht. Viele Treiber öffnen das Gerät exklusiv: andere Programme "
+    "sind dann still. ASIO4ALL ist nur ein Wrapper, kein echter Treiber. Wirkt erst nach einem Neustart.")
 
 
 @dataclass(frozen=True)
@@ -132,6 +142,10 @@ FIELDS: list[Field] = [
     Field("data_dir", "Datenordner", "text"),
 ]
 
+# The device section (own card, see ``SettingsDialog._device_card``): the three
+# drop-downs and the ASIO switch. Not part of FIELDS, which are plain rows.
+DEVICE_KEYS = ("audio_hostapi", "input_device", "output_device", "asio")
+
 
 def register_field(field: Field, before: str | None = None) -> None:
     """Add ``field`` to the page (at the end, or in front of the field ``before``)."""
@@ -160,6 +174,31 @@ class ToggleSwitch(QAbstractButton):
         painter.setBrush(QColor("#FFFFFF"))
         painter.drawEllipse(QRectF(knob_x, 4, 28, 28))
         painter.end()
+
+
+class _ChoiceEditor:
+    """A drop-down of (label, value) pairs; ``value()`` is the stored text ("" = system default)."""
+
+    def __init__(self, field: Field, value: str) -> None:
+        self.field = field
+        self.box = QComboBox()
+        self.widget: QWidget = self.box
+        self.set_choices([], value)
+
+    def set_choices(self, choices: list[tuple[str, str]], selected: str) -> None:
+        """Show ``choices`` after the standard entry; an unlisted ``selected`` value stays (marked)."""
+        entries = [(STANDARD_TEXT, ""), *choices]
+        if selected and all(value != selected for _label, value in entries):
+            entries.append((f"{selected} (nicht gefunden)", selected))
+        self.box.blockSignals(True)
+        self.box.clear()
+        for label, value in entries:
+            self.box.addItem(label, value)
+        self.box.setCurrentIndex(max(0, self.box.findData(selected)))
+        self.box.blockSignals(False)
+
+    def value(self) -> str:
+        return str(self.box.currentData() or "")
 
 
 class _Editor:
@@ -260,6 +299,8 @@ class SettingsDialog(QDialog):
             f"QSpinBox, QDoubleSpinBox, QLineEdit, QComboBox {{ color: {TEXT.name()}; "
             f"background: {SURFACE.name()}; "
             f"font-size: 16px; border: 1px solid {PARENT_ACCENT}; border-radius: 10px; padding: 6px 10px; }} "
+            f"QComboBox QAbstractItemView {{ color: {TEXT.name()}; background: {SURFACE.name()}; "
+            f"selection-background-color: {PARENT_ACCENT}; selection-color: #000000; font-size: 16px; }} "
             "QSpinBox:disabled, QDoubleSpinBox:disabled { color: #5A5A60; border-color: #3A3A41; } "
             "QCheckBox::indicator { width: 22px; height: 22px; border-radius: 5px; "
             f"background: {SURFACE.name()}; border: 1px solid #5A5A60; }} "
@@ -307,6 +348,8 @@ class SettingsDialog(QDialog):
             self.panel.edited.connect(self._level_edited)
             self.editors.update(self.panel.editors)
         self._pending = [f.label for f in FIELDS if f.restart and values[f.key] != getattr(running, f.key)]
+        self._source = getattr(parent, "audio_devices", None)
+        self._applied = running
         switches, numbers = QVBoxLayout(), QFormLayout()
         switches.setSpacing(14)
         numbers.setHorizontalSpacing(24)
@@ -338,6 +381,7 @@ class SettingsDialog(QDialog):
             inner_layout.addWidget(self.panel)
         inner_layout.addWidget(self._card("Loop-Verhalten und Aufnahme", switches))
         inner_layout.addWidget(self._card("Zahlenwerte", numbers))
+        inner_layout.addWidget(self._device_card(values))
         notes = QVBoxLayout()
         for text in NOTES:
             note = self._hint(text)
@@ -382,6 +426,90 @@ class SettingsDialog(QDialog):
         self.resize(1280, 800)
         if self._pending:
             self._say(f"Gespeichert, {RESTART_TEXT}: " + ", ".join(self._pending), warning=True)
+
+    # -------------------------------------------------- devices and audio system
+
+    def _device_card(self, values: dict[str, Any]) -> QFrame:
+        """Microphone, speaker and audio system as drop-downs, plus the ASIO switch (plan 8, 12)."""
+        fields = {
+            "audio_hostapi": Field("audio_hostapi", "Audio-System", "choice"),
+            "input_device": Field("input_device", "Mikrofon (Eingang)", "choice"),
+            "output_device": Field("output_device", "Lautsprecher / Kopfhörer (Ausgang)", "choice"),
+        }
+        for key, field in fields.items():
+            self.editors[key] = _ChoiceEditor(field, str(values[key]))  # type: ignore[assignment]
+        self._asio = _Editor(Field("asio", "ASIO zulassen (nur Windows)", "bool"), values["asio"])
+        self.editors["asio"] = self._asio
+        self._hostapi_box().currentIndexChanged.connect(lambda _i: self._fill_devices(reset_devices=True))
+        for key in ("input_device", "output_device"):
+            self._choice(key).box.currentIndexChanged.connect(lambda _i: self._update_device_hints())
+
+        self.device_hint = self._hint("")
+        self.device_hint.setStyleSheet("color: #FF9F0A; font-size: 13px;")
+        self.latency_hint = self._hint("")
+        form = QFormLayout()
+        form.setHorizontalSpacing(24)
+        form.setVerticalSpacing(12)
+        for key, field in fields.items():
+            form.addRow(field.label, self.editors[key].widget)
+        content = QVBoxLayout()
+        content.addLayout(form)
+        content.addWidget(self.device_hint)
+        content.addWidget(self.latency_hint)
+        content.addWidget(self._hint(
+            "Der Wechsel gilt sofort, die Audio-Streams starten dafür kurz neu. "
+            "Fehlt ein Gerät, wird der Systemstandard genutzt (Hinweis in der Statuszeile). "
+            "Für ein und aus am besten dasselbe Interface wählen: zwei Geräte können gegeneinander driften."))
+        content.addLayout(self._switch_row(self._asio, "ASIO zulassen (nur Windows, " + RESTART_TEXT + ")",
+                                           ASIO_WARNING))
+        self._fill_devices()
+        return self._card("Geräte und Audio-System", content)
+
+    def _choice(self, key: str) -> _ChoiceEditor:
+        return self.editors[key]  # type: ignore[return-value]
+
+    def _hostapi_box(self) -> QComboBox:
+        return self._choice("audio_hostapi").box
+
+    def _fill_devices(self, reset_devices: bool = False) -> None:
+        """Fill the audio systems and, for the chosen one, the microphone and speaker lists.
+
+        ``reset_devices``: the audio system was just changed, so a device that
+        the new one does not offer goes back to the system default.
+        """
+        hostapi = self._choice("audio_hostapi").value()
+        source = self._source
+        if source is None:
+            self._choice("audio_hostapi").set_choices([], hostapi)
+            for key in ("input_device", "output_device"):
+                self._choice(key).set_choices([], self._choice(key).value())
+            self._update_device_hints()
+            return
+        groups = {"input": source.device_groups("input"), "output": source.device_groups("output")}
+        names = list(dict.fromkeys(g.name for kind in groups.values() for g in kind))
+        self._choice("audio_hostapi").set_choices([(name, name) for name in names], hostapi)
+        shown = self._choice("audio_hostapi").value()
+        for key, kind in (("input_device", "input"), ("output_device", "output")):
+            listed = shown or default_hostapi([g.name for g in groups[kind]], sys.platform)
+            members = [d.name for g in groups[kind] if g.name == listed for d in g.devices]
+            editor = self._choice(key)
+            current = editor.value()
+            if reset_devices and current not in members:
+                current = ""
+            editor.set_choices([(n, n) for n in dict.fromkeys(members)], current)
+        self._update_device_hints()
+
+    def _update_device_hints(self) -> None:
+        warn = []
+        for key in ("input_device", "output_device"):
+            name = self._choice(key).value().lower()
+            if any(word in name for word in BLUETOOTH_WORDS):
+                warn.append(BLUETOOTH_WARNING)
+                break
+        self.device_hint.setText(" ".join(warn))
+        latency = getattr(self._source, "reported_latency_ms", lambda: None)()
+        self.latency_hint.setText(
+            "" if latency is None else f"Latenz „automatisch“ aus den Geräten ermittelt: {latency:.0f} ms")
 
     @staticmethod
     def _hint(text: str) -> QLabel:
@@ -499,12 +627,20 @@ class SettingsDialog(QDialog):
             self._say(str(exc), error=True)
             return False
         restart = self._apply(new)
-        self._applied = replace(new, **{key: getattr(self._applied, key) for key in RESTART_KEYS})
+        switched = any(getattr(new, key) != getattr(self._applied, key)
+                       for key in ("input_device", "output_device", "audio_hostapi"))
         self.saved = True
         labels = {f.key: f.label for f in FIELDS}
+        labels["asio"] = "ASIO"
+        self._applied = new
         if restart:
             names = ", ".join(labels.get(key, key) for key in restart)
             self._say(f"Gespeichert, {RESTART_TEXT}: {names}", warning=True)
+        elif switched:
+            hint = str(getattr(self._source, "device_notice", "") or "")
+            self._say("Gespeichert, Audio wurde kurz neu gestartet." + (f" {hint}" if hint else ""),
+                      warning=bool(hint))
+            self._update_device_hints()
         else:
             self._say("Gespeichert und übernommen.")
         return True

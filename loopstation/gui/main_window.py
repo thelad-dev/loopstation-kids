@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPaintEvent, QPen, QResizeEvent, QShortcut
@@ -339,6 +340,12 @@ class MainWindow(QMainWindow):
         if getattr(dialog, "opened", None) is not None and isinstance(parent, QDialog):
             parent.accept()
 
+    @property
+    def audio_devices(self) -> Any:
+        """The audio engine if it can list devices (the settings page offers them), else None."""
+        audio = self.controller.audio
+        return audio if hasattr(audio, "device_groups") else None
+
     def apply_settings(self, settings: Settings) -> list[str]:
         """Live-apply ``settings``; returns the keys that need a restart."""
         restart = self.controller.apply_settings(settings)
@@ -416,7 +423,7 @@ class MainWindow(QMainWindow):
         self.undo_button.setEnabled(controller.can_undo() or controller.recording_pad is not None)
         self.redo_button.setEnabled(controller.can_redo())
 
-        parts = [controller.notice(), *self.device_status]
+        parts = [controller.notice(), controller.device_notice, *self.device_status]
         if self.launchpad is not None and self.launchpad.status_text:
             parts.append(self.launchpad.status_text)
         unique = list(dict.fromkeys(p for p in parts if p))

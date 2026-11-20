@@ -55,6 +55,14 @@ class Settings:
     # Tempo window for a grid from onset distances (BPM of one beat).
     grid_bpm_min: float = 40.0
     grid_bpm_max: float = 200.0
+    # --- Devices and audio system (W2-GERAETE-LIVE) ---
+    # Saved by name, never by index. "" = system default of the audio system;
+    # audio_hostapi "" = the default of the platform (Windows: WASAPI, Linux: ALSA).
+    input_device: str = ""
+    output_device: str = ""
+    audio_hostapi: str = ""
+    # Windows only: load the PortAudio build with ASIO (needs a restart).
+    asio: bool = False
 
     @property
     def beats_per_bar(self) -> int:
@@ -101,6 +109,12 @@ def _check_str(source: str, key: str, value: Any) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError(f"{source}: Schlüssel '{key}' muss ein nicht leerer Text sein, ist aber {value!r}")
     return value
+
+
+def _check_text(source: str, key: str, value: Any) -> str:
+    if not isinstance(value, str):
+        raise ConfigError(f"{source}: Schlüssel '{key}' muss ein Text sein, ist aber {value!r}")
+    return value.strip()
 
 
 def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Settings:
@@ -161,6 +175,12 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
             values[key] = _check_float(source, key, raw[key], 20, 300)
     if values.get("grid_bpm_min", Settings.grid_bpm_min) > values.get("grid_bpm_max", Settings.grid_bpm_max):
         raise ConfigError(f"{source}: 'grid_bpm_min' darf nicht größer sein als 'grid_bpm_max'")
+    # Devices and audio system (empty text = system default).
+    for key in ("input_device", "output_device", "audio_hostapi"):
+        if key in raw:
+            values[key] = _check_text(source, key, raw[key])
+    if "asio" in raw:
+        values["asio"] = _check_bool(source, "asio", raw["asio"])
     return Settings(**values)
 
 
@@ -197,7 +217,7 @@ def load_settings(path: Path | None = None) -> Settings:
 # Keys that only take effect after a restart: the pad grid, the audio format
 # and the data folder are fixed once the window, the store and the audio
 # engine exist. Every other key is applied while the app runs.
-RESTART_KEYS = ("rows", "cols", "sample_rate", "data_dir")
+RESTART_KEYS = ("rows", "cols", "sample_rate", "data_dir", "asio")
 
 # Comment written above a key that the file does not contain yet.
 SETTING_COMMENTS: dict[str, str] = {
@@ -224,6 +244,12 @@ SETTING_COMMENTS: dict[str, str] = {
     "time_signature": "Taktart der Sitzung: 2/4, 3/4, 4/4 oder 6/8. Wirkt bei der nächsten ersten Aufnahme.",
     "grid_bpm_min": "Langsamstes Tempo für einen Takt aus Schlägen in BPM (20 bis 300). Wirkt sofort.",
     "grid_bpm_max": "Schnellstes Tempo für einen Takt aus Schlägen in BPM (20 bis 300). Wirkt sofort.",
+    "input_device": 'Aufnahmegerät (Name wie in der Liste), "" = Systemstandard. Wirkt sofort.',
+    "output_device": 'Wiedergabegerät (Name wie in der Liste), "" = Systemstandard. Wirkt sofort.',
+    "audio_hostapi": 'Audio-System (z. B. "Windows WASAPI", "ALSA"), "" = Standard der Plattform. '
+                     "Wirkt sofort.",
+    "asio": "Nur Windows: ASIO-Treiber zulassen (für Audio-Interfaces, oft exklusiv). "
+            "Wirkt erst nach einem Neustart.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 
