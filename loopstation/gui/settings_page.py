@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from loopstation.audio.devices import default_hostapi
 from loopstation.config import (
     RESTART_KEYS,
     SIGNATURES,
@@ -46,7 +47,6 @@ from loopstation.config import (
     settings_values,
     write_settings,
 )
-from loopstation.audio.devices import default_hostapi
 from loopstation.gui.grid_panel import GridPanel
 from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
 from loopstation.gui.volume_slider import VolumeSlider

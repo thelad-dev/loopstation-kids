@@ -227,7 +227,7 @@ class SoundDeviceAudio:
             try:
                 opened = (self._start_output(wanted_out.index), wanted_out.index, "")
             except Exception as exc:
-                log.info("opening the new output next to the running one failed (%s), closing the old one first", exc)
+                log.info("opening the new output alongside the old one failed (%s), closing old first", exc)
         if self._output is not None:
             try:
                 self._output.stop()
