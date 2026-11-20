@@ -11,6 +11,7 @@ in ``config.SETTING_COMMENTS``).
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -45,6 +46,7 @@ from loopstation.config import (
     settings_values,
     write_settings,
 )
+from loopstation.audio.devices import default_hostapi
 from loopstation.gui.grid_panel import GridPanel
 from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
 from loopstation.gui.volume_slider import VolumeSlider
@@ -438,7 +440,7 @@ class SettingsDialog(QDialog):
             self.editors[key] = _ChoiceEditor(field, str(values[key]))  # type: ignore[assignment]
         self._asio = _Editor(Field("asio", "ASIO zulassen (nur Windows)", "bool"), values["asio"])
         self.editors["asio"] = self._asio
-        self._hostapi_box().currentIndexChanged.connect(lambda _i: self._fill_devices())
+        self._hostapi_box().currentIndexChanged.connect(lambda _i: self._fill_devices(reset_devices=True))
         for key in ("input_device", "output_device"):
             self._choice(key).box.currentIndexChanged.connect(lambda _i: self._update_device_hints())
 
@@ -469,8 +471,12 @@ class SettingsDialog(QDialog):
     def _hostapi_box(self) -> QComboBox:
         return self._choice("audio_hostapi").box
 
-    def _fill_devices(self) -> None:
-        """Fill the audio systems and, for the chosen one, the microphone and speaker lists."""
+    def _fill_devices(self, reset_devices: bool = False) -> None:
+        """Fill the audio systems and, for the chosen one, the microphone and speaker lists.
+
+        ``reset_devices``: the audio system was just changed, so a device that
+        the new one does not offer goes back to the system default.
+        """
         hostapi = self._choice("audio_hostapi").value()
         source = self._source
         if source is None:
@@ -484,9 +490,13 @@ class SettingsDialog(QDialog):
         self._choice("audio_hostapi").set_choices([(name, name) for name in names], hostapi)
         shown = self._choice("audio_hostapi").value()
         for key, kind in (("input_device", "input"), ("output_device", "output")):
-            members = [d.name for g in groups[kind] if not shown or g.name == shown for d in g.devices]
+            listed = shown or default_hostapi([g.name for g in groups[kind]], sys.platform)
+            members = [d.name for g in groups[kind] if g.name == listed for d in g.devices]
             editor = self._choice(key)
-            editor.set_choices([(n, n) for n in dict.fromkeys(members)], editor.value())
+            current = editor.value()
+            if reset_devices and current not in members:
+                current = ""
+            editor.set_choices([(n, n) for n in dict.fromkeys(members)], current)
         self._update_device_hints()
 
     def _update_device_hints(self) -> None:

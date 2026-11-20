@@ -218,6 +218,11 @@ class SoundDeviceAudio:
         wanted_out = resolve_choice(self._sd, output_name, hostapi, "output", self._platform)
         notes = [wanted_in.note, wanted_out.note]
         previous = self._output_index
+        try:
+            opened = self._open_output(wanted_out.index, previous)
+        except Exception as exc:
+            log.info("opening the new output next to the running one failed (%s), closing the old one first", exc)
+            opened = None
         if self._output is not None:
             try:
                 self._output.stop()
@@ -225,7 +230,9 @@ class SoundDeviceAudio:
             except Exception as exc:
                 log.warning("closing audio output failed: %s", exc)
             self._output = None
-        self._output, self._output_index, note = self._open_output(wanted_out.index, previous)
+        if opened is None:
+            opened = self._open_output(wanted_out.index, previous)
+        self._output, self._output_index, note = opened
         notes.append(note)
         self._input_index = wanted_in.index
         self.available_input = self._check_input(self._input_index)
