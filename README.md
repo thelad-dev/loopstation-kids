@@ -23,12 +23,13 @@ Ohne Mikrofon, ohne Audiogerät oder ohne Launchpad startet die Loopstation trot
 
 ## Windows
 
-Für Windows gibt es einen Installer (`Loopstation-Setup-<Version>.exe`), der alles mitbringt; Python muss nicht installiert sein. Er entsteht in GitHub Actions (Workflow `windows-installer`, bei einem Tag `v<Version>` oder per Hand gestartet) und liegt dort als Artefakt; bei einem Tag zusätzlich als Entwurf eines Releases.
+Für Windows gibt es einen Installer (`Loopstation-Setup-<Version>.exe`), der alles mitbringt; Python muss nicht installiert sein. Er entsteht in GitHub Actions (Workflow `windows-installer`, bei einem Tag `v<Version>` oder per Hand gestartet) und liegt dort als Artefakt; bei einem Tag zusätzlich als Entwurf eines Releases. Pull Requests, die `packaging/`, `pyproject.toml`, `requirements*.txt`, `settings.toml` oder `loopstation/installed.py` ändern, bauen und starten den Installer ebenfalls, damit er vor dem Zusammenführen geprüft ist.
 
 - Installation ohne Adminrechte für den aktuellen Benutzer (auf Wunsch für alle Benutzer), mit Startmenü-Eintrag und optionaler Desktop-Verknüpfung. Deinstallieren über „Apps & Features“.
 - Einstellungen, Aufnahmen und Ereignis-Protokoll liegen in `%LOCALAPPDATA%\Loopstation` (`settings.toml`, `samples/`, `data/`). Beim ersten Start wird dort eine kommentierte `settings.toml` angelegt. Updates und Deinstallation lassen diesen Ordner unangetastet, die Aufnahmen bleiben also erhalten. Wer alles entfernen will, löscht den Ordner von Hand.
 - Meldungen der App (etwa „kein Mikrofon“) stehen in `%LOCALAPPDATA%\Loopstation\loopstation.log`.
 - Der Installer ist nicht signiert. Windows SmartScreen zeigt deshalb beim ersten Start „Der Computer wurde durch Windows geschützt“; über „Weitere Informationen“ und „Trotzdem ausführen“ geht es weiter.
+- Audio-System ist standardmäßig WASAPI im geteilten Modus (Shared): die Loopstation spielt neben anderen Programmen, nichts wird stumm geschaltet. DirectSound und MME stehen als Notbehelf in der Liste (höhere Verzögerung). Siehe [Plattformen und Audio](#plattformen-und-audio).
 - Der Installer bringt beide PortAudio-DLLs von sounddevice (ab 0.5.1) mit, die Standard-DLL und die mit ASIO-Unterstützung. Die App nutzt die Standard-DLL; die ASIO-DLL wird nur geladen, wenn Eltern in den Einstellungen „ASIO zulassen“ einschalten (`asio = true`, wirkt nach einem Neustart).
 - Windows fragt beim ersten Aufnehmen eventuell nach dem Mikrofon-Zugriff. Falls die Aufnahme stumm bleibt: Einstellungen → Datenschutz → Mikrofon → „Desktop-Apps den Zugriff auf das Mikrofon erlauben“ einschalten.
 
@@ -38,10 +39,10 @@ Selbst bauen (unter Windows, mit Python 3.11 und [Inno Setup 6](https://jrsoftwa
 pip install -c packaging/windows/constraints.txt -r requirements.txt -r packaging/windows/requirements-build.txt
 python packaging/windows/make_icon.py build/loopstation.ico
 pyinstaller --noconfirm packaging/windows/loopstation.spec
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.0.0 packaging\windows\loopstation.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.1.0 packaging\windows\loopstation.iss
 ```
 
-Das Ergebnis liegt in `dist\Loopstation-Setup-1.0.0.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
+Das Ergebnis liegt in `dist\Loopstation-Setup-1.1.0.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
 
 ## Linux-Installation
 
@@ -70,6 +71,58 @@ Weitere Optionen:
 
 Erneut aufrufen aktualisiert die Installation auf den Stand dieses Ordners; die alte Installation bleibt bis zum erfolgreichen Abschluss bestehen. Unter Alpine kommt PySide6 aus dem Paket `py3-pyside6`, und das Skript braucht `bash` (`sudo apk add bash`). Ein Audio-Server (PipeWire oder PulseAudio) gehört zum Desktop und wird nicht mitinstalliert.
 
+## Update
+
+Für alle, die die Loopstation schon installiert haben (etwa Version 1.0.0). Aufnahmen, Verlauf und Ereignis-Protokoll bleiben erhalten und werden von der neuen Version weiter gelesen; das ist mit einem eingefrorenen Protokoll aus 1.0.0 getestet (`tests/test_replay_v1.py`). Wer später zurück will, sichert vorher den Datenordner (siehe [Zurück zur vorigen Version](#zurück-zur-vorigen-version)).
+
+**Windows:** den neuen `Loopstation-Setup-<Version>.exe` einfach über die bestehende Installation laufen lassen; vorher die Loopstation beenden. Der Installer ersetzt nur das Programm. `settings.toml`, `samples/` und `data/` liegen in `%LOCALAPPDATA%\Loopstation` und bleiben unangetastet; eine vorhandene `settings.toml` wird nie überschrieben. Die installierte Version steht unter Einstellungen → Apps → Installierte Apps (bzw. „Apps & Features“) bei „Loopstation“.
+
+**Linux (mit `install-linux.sh`):** den neuen Stand holen (neues Quellcode-Archiv aus den Releases entpacken oder im geklonten Ordner `git pull`) und von dort `scripts/install-linux.sh` erneut aufrufen. Das Skript baut die Python-Umgebung neu, installiert die Abhängigkeiten der neuen Version und ergänzt fehlende Systempakete; die alte Installation bleibt bis zum erfolgreichen Abschluss bestehen. `settings.toml`, `samples/` und `data/` in `~/.local/share/loopstation-kids/` bleiben, eine vorhandene `settings.toml` wird nicht überschrieben.
+
+**Aus dem Quellcode:** im Ordner `git pull`, dann in der bestehenden Umgebung `pip install -r requirements.txt` (die neue Version braucht `sounddevice` ab 0.5.1; pip hebt es dabei an). Die Daten liegen wie bisher im Startordner bzw. in `data_dir`. Die Version steht in `pyproject.toml`.
+
+Was sich für Bestandsnutzer ändert:
+
+- **Die bestehende `settings.toml` bleibt gültig.** Neue Schlüssel, die darin fehlen, gelten mit ihren Standardwerten. In die Datei geschrieben werden sie erst, wenn Erwachsene im Elternbereich etwas ändern; dann hängt die Seite die fehlenden Schlüssel mit Kommentar an und lässt die vorhandenen Zeilen stehen.
+- **Leiser als vorher:** neu sind ein Lautstärke-Regler (`volume`, Standard 0.5) und eine Obergrenze (`max_level_db`, Standard -6 dB(FS)) mit Limiter. Version 1.0.0 gab die Summe ungebremst bis zur digitalen Vollaussteuerung aus. Wer es lauter braucht, stellt beides im Elternbereich ein.
+- **Takt aus Klatschen** (`auto_grid`) ist standardmäßig aus: die erste Aufnahme bestimmt den Takt wie bisher über ihre Länge.
+- **Standardmäßig an** sind die weiche Loop-Naht (`soft_seam`), das Strecken knapp neben dem Takt (`stretch_to_grid`) und die Pegelanzeige (`peak_meter`).
+- **Neuer Elternbereich** hinter dem Schloss unten rechts (zwei Sekunden halten, Rechenaufgabe): Pegel, Geräte und Audio-System, Takt, Einstellungen, Erweitert (Wellenform, Marker, Eltern-Takt, Metronom), Sets sichern und öffnen, Export als WAV.
+- **Auf der Kinderseite neu:** „Wiederholen“, das Zurück-Abzeichen am Pad, der freie Modus per langem Halten und das rote „zu laut“-Zeichen. Am Launchpad wirkt ein kurzer Tipp jetzt beim Loslassen.
+
+### Zurück zur vorigen Version
+
+Vor dem Update den Datenordner kopieren (Windows `%LOCALAPPDATA%\Loopstation`, Linux-Installation `~/.local/share/loopstation-kids/` ohne `venv/`, aus dem Quellcode `settings.toml`, `samples/` und `data/` im Startordner). Zurück geht es dann so:
+
+- **Windows:** den alten Installer (z. B. `Loopstation-Setup-1.0.0.exe` aus den Releases) über die neue Installation laufen lassen, dann den gesicherten Datenordner zurückkopieren.
+- **Linux:** das Archiv der alten Version entpacken bzw. `git checkout v1.0.0`, `scripts/install-linux.sh` erneut aufrufen, gesicherte Daten zurückkopieren.
+- **Aus dem Quellcode:** `git checkout v1.0.0`, `pip install -r requirements.txt`.
+
+Ohne Sicherung: Version 1.0.0 lehnt eine `settings.toml` mit Schlüsseln ab, die sie nicht kennt, und startet dann nicht („unbekannter Schlüssel“). Dann die neuen Schlüssel aus der Datei löschen oder die Datei selbst (es gelten die Standardwerte). Das neuere Protokoll liest 1.0.0 zwar, übergeht aber, was sie nicht kennt (Wiederholen, Zurück am Pad, freier Modus, Marker); der Stand der Pads kann daher vom zuletzt gesehenen abweichen. Mit 1.1.0 gesicherte Sets kennt 1.0.0 nicht.
+
+## Plattformen und Audio
+
+Unterstützt werden Linux und Windows. macOS ist geplant, aber noch nicht gebaut oder getestet.
+
+| Plattform | Audio-System (Standard zuerst) | Hinweise |
+|---|---|---|
+| Windows 10/11 | WASAPI (Shared), DirectSound, MME, optional ASIO | WASAPI teilt das Gerät mit anderen Programmen und rechnet die Abtastrate bei Bedarf um. ASIO nur für Audio-Interfaces mit eigenem Treiber, siehe unten. |
+| Linux | ALSA, JACK (falls vorhanden) | Unter PipeWire oder PulseAudio läuft der Ton über deren ALSA-Anbindung; die App muss dafür nichts Besonderes tun. Kein ASIO. |
+| macOS | - | später |
+
+Aufnahme- und Wiedergabegerät sowie das Audio-System wählen Erwachsene im Elternbereich unter „Geräte und Audio-System“ (`input_device`, `output_device`, `audio_hostapi`; leer heißt Systemstandard). Ein Wechsel greift sofort: die Audio-Streams starten kurz neu, `latency_ms = "auto"` wird für das neue Gerät neu bestimmt. Geräte werden per Name gemerkt; fehlt ein Gerät beim Start, nimmt die App den Systemstandard und sagt es.
+
+**ASIO (nur Windows, optional):** „ASIO zulassen“ (`asio = true`) lädt beim nächsten Start die PortAudio-DLL mit ASIO-Unterstützung, danach erscheint ASIO als Audio-System. Viele ASIO-Treiber öffnen das Gerät exklusiv (kein anderer Ton mehr am Rechner); ASIO4ALL ist ein Wrapper und verhält sich oft anders als der Treiber eines Interfaces. Für den Alltag bleibt WASAPI der richtige Weg.
+
+## Mikrofon und Kopfhörer
+
+- Beim Aufnehmen Kopfhörer tragen: Lautsprecher und Mikrofon zusammen erzeugen Echo, und laufende Loops landen in der neuen Aufnahme.
+- Kabelgebundene Kopfhörer benutzen. Bluetooth ist für das Mitspielen meist zu träge und schwankt; die Geräteauswahl warnt bei Bluetooth-Namen.
+- Am besten dasselbe Gerät (etwa ein USB-Headset oder ein Interface) für Aufnahme und Wiedergabe: zwei getrennte Geräte können gegeneinander driften.
+- Ist eine Aufnahme zu laut, zeigt das Pad ein rotes Zeichen; im Elternbereich stehen Pegelanzeige, Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`) und die zuletzt zu lauten Aufnahmen.
+- Die Obergrenze (`max_level_db`) begrenzt die Amplitude im Rechner (dB(FS)), nicht den Schalldruck am Ohr. Den bestimmen auch Systemlautstärke und Kopfhörer; für Kinder am besten Kopfhörer mit eigener Lautstärkebegrenzung.
+- Windows fragt beim ersten Aufnehmen eventuell nach dem Mikrofon-Zugriff (siehe [Windows](#windows)). Unter Linux muss das Mikrofon im Audio-Server des Desktops (PipeWire/PulseAudio) eingeschaltet und nicht stumm sein.
+
 ## Bedienung
 
 | Pad-Farbe | Bedeutung |
@@ -95,6 +148,8 @@ Oben wählt man den Modus, unten gibt es vier Knöpfe:
 
 Ein zweiter Klick auf den aktiven Modus oder ESC führt zurück zu „Spielen“. Aufnahmen stoppen nach der eingestellten Höchstlänge von selbst.
 
+Tastatur: Strg+Z (Zurück), Strg+Y oder Strg+Umschalt+Z (Wiederholen), ESC (zurück zu „Spielen“). Im Elternbereich lassen sich die Pegel-Regler mit den Pfeiltasten und Bild auf/ab verstellen.
+
 ### Im Takt bleiben
 
 Die erste Aufnahme bestimmt die Loop-Länge. Jede weitere Aufnahme wird auf genau diese Länge geschnitten: Ist sie kürzer, wird sie mit Stille aufgefüllt, ist sie länger, wird sie auf zwei, drei, … Loop-Längen aufgefüllt (ein Stopp kurz nach einem Loop-Ende zählt noch zu diesem Loop). So laufen alle Loops gemeinsam und nie auseinander.
@@ -102,8 +157,9 @@ Die erste Aufnahme bestimmt die Loop-Länge. Jede weitere Aufnahme wird auf gena
 - Laufen schon Loops, beginnt eine neue Aufnahme erst am nächsten Loop-Anfang. Bis dahin ist das Pad dunkler, hat einen pulsierenden weißen Rahmen und einen Balken, der sich bis zum Loop-Anfang füllt. Erst dann erscheint der Sekunden-Countdown.
 - Ein Loop startet und stoppt per Pad ebenfalls am Loop-Anfang (gleiche Anzeige). Läuft noch kein Loop, startet er sofort. „Alles still“, Löschen und „Zurück“ wirken sofort.
 - Die Loop-Länge gilt, solange irgendein Pad belegt ist, auch wenn das erste Pad gelöscht oder neu aufgenommen wird. Werden alle Pads leer, beginnt eine neue Runde: Eine himmelblaue Welle läuft über die Pads, und die nächste Aufnahme bestimmt die neue Loop-Länge. „Zurück“ holt die alte Loop-Länge mit den Aufnahmen wieder; eine frühere Version, die in eine leere Runde zurückgeholt wird, bestimmt die Loop-Länge neu.
+- Liegt eine Aufnahme knapp neben ganzen Takten (weniger als 10 % daneben), wird sie weich auf die volle Länge gezogen statt aufgefüllt oder abgeschnitten (`stretch_to_grid`, standardmäßig an). Die Tonhöhe bleibt dabei erhalten; deutlich daneben wird wie oben aufgefüllt oder geschnitten.
 - Abschalten mit `loop_sync = false` in `settings.toml`; dann behält jede Aufnahme ihre eigene Länge wie früher.
-- Optional (`auto_grid = true`, standardmäßig aus): Die erste Aufnahme einer Sitzung beginnt bei ihrem ersten Schlag (Klatschen, Stampfen); sie wird nur verschoben, nicht gekürzt. Liegen zwei oder mehr Schläge im erlaubten Tempo (`grid_bpm_min`, `grid_bpm_max`), bestimmt ihr Abstand den Takt gemäß `time_signature` (`2/4`, `3/4`, `4/4`, `6/8`); sonst gilt die Aufnahmelänge. Weitere Aufnahmen werden nie verschoben.
+- Optional (`auto_grid = true`, standardmäßig aus): Die erste Aufnahme einer Sitzung beginnt bei ihrem ersten Schlag (Klatschen, Stampfen); sie wird nur verschoben, nicht gekürzt. Liegen zwei oder mehr Schläge im erlaubten Tempo (`grid_bpm_min`, `grid_bpm_max`), bestimmt ihr Abstand den Takt gemäß `time_signature` (`2/4`, `3/4`, `4/4`, `6/8`); sonst gilt die Aufnahmelänge, aber nur, wenn sie als Takt taugt (dieselben Tempo-Grenzen); sonst bekommt die Sitzung lieber keinen Takt als einen falschen. Weitere Aufnahmen werden nie verschoben. Im Elternbereich stehen Tempo, Taktart und woher der Takt kommt (Aufnahmelänge, Schläge oder Eltern-Vorgabe).
 
 Wie genau neue Loops auf den gehörten liegen, hängt von der Verzögerung zwischen Lautsprecher und Mikrofon ab (`latency_ms`). Der Standard `"auto"` nimmt den Wert, den der Audiotreiber meldet; klingen neue Loops etwas zu spät oder zu früh, lässt sich der Wert in Millisekunden einstellen. Mit echtem Mikrofon und Lautsprecher ist das bisher nicht nachgemessen, die Tests prüfen den Schnitt mit nachgebauter Soundkarte samplegenau.
 
@@ -115,13 +171,27 @@ Ein angeschlossenes Novation Launchpad wird automatisch erkannt (auch nachträgl
 - Ältere Modelle (Launchpad, S, Mini MK1/MK2): nur rote und grüne LEDs, leere Pads bleiben dunkel.
 - Das erste Launchpad Pro wird nicht unterstützt.
 
+- Kurz tippen wirkt beim Loslassen, lange halten schaltet den freien Modus des Pads um (wie auf dem Bildschirm).
+
 Die Launchpad-Anbindung ist bisher nur mit nachgebauten MIDI-Ports getestet, noch nicht an echten Geräten.
 
 ## Einstellungen
 
-In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne, Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Lautstärke (`volume`) mit Obergrenze (`max_level_db`), Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`), Pegelanzeige der Aufnahme für Eltern (`peak_meter`), Takt aus der ersten Aufnahme (`auto_grid`, `time_signature`, `grid_bpm_min`, `grid_bpm_max`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), freie Pads am Takt-Punkt starten (`free_pad_on_grid`), Marker als Cue-Punkte im Export (`export_cue_points`), Aufnahme- und Wiedergabegerät (`input_device`, `output_device`) und Audio-System (`audio_hostapi`, ab Windows-Standard WASAPI, ALSA unter Linux) sowie ASIO (`asio`), leiser Metronom-Ton (`metronome_tone`, `metronome_level_db`), Datenordner. Fehlt die Datei, gelten die Standardwerte.
+In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne, Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Lautstärke (`volume`) mit Obergrenze (`max_level_db`), Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`), Pegelanzeige der Aufnahme für Eltern (`peak_meter`), Takt aus der ersten Aufnahme (`auto_grid`, `time_signature`, `grid_bpm_min`, `grid_bpm_max`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), freie Pads am Takt-Punkt starten (`free_pad_on_grid`), Marker als Cue-Punkte im Export (`export_cue_points`), Strecken knapp neben dem Takt (`stretch_to_grid`), Aufnahme- und Wiedergabegerät (`input_device`, `output_device`) und Audio-System (`audio_hostapi`, Standard WASAPI unter Windows, ALSA unter Linux) sowie ASIO (`asio`), leiser Metronom-Ton (`metronome_tone`, `metronome_level_db`), Datenordner. Fehlt die Datei, gelten die Standardwerte.
 
-Erwachsene erreichen die Einstellungsseite über das kleine Schloss unten rechts (zwei Sekunden gedrückt halten, dann eine Rechenaufgabe lösen). Die Seite schreibt die `settings.toml` mit allen Kommentaren und übernimmt Pieptöne, Loop-Sync, Aufnahmelänge, Latenz, Launchpad, Vollbild sowie Geräte und Audio-System sofort. Oben rechts sitzt der Lautstärke-Regler, darunter der Abschnitt für Pegel (Obergrenze, Mikrofonpegel, Schalter, Pegelanzeige und die zuletzt zu lauten Aufnahmen); diese Regler wirken sofort und werden sofort in die `settings.toml` geschrieben, ohne „Speichern“. Die Pegelanzeige (`peak_meter`) ist standardmäßig an; Rastergröße, Abtastrate, ASIO und Datenordner wirken erst nach einem Neustart.
+## Elternbereich
+
+Erwachsene erreichen den Elternbereich über das kleine Schloss unten rechts (zwei Sekunden gedrückt halten, dann eine Rechenaufgabe lösen). Die Kinderseite bleibt bewusst schlicht: Pads, Modi, Zurück und Wiederholen, Lautstärke, ein rotes Zeichen bei zu lauter Aufnahme und der Puls beim Warten. Alles mit Zahlen und Fachbegriffen liegt im Elternbereich:
+
+- **Lautstärke und Pegel:** Lautstärke, Obergrenze, Mikrofonpegel, automatischer Aufnahmepegel, Pegelanzeige und die zuletzt zu lauten Aufnahmen.
+- **Takt:** Tempo, Taktart und Quelle des aktuellen Takts.
+- **Geräte und Audio-System:** siehe [Plattformen und Audio](#plattformen-und-audio).
+- **Einstellungen:** alle Werte der `settings.toml` (siehe [Einstellungen](#einstellungen)).
+- **Erweitert**, **Export**, **Sets:** eigene Abschnitte weiter unten.
+
+Der Verlauf eines Pads (alle früheren Aufnahmen zum Anhören und Zurückholen) ist auch für Kinder da: Modus „Verlauf“, dann Pad antippen.
+
+Die Einstellungsseite schreibt die `settings.toml` mit allen Kommentaren und übernimmt jede Änderung sofort, außer Rastergröße, Abtastrate, ASIO und Datenordner (die wirken nach einem Neustart; die Seite sagt das am Feld). Oben rechts sitzt der Lautstärke-Regler, darunter der Abschnitt für Pegel (Obergrenze, Mikrofonpegel, Schalter, Pegelanzeige und die zuletzt zu lauten Aufnahmen); diese Regler wirken sofort und werden sofort in die `settings.toml` geschrieben, ohne „Speichern“. Die Pegelanzeige (`peak_meter`) ist standardmäßig an.
 
 ## Erweitert
 
