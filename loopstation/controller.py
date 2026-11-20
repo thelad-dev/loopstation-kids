@@ -36,6 +36,8 @@ NOTICE_SECONDS = 3.0
 SESSION_SHOW_SECONDS = 1.6
 # A clipped microphone block keeps the "too loud" sign on screen this long.
 CLIP_HOLD_SECONDS = 1.5
+# Peaks (linear) where the coarse three-step level display moves up a step.
+LEVEL_QUIET, LEVEL_MEDIUM, LEVEL_LOUD = 0.02, 0.25, 0.7
 # Range of the parents' ceiling in dB(FS), as in settings.toml.
 MIN_MAX_LEVEL_DB, MAX_MAX_LEVEL_DB = -30.0, 0.0
 
@@ -244,6 +246,13 @@ class Controller:
     def input_peak(self) -> float:
         """Microphone peak at the last poll (linear, after the trim; 0 when not recording)."""
         return self._input_peak
+
+    def input_level_stage(self) -> int:
+        """Coarse input level for the child while recording: 0 (silent) to 3 (very loud)."""
+        if self._recording is None:
+            return 0
+        peak = self._input_peak
+        return 3 if peak >= LEVEL_LOUD else 2 if peak >= LEVEL_MEDIUM else 1 if peak >= LEVEL_QUIET else 0
 
     @property
     def clip_count(self) -> int:

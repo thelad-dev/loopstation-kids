@@ -1,4 +1,4 @@
-"""The large volume control in the top right corner.
+"""The large volume control in the top right corner (mockup 01/02).
 
 One widget for the whole window: it shows and sets the controller's master
 volume and nothing else. The track always spans the full range, the part
@@ -18,9 +18,11 @@ from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent, QPen, QPolygonF, QWheelEvent
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from loopstation.gui.widgets import ACCENT_GREEN, SURFACE, SURFACE_PRESSED, TEXT, TEXT_DIM
+from loopstation.gui.widgets import SURFACE, TEXT, TEXT_DIM
 
 WHEEL_STEP = 0.05  # position per wheel notch
+FILL = QColor("#5AC8FA")  # filled part and handle rim (as in the mockups)
+TRACK = QColor("#3A3A41")
 
 
 def position_to_volume(position: float) -> float:
@@ -38,7 +40,7 @@ class VolumeSlider(QWidget):
 
     volumeChanged = Signal(float)  # noqa: N815 - Qt API
 
-    HEIGHT = 56
+    HEIGHT = 104
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -48,8 +50,8 @@ class VolumeSlider(QWidget):
         self.setAccessibleName("Lautstärke")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.setMinimumSize(300, self.HEIGHT)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.setMinimumSize(240, self.HEIGHT)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
     # ----------------------------------------------------------- the value
 
@@ -70,15 +72,15 @@ class VolumeSlider(QWidget):
             self.update()
 
     def sizeHint(self) -> QSize:  # noqa: N802 - Qt API
-        return QSize(360, self.HEIGHT)
+        return QSize(384, self.HEIGHT)
 
     # ------------------------------------------------------------ geometry
 
     def _track(self) -> QRectF:
-        """The bar the handle runs on (without the speaker icon)."""
+        """The bar the handle runs on (between the two speaker icons)."""
         h = self.height()
-        left = h * 1.25
-        return QRectF(left, h * 0.30, max(1.0, self.width() - left - h * 0.5), h * 0.40)
+        left = h * 0.63
+        return QRectF(left, h * 0.5 - h * 0.105, max(1.0, self.width() - 2 * left), h * 0.21)
 
     def _x_of(self, position: float) -> float:
         track = self._track()
@@ -122,51 +124,66 @@ class VolumeSlider(QWidget):
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        h = self.height()
         track = self._track()
         radius = track.height() / 2
-        position = volume_to_position(self._volume)
-        reach = volume_to_position(self._limit)
-        handle_x = self._x_of(position)
+        handle_x = self._x_of(volume_to_position(self._volume))
+        reach_x = self._x_of(volume_to_position(self._limit))
 
-        # Whole track, then the part the child cannot reach (hatched, dim).
+        # Panel, then the whole track.
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(SURFACE_PRESSED if self._dragging else SURFACE)
+        painter.setBrush(SURFACE)
+        painter.drawRoundedRect(QRectF(self.rect()), h * 0.19, h * 0.19)
+        painter.setBrush(TRACK)
         painter.drawRoundedRect(track, radius, radius)
-        if reach < 1.0:
-            blocked = QRectF(self._x_of(reach), track.top(), track.right() - self._x_of(reach),
-                             track.height())
+        # Filled part up to the handle.
+        painter.save()
+        painter.setClipRect(QRectF(track.left(), track.top(), handle_x - track.left(), track.height()))
+        painter.setBrush(FILL)
+        painter.drawRoundedRect(track, radius, radius)
+        painter.restore()
+        # Above the parents' ceiling: hatched, not reachable, with a lock on the line.
+        if self._limit < 1.0:
+            blocked = QRectF(reach_x, track.top(), track.right() - reach_x, track.height())
             painter.save()
             painter.setClipRect(blocked)
-            painter.setBrush(QColor(0, 0, 0, 110))
+            painter.setBrush(QColor("#2E2E34"))
             painter.drawRoundedRect(track, radius, radius)
-            painter.setPen(QPen(QColor(TEXT_DIM.red(), TEXT_DIM.green(), TEXT_DIM.blue(), 150), 2))
-            step = track.height() * 0.5
+            painter.setPen(QPen(QColor("#4A4A52"), 4))
             x = blocked.left() - track.height()
             while x < blocked.right():
                 painter.drawLine(QPointF(x, track.bottom()), QPointF(x + track.height(), track.top()))
-                x += step
+                x += 10
             painter.restore()
-        # The filled part up to the handle.
-        if handle_x > track.left():
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(ACCENT_GREEN)
-            painter.save()
-            painter.setClipRect(QRectF(track.left(), track.top(), handle_x - track.left(), track.height()))
-            painter.drawRoundedRect(track, radius, radius)
-            painter.restore()
+        line = QPen(QColor("#AEAEB2"), 3)
+        line.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(line)
+        painter.drawLine(QPointF(reach_x, h * 0.5 - h * 0.19), QPointF(reach_x, h * 0.5 + h * 0.19))
+        self._paint_lock(painter, QPointF(reach_x, h * 0.5 - h * 0.30), h * 0.15)
 
-        # Handle: a big white disc with a dark rim.
-        handle_r = self.height() * 0.40
-        painter.setPen(QPen(QColor("#111114"), 3))
-        painter.setBrush(TEXT)
-        painter.drawEllipse(QPointF(handle_x, track.center().y()), handle_r, handle_r)
+        # Handle: white disc with a sky-blue rim.
+        r = h * 0.26
+        painter.setPen(QPen(FILL, max(3.0, h * 0.048)))
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.drawEllipse(QPointF(handle_x, track.center().y()), r, r)
 
-        self._paint_speaker(painter, QRectF(self.height() * 0.08, self.height() * 0.2,
-                                            self.height() * 0.7, self.height() * 0.6))
+        self._paint_speaker(painter, QRectF(h * 0.18, h * 0.36, h * 0.27, h * 0.28), 1)
+        self._paint_speaker(painter, QRectF(self.width() - h * 0.47, h * 0.34, h * 0.30, h * 0.32), 3)
         painter.end()
 
-    def _paint_speaker(self, painter: QPainter, rect: QRectF) -> None:
-        """Speaker with 0..3 sound waves for the current position; a cross when silent."""
+    @staticmethod
+    def _paint_lock(painter: QPainter, center: QPointF, size: float) -> None:
+        """Small padlock (the ceiling that the parents set)."""
+        pen = QPen(QColor("#AEAEB2"), max(1.5, size * 0.14))
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        body = QRectF(center.x() - size * 0.5, center.y() - size * 0.05, size, size * 0.62)
+        painter.drawRoundedRect(body, size * 0.12, size * 0.12)
+        painter.drawArc(QRectF(center.x() - size * 0.3, center.y() - size * 0.55, size * 0.6, size * 0.9),
+                        0, 180 * 16)
+
+    def _paint_speaker(self, painter: QPainter, rect: QRectF, waves: int) -> None:
         color = QColor(TEXT) if self.isEnabled() else QColor(TEXT_DIM)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(color)
@@ -180,12 +197,7 @@ class VolumeSlider(QWidget):
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        if self._volume <= 0:
-            painter.drawLine(QPointF(x + w * 0.70, y + h * 0.35), QPointF(x + w * 1.0, y + h * 0.65))
-            painter.drawLine(QPointF(x + w * 1.0, y + h * 0.35), QPointF(x + w * 0.70, y + h * 0.65))
-            return
-        waves = 1 + int(volume_to_position(self._volume) * 2.999)
         for i in range(waves):
             r = h * (0.22 + 0.22 * i)
-            arc = QRectF(x + w * 0.55 - r * 0.6, y + h * 0.5 - r, r * 1.2, r * 2)
-            painter.drawArc(arc, -45 * 16, 90 * 16)
+            painter.drawArc(QRectF(x + w * 0.55 - r * 0.6, y + h * 0.5 - r, r * 1.2, r * 2),
+                            -45 * 16, 90 * 16)

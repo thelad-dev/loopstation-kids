@@ -49,11 +49,13 @@ def test_slider_curve_round_trips():
 def test_slider_is_large_and_sits_in_the_top_right_corner(window):
     slider = window.volume_slider
     top_left = slider.mapTo(window, QPoint(0, 0))
-    assert slider.height() >= 56 and slider.width() >= 300
+    assert slider.height() >= 100 and slider.width() >= 300
     assert top_left.x() + slider.width() >= window.width() - 40  # flush right
-    assert top_left.x() > window.width() / 2
-    mode_top = window.mode_buttons[next(iter(window.mode_buttons))].mapTo(window, QPoint(0, 0)).y()
-    assert top_left.y() < mode_top  # above the mode bar
+    assert top_left.y() < 40  # in the top row
+    # The same row as the mode buttons, to the right of all of them.
+    for button in window.mode_buttons.values():
+        assert button.mapTo(window, QPoint(button.width(), 0)).x() <= top_left.x()
+    assert top_left.y() + slider.height() <= window.grid.mapTo(window, QPoint(0, 0)).y()
     assert slider.accessibleName() == "Lautstärke"
 
 
@@ -126,3 +128,19 @@ def test_clip_sign_shows_on_the_recording_pad_only_while_the_input_clips(window,
     clock.advance(2.0)
     window.refresh()
     assert pads[0].clip is False
+
+
+def test_recording_pad_shows_a_coarse_three_step_level(window):
+    controller = window.controller
+    pad = window.grid.pads[0]
+    QTest.mouseClick(pad, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                     QPoint(pad.width() // 2, pad.height() // 2))
+    assert pad.level == 0
+    for peak, stage in ((0.001, 0), (0.1, 1), (0.4, 2), (0.9, 3)):
+        controller.audio.input_peak = peak
+        controller.tick()
+        window.refresh()
+        assert controller.input_level_stage() == stage and pad.level == stage
+    assert all(p.level == 0 for p in window.grid.pads[1:])
+    controller.press(0)  # stop
+    assert controller.input_level_stage() == 0

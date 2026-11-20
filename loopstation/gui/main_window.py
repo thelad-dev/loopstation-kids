@@ -41,6 +41,8 @@ from loopstation.midi.launchpad import LaunchpadController
 
 TICK_MS = 30
 SESSION_WAVE_WIDTH = 0.3  # seconds a pad stays lit while the new-session wave passes
+MODE_BAR_HEIGHT = 104  # mode buttons and volume control share one row of this height
+MODE_FONT_PT = 15
 PAD_GAP = 8  # visible gap is larger: each pad keeps a margin for its glow
 
 # (mode, icon, word, accent colour)
@@ -136,22 +138,21 @@ class MainWindow(QMainWindow):
         self.frame = Frame()
         self.setCentralWidget(self.frame)
 
-        # Header: the volume control sits in the top right corner.
-        self.volume_slider = VolumeSlider()
-        self.volume_slider.volumeChanged.connect(self.controller.set_volume)
-        header = QHBoxLayout()
-        header.addStretch(1)
-        header.addWidget(self.volume_slider)
-
         # Mode bar.
         self.mode_buttons: dict[Mode, BigButton] = {}
         mode_bar = QHBoxLayout()
-        mode_bar.setSpacing(14)
+        mode_bar.setSpacing(12)
         for mode, icon, word, accent in MODES:
-            button = BigButton(icon, word, accent, checkable=True, stacked=True)
+            button = BigButton(icon, word, accent, checkable=True, stacked=True,
+                               min_height=MODE_BAR_HEIGHT, font_pt=MODE_FONT_PT)
             button.clicked.connect(lambda _checked=False, m=mode: self._choose_mode(m))
             self.mode_buttons[mode] = button
-            mode_bar.addWidget(button, 1)  # equal widths
+            mode_bar.addWidget(button, 2)  # equal widths
+        # The volume control closes the bar on the right (a larger gap sets it apart).
+        self.volume_slider = VolumeSlider()
+        self.volume_slider.volumeChanged.connect(self.controller.set_volume)
+        mode_bar.addSpacing(20)
+        mode_bar.addWidget(self.volume_slider, 5)
 
         # Pads.
         rows, cols = controller.settings.rows, controller.settings.cols
@@ -184,7 +185,6 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(self.frame)
         layout.setContentsMargins(24, 18, 24, 18)
         layout.setSpacing(14)
-        layout.addLayout(header)
         layout.addLayout(mode_bar)
         layout.addWidget(self.grid, 1)
         layout.addLayout(actions)
@@ -287,6 +287,7 @@ class MainWindow(QMainWindow):
         session = controller.session_shown()
         self.volume_slider.set_state(controller.volume, controller.volume_limit)
         clipping = controller.input_clipping()
+        level = controller.input_level_stage()
         for pad in self.grid.pads:
             color = colors.get(pad.index, "white")
             sparkle = 0.0 if session is None else self._session_wave(pad.index, session)
@@ -295,7 +296,7 @@ class MainWindow(QMainWindow):
                 pad.set_look(color, None, None, 0.0, progress if progress is not None else 0.0, sparkle)
             elif pad.index == controller.recording_pad and remaining is not None:
                 pad.set_look(color, None, remaining, min(1.0, remaining / limit), None, sparkle,
-                             clip=clipping)
+                             clip=clipping, level=level)
             else:
                 pad.set_look(color, self._overlay(controller.mode, color, pad.index), None, 0.0,
                              None, sparkle)
