@@ -29,6 +29,7 @@ Für Windows gibt es einen Installer (`Loopstation-Setup-<Version>.exe`), der al
 - Einstellungen, Aufnahmen und Ereignis-Protokoll liegen in `%LOCALAPPDATA%\Loopstation` (`settings.toml`, `samples/`, `data/`). Beim ersten Start wird dort eine kommentierte `settings.toml` angelegt. Updates und Deinstallation lassen diesen Ordner unangetastet, die Aufnahmen bleiben also erhalten. Wer alles entfernen will, löscht den Ordner von Hand.
 - Meldungen der App (etwa „kein Mikrofon“) stehen in `%LOCALAPPDATA%\Loopstation\loopstation.log`.
 - Der Installer ist nicht signiert. Windows SmartScreen zeigt deshalb beim ersten Start „Der Computer wurde durch Windows geschützt“; über „Weitere Informationen“ und „Trotzdem ausführen“ geht es weiter.
+- Der Installer bringt beide PortAudio-DLLs von sounddevice (ab 0.5.1) mit, die Standard-DLL und die mit ASIO-Unterstützung. Die App nutzt vorerst nur die Standard-DLL; ein ASIO-Schalter folgt später.
 - Windows fragt beim ersten Aufnehmen eventuell nach dem Mikrofon-Zugriff. Falls die Aufnahme stumm bleibt: Einstellungen → Datenschutz → Mikrofon → „Desktop-Apps den Zugriff auf das Mikrofon erlauben“ einschalten.
 
 Selbst bauen (unter Windows, mit Python 3.11 und [Inno Setup 6](https://jrsoftware.org/isinfo.php)):

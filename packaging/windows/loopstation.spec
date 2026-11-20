@@ -5,7 +5,7 @@
 #
 # Result: dist/Loopstation/Loopstation.exe plus its _internal folder.
 # The hooks from pyinstaller-hooks-contrib bundle Qt (PySide6), the PortAudio
-# DLL of sounddevice and the libsndfile DLL of soundfile. mido loads its MIDI
+# DLLs of sounddevice (with and without ASIO) and the libsndfile DLL of soundfile. mido loads its MIDI
 # backend by name at run time, so it is listed as a hidden import here.
 
 from pathlib import Path

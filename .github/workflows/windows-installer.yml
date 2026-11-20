@@ -65,6 +65,13 @@ jobs:
           foreach ($pattern in @("libportaudio*.dll", "libsndfile*.dll", "_rtmidi*.pyd", "qwindows.dll", "settings.toml")) {
             if (-not (Get-ChildItem $internal -Recurse -Filter $pattern)) { throw "missing in bundle: $pattern" }
           }
+          # sounddevice >= 0.5.1 ships two PortAudio DLLs: the default one and one with ASIO.
+          # Both must be in the bundle; whether ASIO loads is checked on real hardware, not here.
+          foreach ($name in @("libportaudio64bit.dll", "libportaudio64bit-asio.dll")) {
+            $found = Get-ChildItem (Join-Path $internal "_sounddevice_data/portaudio-binaries") -Filter $name -ErrorAction SilentlyContinue
+            if (-not $found) { throw "missing in bundle: _sounddevice_data/portaudio-binaries/$name" }
+            Write-Host "bundled: $($found.FullName) ($($found.Length) bytes)"
+          }
 
       - name: Smoke test (start the exe with an empty profile)
         run: |
