@@ -305,9 +305,9 @@ SETTING_COMMENTS: dict[str, str] = {
             "Wirkt erst nach einem Neustart.",
     "stretch_to_grid": "true = eine Aufnahme knapp neben einem ganzen Takt wird weich auf den Takt gezogen, "
                        "false = immer mit Stille aufgefüllt oder geschnitten. Wirkt sofort.",
-    "stretch_engine": 'Stretch-Engine: "auto" = Rubber Band, wenn vorhanden, sonst still der einfache Stretch; '
-                      '"rubberband" = Rubber Band gewünscht, der Elternbereich meldet, wenn es fehlt; "simple" = immer der einfache Stretch. '
-                      "Wirkt sofort.",
+    "stretch_engine": 'Stretch-Engine: "auto" = Rubber Band, wenn vorhanden, sonst still der einfache '
+                      'Stretch; "rubberband" = Rubber Band gewünscht, der Elternbereich meldet, wenn es '
+                      'fehlt; "simple" = immer der einfache Stretch. Wirkt sofort.',
     "metronome_tone": "true = leiser Metronom-Ton auf jedem Schlag des Takts (nur im Elternbereich "
                       "einzustellen, das Kind sieht nur den Puls). Wirkt sofort.",
     "metronome_level_db": "Pegel des Metronom-Tons in dB(FS) von -40 bis -6, vor Lautstärke und "

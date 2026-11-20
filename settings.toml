@@ -148,6 +148,6 @@ export_cue_points = true
 # "rubberband" = Rubber Band gewünscht: fehlt es oder läuft es nicht, meldet der
 # Elternbereich "Rubber Band nicht installiert, einfache Engine aktiv" mit dem
 # Weg zum Nachinstallieren, und die App läuft mit dem einfachen Stretch weiter.
-# "simple" = immer der einfache Stretch. Rubber
-# Band steht unter der GPL, siehe README. Wirkt sofort.
+# "simple" = immer der einfache Stretch. Rubber Band steht unter der GPL,
+# siehe README. Wirkt sofort.
 stretch_engine = "auto"
