@@ -121,6 +121,13 @@ In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergrö�
 
 Erwachsene erreichen die Einstellungsseite über das kleine Schloss unten rechts (zwei Sekunden gedrückt halten, dann eine Rechenaufgabe lösen). Die Seite schreibt die `settings.toml` mit allen Kommentaren und übernimmt Pieptöne, Loop-Sync, Aufnahmelänge, Latenz, Launchpad und Vollbild sofort. Oben rechts sitzt der Lautstärke-Regler, darunter der Abschnitt für Pegel (Obergrenze, Mikrofonpegel, Schalter, Pegelanzeige und die zuletzt zu lauten Aufnahmen); diese Regler wirken sofort und werden sofort in die `settings.toml` geschrieben, ohne „Speichern“. Die Pegelanzeige (`peak_meter`) ist standardmäßig an; Rastergröße, Abtastrate und Datenordner wirken erst nach einem Neustart.
 
+## Export
+
+Nur im Elternbereich (Knopf „Export“ unten auf der Einstellungsseite), lokal, ohne Upload. Das Format ist WAV, 24 Bit, mono, in der Abtastrate der Sitzung; die Dateien landen in `Dokumente/Loopstation/Export`.
+
+- **Summe:** alles, was gerade loopt (oder alle belegten Pads als Loop), über N Takte (4, 8, 16, 32 oder eine eigene Zahl). Die Länge ist genau N × Taktlänge in ganzen Frames, jeder Loop startet vorn und wiederholt sich wie live. Es gilt dieselbe Pegelkette wie live: Lautstärke, dann der Limiter mit der Eltern-Obergrenze auf die Summe. Optional ein kurzer Ausklang (15 ms) und Einmal-Pads am Anfang. Ohne Takt in der Sitzung (`loop_sync` aus) wird nicht geraten: die Seite erklärt das, und nur auf ausdrückliche Wahl gilt „N × längstes Sample“ als Notbehelf, vermerkt im Kommentar der Datei.
+- **Einzelner Loop:** das aufgenommene Sample unverändert, ohne Lautstärke und Limiter.
+
 ## Daten
 
 - `samples/pad_<Pad>_<Zeitstempel>.wav`: jede Aufnahme als eigene WAV-Datei. Dateien werden nie automatisch gelöscht, damit „Zurück“ und der Verlauf immer funktionieren.

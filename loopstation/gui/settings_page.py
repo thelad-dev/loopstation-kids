@@ -75,6 +75,18 @@ RESTART_TEXT = "wirkt nach Neustart"
 
 
 @dataclass(frozen=True)
+class ParentAction:
+    """A further page of the parents' area, reached by a button next to "Speichern".
+
+    ``open(parent)`` shows that page (modal) on top of the settings page.
+    """
+
+    icon: str
+    label: str
+    open: Callable[[QWidget], None]
+
+
+@dataclass(frozen=True)
 class Field:
     """One row of the page. ``kind``: ``bool``, ``int``, ``float``, ``auto_float`` or ``text``."""
 
@@ -337,6 +349,12 @@ class SettingsDialog(QDialog):
         texts.addWidget(self.message)
         texts.addWidget(footer)
         bottom.addLayout(texts, 1)
+        self.action_buttons: dict[str, BigButton] = {}
+        for action in actions:
+            button = BigButton(action.icon, action.label, ACCENT_GRAY)
+            button.clicked.connect(lambda _checked=False, a=action: a.open(self))
+            self.action_buttons[action.label] = button
+            bottom.addWidget(button)
         bottom.addWidget(self.save_button)
 
         layout = QVBoxLayout(self)

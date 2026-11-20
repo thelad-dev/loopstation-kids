@@ -589,6 +589,25 @@ class Controller:
             self._fitted[key] = fit_to_grid(data, grid, grace_frames(grid, self.audio.sample_rate))
         return self._fitted[key]
 
+    # --------------------------------------------- export (read only, parents)
+
+    @property
+    def sample_rate(self) -> int:
+        """Sample rate of the audio engine (what loaded samples are converted to)."""
+        return self.audio.sample_rate
+
+    def grid_frames(self) -> int | None:
+        """Loop length in frames, None while recordings are free (no bars to count)."""
+        return self._grid()
+
+    def loop_audio(self, sample: str) -> np.ndarray | None:
+        """A sample as it plays in a loop (fitted to the grid), None if unreadable."""
+        return self._loop_data(sample)
+
+    def sample_audio(self, sample: str) -> np.ndarray | None:
+        """A sample as recorded, None if unreadable."""
+        return self._load(sample)
+
     # ------------------------------------------------------------- buttons
 
     def tick(self) -> None:

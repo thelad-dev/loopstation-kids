@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from loopstation.config import DEFAULT_CONFIG_NAME, Settings
 from loopstation.controller import Controller, Mode
 from loopstation.gui.confirm_dialog import ConfirmDialog
+from loopstation.gui.export_dialog import ExportDialog
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
 from loopstation.gui.parent_gate import ENTRY_SIZE, ParentEntryButton, ParentGate
@@ -151,6 +152,7 @@ class MainWindow(QMainWindow):
         self.history_factory: Callable[[Controller, int, QWidget], QDialog] = HistoryDialog
         self.gate_factory: Callable[[QWidget], QDialog] = ParentGate
         self.settings_factory: Callable[..., QDialog] = SettingsDialog
+        self.export_factory: Callable[[Controller, QWidget], QDialog] = ExportDialog
 
         self.setWindowTitle("Loopstation")
         self.frame = Frame()
@@ -305,10 +307,15 @@ class MainWindow(QMainWindow):
             self.settings_factory(
                 self.config_path, self.controller.settings, self.apply_settings,
                 self.settings_template, self,
+                [ParentAction("download", "Export", self.open_export)],
             ).exec()
         finally:
             self._dialog_open = False
             self.refresh()
+
+    def open_export(self, parent: QWidget) -> None:
+        """Export page, opened from the parents' area (the pads are already locked)."""
+        self.export_factory(self.controller, parent).exec()
 
     def apply_settings(self, settings: Settings) -> list[str]:
         """Live-apply ``settings``; returns the keys that need a restart."""

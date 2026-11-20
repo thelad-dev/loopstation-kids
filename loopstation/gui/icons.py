@@ -153,6 +153,22 @@ def draw_icon(painter: QPainter, name: str, rect: QRectF, color: QColor) -> None
             shackle.lineTo(QPointF(r.left() + s * 0.70, r.top() + s * 0.34))
         painter.drawPath(shackle)
 
+    elif name == "download":
+        # Tray with an arrow into it (Feather "download").
+        painter.setPen(_pen(color, s * 0.1))
+        tray = QPainterPath(QPointF(r.left() + s * 0.12, r.top() + s * 0.62))
+        tray.lineTo(QPointF(r.left() + s * 0.12, r.top() + s * 0.80))
+        tray.quadTo(QPointF(r.left() + s * 0.12, r.top() + s * 0.88),
+                    QPointF(r.left() + s * 0.20, r.top() + s * 0.88))
+        tray.lineTo(QPointF(r.left() + s * 0.80, r.top() + s * 0.88))
+        tray.quadTo(QPointF(r.left() + s * 0.88, r.top() + s * 0.88),
+                    QPointF(r.left() + s * 0.88, r.top() + s * 0.80))
+        tray.lineTo(QPointF(r.left() + s * 0.88, r.top() + s * 0.62))
+        painter.drawPath(tray)
+        painter.drawLine(QPointF(c.x(), r.top() + s * 0.12), QPointF(c.x(), r.top() + s * 0.62))
+        painter.drawLine(QPointF(c.x(), r.top() + s * 0.62), QPointF(c.x() - s * 0.2, r.top() + s * 0.42))
+        painter.drawLine(QPointF(c.x(), r.top() + s * 0.62), QPointF(c.x() + s * 0.2, r.top() + s * 0.42))
+
     elif name == "back":
         painter.setPen(_pen(color, s * 0.11))
         painter.drawLine(QPointF(r.left() + s * 0.22, c.y()), QPointF(r.left() + s * 0.8, c.y()))
