@@ -11,6 +11,8 @@ from loopstation.audio.sync import (
     grace_frames,
     max_grid_frames,
     next_boundary,
+    seam_fade_frames,
+    soften_seam,
 )
 
 
@@ -70,3 +72,38 @@ def test_fit_to_grid_pads_with_silence_and_cuts():
 
     exact = data[:1000]
     assert fit_to_grid(exact, 1000) is exact
+
+
+# ------------------------------------------------------------ seam fade
+
+
+@pytest.mark.parametrize(
+    ("length_s", "expected_ms"),
+    [(8.0, 25.0), (1.0, 20.0), (0.5, 10.0), (0.15, 3.0), (0.05, 2.0), (0.01, 1.0)],
+)
+def test_seam_fade_length_is_proportional_with_hard_limits(length_s, expected_ms):
+    sr = 44100
+    frames = seam_fade_frames(round(length_s * sr), sr)
+    assert abs(frames - expected_ms / 1000 * sr) <= 1
+    assert frames <= round(length_s * sr) * 0.10  # never over 10 %
+
+
+def test_seam_fade_of_a_tiny_loop_never_eats_it():
+    assert seam_fade_frames(0, 8000) == 0
+    assert seam_fade_frames(5, 8000) == 0
+    assert seam_fade_frames(100, 8000) == 10
+
+
+def test_softened_seam_keeps_length_and_the_middle_and_zeroes_the_ends():
+    data = np.full(8000, 0.5, dtype=np.float32)
+    out = soften_seam(data, 8000)
+    n = seam_fade_frames(len(data), 8000)
+    assert len(out) == len(data) and n > 2
+    assert out[0] == 0.0 and out[-1] == 0.0
+    assert np.array_equal(out[n:-n], data[n:-n])
+    assert np.all(np.diff(out[:n]) >= 0) and np.all(np.diff(out[-n:]) <= 0)
+    assert np.all(data == 0.5)  # the input is not touched
+
+
+def test_softened_seam_leaves_a_silent_loop_silent():
+    assert not soften_seam(np.zeros(4000, dtype=np.float32), 8000).any()

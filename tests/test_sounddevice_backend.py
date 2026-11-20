@@ -10,7 +10,7 @@ import numpy as np
 from conftest import FakeSoundDevice
 
 from loopstation.audio.sounddevice_backend import SoundDeviceAudio
-from loopstation.audio.sync import fit_to_grid, grace_frames
+from loopstation.audio.sync import fit_to_grid, grace_frames, seam_fade_frames, soften_seam
 
 SR = 8000
 GRID = 1000
@@ -243,3 +243,91 @@ def test_a_loop_recorded_from_the_speaker_lands_exactly_on_the_original():
     device.run_to(6000)
     out = device.output_signal()
     assert np.array_equal(out[4000:6000], np.tile(2 * original, 2))
+
+
+# ------------------------------------------------------------- loop seam
+
+
+def make_seam(soft_seam: bool, grid: int = GRID):
+    device = FakeSoundDevice()
+    audio = SoundDeviceAudio(SR, 10, latency_seconds=0.0, sd=device, clock=lambda: 0.0, soft_seam=soft_seam)
+    audio.set_grid(grid)
+    return audio, device
+
+
+def sawtooth(length: int = GRID, amp: float = 0.8) -> np.ndarray:
+    return np.linspace(-amp, amp, length, endpoint=False, dtype=np.float32)
+
+
+def test_a_loop_with_a_jump_has_no_step_at_the_seam_and_keeps_its_period():
+    saw = sawtooth()
+    hard, hard_dev = make_seam(False)
+    hard.play(0, saw, loop=True)
+    hard_dev.run_to(3000)
+    soft, soft_dev = make_seam(True)
+    soft.play(0, saw, loop=True)
+    soft_dev.run_to(3000)
+
+    hard_out, soft_out = hard_dev.output_signal(), soft_dev.output_signal()
+    seams = (GRID, 2 * GRID)
+    for seam in seams:
+        assert abs(hard_out[seam] - hard_out[seam - 1]) > 1.5  # the click today
+        assert abs(soft_out[seam] - soft_out[seam - 1]) < 0.05
+    steps = np.abs(np.diff(soft_out))
+    assert steps.max() < 0.1  # the hard step is 1.6
+    # Same period: outside the faded ends both are the same signal, every cycle.
+    n = seam_fade_frames(GRID, SR)
+    for k in range(3):
+        mid = slice(k * GRID + n, (k + 1) * GRID - n)
+        assert np.array_equal(soft_out[mid], hard_out[mid])
+    assert np.array_equal(soft_out[GRID:2 * GRID], soft_out[:GRID])
+
+
+def test_switch_off_plays_the_samples_unchanged():
+    saw = sawtooth()
+    audio, device = make_seam(False)
+    audio.play(0, saw, loop=True)
+    device.run_to(2000)
+    assert np.array_equal(device.output_signal(), np.tile(saw, 2))
+
+
+def test_one_shots_and_effects_are_not_faded():
+    data = np.full(GRID, 0.5, dtype=np.float32)
+    audio, device = make_seam(True)
+    audio.play(0, data, loop=False)
+    device.run_to(GRID)
+    assert np.array_equal(device.output_signal(), data)
+
+
+def test_free_loops_without_a_grid_are_faded_too():
+    saw = sawtooth()
+    audio, device = make_seam(True, grid=None)
+    audio.play(0, saw, loop=True)
+    device.run_to(2000)
+    out = device.output_signal()
+    assert abs(out[GRID] - out[GRID - 1]) < 0.05 and out[0] == 0.0
+
+
+def test_pressing_a_stopping_loop_again_keeps_it_going_with_the_faded_copy():
+    saw = sawtooth()
+    audio, device = make_seam(True)
+    audio.play(0, saw, loop=True)
+    device.run_to(300)
+    audio.stop(0, at_boundary=True)
+    audio.play(0, saw, loop=True)  # same sample again: must not restart
+    device.run_to(2500)
+    assert audio.playing_pads() == {0}
+    assert np.array_equal(device.output_signal()[GRID:2 * GRID], device.output_signal()[:GRID])
+
+
+def test_a_faded_loop_stays_in_phase_with_another_loop():
+    a, b = sawtooth(amp=0.4), sawtooth(2 * GRID, amp=0.4)  # the sum must not clip
+    audio, device = make_seam(True)
+    audio.play(0, a, loop=True)
+    device.run_to(500)
+    audio.play(1, b, loop=True)  # starts on the next grid boundary, frame 1000
+    device.run_to(5000)
+    fa, fb = soften_seam(a, SR), soften_seam(b, SR)
+    expected = np.tile(fa, 5)
+    expected[GRID:] += np.tile(fb, 2)
+    assert np.array_equal(device.output_signal(), expected)

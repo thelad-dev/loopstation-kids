@@ -14,6 +14,12 @@ import numpy as np
 # an eighth of the loop so short loops keep most of their tail.
 STOP_GRACE_SECONDS = 0.15
 
+# Seam fade: 2 % of the loop, at least 2 ms, at most 25 ms, never over 10 %.
+SEAM_FADE_FRACTION = 0.02
+SEAM_FADE_MIN_SECONDS = 0.002
+SEAM_FADE_MAX_SECONDS = 0.025
+SEAM_FADE_LIMIT_FRACTION = 0.10
+
 
 def next_boundary(now: int, origin: int, grid: int) -> int:
     """First grid boundary at or after frame ``now``."""
@@ -62,4 +68,31 @@ def fit_to_grid(data: np.ndarray, grid: int, grace: int = 0, limit: int | None =
         return np.ascontiguousarray(data[:target])
     out = np.zeros(target, dtype=np.float32)
     out[: len(data)] = data
+    return out
+
+
+def seam_fade_frames(length: int, sample_rate: int) -> int:
+    """Length in frames of the fade at each end of a loop of ``length`` frames."""
+    if length <= 0:
+        return 0
+    frames = round(SEAM_FADE_FRACTION * length)
+    frames = max(frames, round(SEAM_FADE_MIN_SECONDS * sample_rate))
+    frames = min(frames, round(SEAM_FADE_MAX_SECONDS * sample_rate))
+    return min(frames, int(SEAM_FADE_LIMIT_FRACTION * length))
+
+
+def soften_seam(data: np.ndarray, sample_rate: int) -> np.ndarray:
+    """Copy of the loop ``data`` with its first and last frames faded through zero.
+
+    The length is unchanged, so the loop period and the grid stay exact; the
+    first and the last frame are 0, which removes the step where the end meets
+    the beginning. A silent end stays silent.
+    """
+    out = np.array(data, dtype=np.float32)
+    n = seam_fade_frames(len(out), sample_rate)
+    if n < 2:
+        return out
+    ramp = (0.5 * (1.0 - np.cos(np.pi * np.arange(n) / n))).astype(np.float32)
+    out[:n] *= ramp
+    out[len(out) - n:] *= ramp[::-1]
     return out

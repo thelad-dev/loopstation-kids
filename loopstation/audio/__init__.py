@@ -27,7 +27,9 @@ def create_audio(settings: Settings) -> tuple[AudioBackend, str | None]:
         from loopstation.audio.sounddevice_backend import SoundDeviceAudio
 
         latency = None if settings.latency_ms is None else settings.latency_ms / 1000
-        audio = SoundDeviceAudio(settings.sample_rate, settings.max_record_seconds, latency)
+        audio = SoundDeviceAudio(
+            settings.sample_rate, settings.max_record_seconds, latency, soft_seam=settings.soft_seam
+        )
     except Exception as exc:  # no PortAudio, no device, unsupported rate, ...
         log.warning("audio not available, continuing silently: %s", exc)
         return NullAudio(settings.sample_rate), NO_AUDIO_TEXT

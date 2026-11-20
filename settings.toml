@@ -36,3 +36,9 @@ latency_ms = "auto"
 # Ordner für die Daten (relativ zum Startordner):
 # Aufnahmen in <data_dir>/samples/, Ereignis-Protokoll in <data_dir>/data/.
 data_dir = "."
+
+# --- Loop-Naht ---
+# Die ersten und letzten Millisekunden jedes Loops werden weich ein- und ausgeblendet,
+# damit es beim Sprung vom Ende zum Anfang nicht knackt. Die Loop-Länge bleibt gleich.
+# false = harter Sprung wie bisher.
+soft_seam = true

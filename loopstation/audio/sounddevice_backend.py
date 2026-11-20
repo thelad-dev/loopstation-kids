@@ -28,7 +28,7 @@ from typing import Any
 
 import numpy as np
 
-from loopstation.audio.sync import next_boundary
+from loopstation.audio.sync import next_boundary, soften_seam
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +44,8 @@ class _Voice:
     end: int | None = None
     # True for loops that run on the grid (they keep the grid going).
     synced: bool = False
+    # The sample the caller handed in (``data`` may be a seam-faded copy).
+    source: np.ndarray | None = None
 
 
 class SoundDeviceAudio:
@@ -54,12 +56,14 @@ class SoundDeviceAudio:
         latency_seconds: float | None = None,
         sd: Any = None,
         clock: Callable[[], float] = time.monotonic,
+        soft_seam: bool = False,
     ) -> None:
         if sd is None:
             import sounddevice as sd  # deferred on purpose, see module docstring
 
         self._sd = sd
         self._clock = clock
+        self._soft_seam = soft_seam
         self.sample_rate = sample_rate
         self._max_frames = int((max_record_seconds + 1) * sample_rate)
         # None = use the latencies PortAudio reports for the two streams.
@@ -283,13 +287,16 @@ class SoundDeviceAudio:
 
     def play(self, pad: int, data: np.ndarray, loop: bool) -> None:
         data = np.asarray(data, dtype=np.float32)
+        # Looped voices get the faded copy; built here, so the audio callback
+        # never allocates. One-shots and the switch being off play unchanged.
+        played = soften_seam(data, self.sample_rate) if loop and self._soft_seam else data
         with self._lock:
             now = self._frame
             if not (loop and self._grid is not None):
-                self._voices[pad] = _Voice(data, loop, start=now)
+                self._voices[pad] = _Voice(played, loop, start=now, source=data)
                 return
             old = self._voices.get(pad)
-            if old is not None and old.synced and old.end is not None and old.data is data:
+            if old is not None and old.synced and old.end is not None and old.source is data:
                 old.end = None  # pressed again before it stopped: keep it going
                 return
             if self._grid_running(exclude=pad):
@@ -298,7 +305,7 @@ class SoundDeviceAudio:
                 # Nothing else on the grid: start right away and anchor it here.
                 self._origin = now
                 start = now
-            self._voices[pad] = _Voice(data, True, start=start, synced=True)
+            self._voices[pad] = _Voice(played, True, start=start, synced=True, source=data)
 
     def stop(self, pad: int, at_boundary: bool = False) -> None:
         with self._lock:
