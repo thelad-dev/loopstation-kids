@@ -10,13 +10,13 @@ import pytest
 from conftest import FakeAudio, make_settings
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QCheckBox, QDialog
+from PySide6.QtWidgets import QDialog
 
 from loopstation.config import Settings, load_settings
 from loopstation.controller import Controller
 from loopstation.gui import settings_page
-from loopstation.gui.parent_gate import ENTRY_SIZE, GateQuestion, ParentGate, new_question
-from loopstation.gui.settings_page import NOTES, Field, SettingsDialog, register_field
+from loopstation.gui.parent_gate import ENTRY_SIZE, HOLD_MS, GateQuestion, ParentGate, new_question
+from loopstation.gui.settings_page import NOTES, Field, SettingsDialog, ToggleSwitch, register_field
 from loopstation.store import EventStore
 
 
@@ -50,15 +50,24 @@ def test_questions_are_two_digit_sums_with_carry():
         assert question.answer == a + b
 
 
-def test_wrong_answer_opens_nothing_and_asks_again(qapp):
-    gate = ParentGate(question=GateQuestion("17 + 25 = ?", 42))
+def test_wrong_answer_opens_nothing_and_just_closes(qapp):
     for wrong in ("41", "", "0"):
+        gate = ParentGate(question=GateQuestion("17 + 25 = ?", 42))
         gate.answer_edit.setText(wrong)
         assert gate.check() is False
-        assert gate.result() != QDialog.DialogCode.Accepted
-        assert gate.answer_edit.text() == ""
-        assert "stimmt nicht" in gate.feedback.text()
-        gate.question = GateQuestion("17 + 25 = ?", 42)  # the same sum again, for the next try
+        assert gate.result() == QDialog.DialogCode.Rejected  # back to the child page, no alarm
+
+
+def test_number_pad_types_and_deletes_digits(qapp):
+    gate = ParentGate(question=GateQuestion("17 + 25 = ?", 42))
+    assert gate.question_label.text() == "Wie viel ist 17 + 25 ?"
+    gate.keys["4"].click()
+    gate.keys["3"].click()
+    gate.keys["⌫"].click()
+    gate.keys["2"].click()
+    assert gate.answer_edit.text() == "42"
+    gate.keys["OK"].click()
+    assert gate.result() == QDialog.DialogCode.Accepted
 
 
 def test_right_answer_opens(qapp):
@@ -99,6 +108,7 @@ def test_entry_is_small_dim_and_needs_a_hold(parts):
     win, _controller, _path = parts
     entry = win.parent_entry
     assert entry.width() == entry.height() == ENTRY_SIZE
+    assert HOLD_MS == 2000  # mockup 08: two seconds
     # In the window margin: it covers no mode button, pad or action button.
     box = entry.geometry()
     for widget in [*win.mode_buttons.values(), *win.grid.pads, win.undo_button, win.stop_button,
@@ -302,7 +312,7 @@ def test_later_packages_add_a_field_with_one_line(qapp, tmp_path, monkeypatch):
         register_field(Field("rows", "doppelt", "int"))
 
 
-def test_all_widgets_are_checkboxes_for_bool_fields(page):
+def test_bool_fields_are_toggle_switches(page):
     dialog, *_ = page
     boxes = {f.key for f in settings_page.FIELDS if f.kind == "bool"}
-    assert boxes and all(isinstance(dialog.editors[k].widget, QCheckBox) for k in boxes)
+    assert boxes and all(isinstance(dialog.editors[k].widget, ToggleSwitch) for k in boxes)

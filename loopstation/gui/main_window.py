@@ -206,7 +206,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.grid, 1)
         layout.addLayout(actions)
 
-        # Way into the parents' area: a dim gear in the window margin, held to open.
+        # Way into the parents' area: a dim lock in the window margin, held to open.
         self.parent_entry = ParentEntryButton(self.frame)
         self.parent_entry.held.connect(self.open_parent_area)
 
@@ -227,8 +227,8 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt API
         super().resizeEvent(event)
-        # Bottom left corner, inside the window margin: no layout and no child control moves.
-        self.parent_entry.move(2, self.frame.height() - ENTRY_SIZE - 2)
+        # Bottom right corner, inside the window margin: no layout and no child control moves.
+        self.parent_entry.move(self.frame.width() - 24, self.frame.height() - ENTRY_SIZE - 1)
         self.parent_entry.raise_()
 
     # -------------------------------------------------------------- actions

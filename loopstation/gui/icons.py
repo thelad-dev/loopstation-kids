@@ -134,14 +134,23 @@ def draw_icon(painter: QPainter, name: str, rect: QRectF, color: QColor) -> None
             body = body.subtracted(slot)
         painter.drawPath(body)
 
-    elif name == "settings":
-        # Gear: a ring with eight teeth.
-        painter.setPen(_pen(color, s * 0.12))
-        painter.drawEllipse(c, s * 0.2, s * 0.2)
-        for step in range(8):
-            angle = math.radians(step * 45)
-            inner = QPointF(c.x() + s * 0.30 * math.cos(angle), c.y() + s * 0.30 * math.sin(angle))
-            outer = QPointF(c.x() + s * 0.43 * math.cos(angle), c.y() + s * 0.43 * math.sin(angle))
-            painter.drawLine(inner, outer)
+    elif name in ("lock", "unlock"):
+        painter.setPen(_pen(color, s * 0.1))
+        body = QRectF(r.left() + s * 0.18, r.top() + s * 0.44, s * 0.64, s * 0.42)
+        painter.drawRoundedRect(body, s * 0.08, s * 0.08)
+        shackle = QPainterPath(QPointF(r.left() + s * 0.30, r.top() + s * 0.44))
+        shackle.lineTo(QPointF(r.left() + s * 0.30, r.top() + s * 0.30))
+        shackle.arcTo(QRectF(r.left() + s * 0.30, r.top() + s * 0.08, s * 0.40, s * 0.44), 180, -180)
+        if name == "lock":
+            shackle.lineTo(QPointF(r.left() + s * 0.70, r.top() + s * 0.44))
+        else:
+            shackle.lineTo(QPointF(r.left() + s * 0.70, r.top() + s * 0.34))
+        painter.drawPath(shackle)
+
+    elif name == "back":
+        painter.setPen(_pen(color, s * 0.11))
+        painter.drawLine(QPointF(r.left() + s * 0.22, c.y()), QPointF(r.left() + s * 0.8, c.y()))
+        painter.drawLine(QPointF(r.left() + s * 0.22, c.y()), QPointF(r.left() + s * 0.46, c.y() - s * 0.24))
+        painter.drawLine(QPointF(r.left() + s * 0.22, c.y()), QPointF(r.left() + s * 0.46, c.y() + s * 0.24))
 
     painter.restore()

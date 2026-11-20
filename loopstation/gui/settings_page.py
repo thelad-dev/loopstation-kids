@@ -16,12 +16,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QPainter, QPaintEvent, QShowEvent
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QCheckBox,
     QDialog,
     QDoubleSpinBox,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -40,6 +43,7 @@ from loopstation.config import (
     settings_values,
     write_settings,
 )
+from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
 from loopstation.gui.widgets import (
     ACCENT_GRAY,
     ACCENT_GREEN,
@@ -48,7 +52,6 @@ from loopstation.gui.widgets import (
     TEXT,
     TEXT_DIM,
     BigButton,
-    big_font,
 )
 
 # Advice for parents that belongs on the page whatever fields it has
@@ -106,6 +109,27 @@ def register_field(field: Field, before: str | None = None) -> None:
     FIELDS.insert(index, field)
 
 
+class ToggleSwitch(QAbstractButton):
+    """On/off switch (green and knob right = on), as in the parents' area mockup."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setFixedSize(QSize(64, 36))
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(ACCENT_GREEN) if self.isChecked() else QColor("#48484E"))
+        painter.drawRoundedRect(QRectF(self.rect()), 18, 18)
+        knob_x = self.width() - 32 if self.isChecked() else 4
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.drawEllipse(QRectF(knob_x, 4, 28, 28))
+        painter.end()
+
+
 class _Editor:
     """The input widget of one field and how to read and set its value."""
 
@@ -115,7 +139,7 @@ class _Editor:
         self._auto: QCheckBox | None = None
         kind = field.kind
         if kind == "bool":
-            self._box = QCheckBox()
+            self._box = ToggleSwitch()
             self._box.setChecked(bool(value))
             self.widget = self._box
         elif kind == "text":
@@ -180,52 +204,73 @@ class SettingsDialog(QDialog):
         self._apply = apply
         self._template = template
         self.saved = False
-        self.setWindowTitle("Einstellungen")
+        self.setWindowTitle("Elternbereich")
         self.setModal(True)
         self.setStyleSheet(
-            f"QDialog, QScrollArea, #settings_inner {{ background: {BACKGROUND.name()}; }} "
+            f"SettingsDialog {{ background: {BACKGROUND.name()}; border: 5px solid {PARENT_ACCENT}; }} "
+            f"QScrollArea, #settings_inner {{ background: transparent; border: none; }} "
             f"QLabel, QCheckBox {{ color: {TEXT.name()}; font-size: 16px; }} "
+            "#card { background: #1B1B1F; border: 1px solid #26262B; border-radius: 18px; } "
             f"QSpinBox, QDoubleSpinBox, QLineEdit {{ color: {TEXT.name()}; background: {SURFACE.name()}; "
-            "font-size: 16px; border: 1px solid #3A3A41; border-radius: 6px; padding: 4px 8px; } "
-            "QSpinBox:disabled, QDoubleSpinBox:disabled { color: #5A5A60; } "
+            f"font-size: 16px; border: 1px solid {PARENT_ACCENT}; border-radius: 10px; padding: 6px 10px; }} "
+            "QSpinBox:disabled, QDoubleSpinBox:disabled { color: #5A5A60; border-color: #3A3A41; } "
             "QCheckBox::indicator { width: 22px; height: 22px; border-radius: 5px; "
             f"background: {SURFACE.name()}; border: 1px solid #5A5A60; }} "
             f"QCheckBox::indicator:checked {{ background: {ACCENT_GREEN.name()}; }}")
 
-        title = QLabel("Einstellungen für Erwachsene")
-        title.setFont(big_font(24))
-        title.setStyleSheet(f"color: {TEXT.name()};")
+        # Header: back to the child page, title with the open lock, what the page does.
+        self.close_button = BigButton("back", "Zur Kinderseite", ACCENT_GRAY)
+        self.close_button.setToolTip("Eltern-Modus beenden")
+        self.close_button.clicked.connect(self.reject)
+        title = QLabel("Elternbereich")
+        title.setStyleSheet("font-size: 34px; font-weight: bold;")
+        subtitle = QLabel("Änderungen gelten sofort · gespeichert in settings.toml")
+        subtitle.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 15px;")
+        title_box = QVBoxLayout()
+        title_box.setSpacing(0)
+        title_box.addWidget(title)
+        title_box.addWidget(subtitle)
+        header = QHBoxLayout()
+        header.setSpacing(24)
+        header.addWidget(self.close_button)
+        header.addWidget(_IconLabel("unlock", PARENT_ACCENT, 40))
+        header.addLayout(title_box, 1)
 
         self.editors: dict[str, _Editor] = {}
         shown = self._file_settings()
         values = settings_values(shown)
         self._pending = [f.label for f in FIELDS if f.restart and values[f.key] != getattr(running, f.key)]
-        form = QFormLayout()
-        form.setHorizontalSpacing(24)
-        form.setVerticalSpacing(10)
+        switches, numbers = QVBoxLayout(), QFormLayout()
+        switches.setSpacing(14)
+        numbers.setHorizontalSpacing(24)
+        numbers.setVerticalSpacing(12)
         for field in FIELDS:
             editor = _Editor(field, values[field.key])
             self.editors[field.key] = editor
             label = field.label + (f" ({RESTART_TEXT})" if field.restart else "")
-            row = QVBoxLayout()
-            row.setSpacing(2)
-            row.addWidget(editor.widget)
-            if field.hint:
-                hint = QLabel(field.hint)
-                hint.setWordWrap(True)
-                hint.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 13px;")
-                row.addWidget(hint)
-            form.addRow(label, row)
+            if field.kind == "bool":
+                switches.addLayout(self._switch_row(editor, label, field.hint))
+            else:
+                row = QVBoxLayout()
+                row.setSpacing(2)
+                row.addWidget(editor.widget)
+                if field.hint:
+                    row.addWidget(self._hint(field.hint))
+                numbers.addRow(label, row)
 
         inner = QWidget()
         inner.setObjectName("settings_inner")
         inner_layout = QVBoxLayout(inner)
-        inner_layout.addLayout(form)
+        inner_layout.setContentsMargins(0, 0, 8, 0)
+        inner_layout.setSpacing(14)
+        inner_layout.addWidget(self._card("Loop-Verhalten und Aufnahme", switches))
+        inner_layout.addWidget(self._card("Zahlenwerte", numbers))
+        notes = QVBoxLayout()
         for text in NOTES:
-            note = QLabel(text)
-            note.setWordWrap(True)
-            note.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 14px;")
-            inner_layout.addWidget(note)
+            note = self._hint(text)
+            note.setStyleSheet(f"color: {TEXT.name()}; font-size: 14px;")
+            notes.addWidget(note)
+        inner_layout.addWidget(self._card("Hinweise für Erwachsene", notes))
         inner_layout.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -234,27 +279,70 @@ class SettingsDialog(QDialog):
 
         self.message = QLabel("")
         self.message.setWordWrap(True)
-        self.message.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.close_button = BigButton("close", "Schließen", ACCENT_GRAY)
-        self.close_button.clicked.connect(self.reject)
-        self.save_button = BigButton("check", "Speichern", ACCENT_GREEN)
-        self.save_button.clicked.connect(self.save)
-        buttons = QHBoxLayout()
-        buttons.setSpacing(24)
-        buttons.addWidget(self.close_button)
-        buttons.addWidget(self.save_button)
+        footer = QLabel(
+            "Lokal · ohne Konto · ohne Internet · Neustart nötig nur für: " + ", ".join(RESTART_KEYS))
+        footer.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 13px;")
+        footer.setWordWrap(True)
+        self.save_button = BigButton("check", "Speichern", QColor(PARENT_ACCENT), checkable=True)
+        self.save_button.setChecked(True)  # filled: the one main action
+        self.save_button.clicked.connect(self._save_clicked)
+        bottom = QHBoxLayout()
+        bottom.setSpacing(24)
+        texts = QVBoxLayout()
+        texts.addWidget(self.message)
+        texts.addWidget(footer)
+        bottom.addLayout(texts, 1)
+        bottom.addWidget(self.save_button)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 24, 32, 24)
-        layout.setSpacing(12)
-        layout.addWidget(title)
+        layout.setSpacing(16)
+        layout.addLayout(header)
         layout.addWidget(scroll, 1)
-        layout.addWidget(self.message)
-        layout.addLayout(buttons)
-        self.resize(760, 640)
+        layout.addLayout(bottom)
+        self.resize(1280, 800)
         if self._pending:
             self._say(f"Gespeichert, {RESTART_TEXT}: " + ", ".join(self._pending), warning=True)
+
+    @staticmethod
+    def _hint(text: str) -> QLabel:
+        hint = QLabel(text)
+        hint.setWordWrap(True)
+        hint.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 13px;")
+        return hint
+
+    @staticmethod
+    def _card(title: str, content: QVBoxLayout | QFormLayout) -> QFrame:
+        card = QFrame()
+        card.setObjectName("card")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(24, 18, 24, 18)
+        heading = QLabel(title)
+        heading.setStyleSheet("font-size: 20px; font-weight: bold;")
+        layout.addWidget(heading)
+        layout.addLayout(content)
+        return card
+
+    def _switch_row(self, editor: _Editor, label: str, hint: str) -> QHBoxLayout:
+        texts = QVBoxLayout()
+        texts.setSpacing(0)
+        name = QLabel(label)
+        name.setStyleSheet("font-size: 18px; font-weight: bold;")
+        texts.addWidget(name)
+        if hint:
+            texts.addWidget(self._hint(hint))
+        row = QHBoxLayout()
+        row.setSpacing(16)
+        row.addWidget(editor.widget)
+        row.addLayout(texts, 1)
+        return row
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt API
+        super().showEvent(event)
+        # Fill the window it was opened from, like the page in the mockup.
+        parent = self.parentWidget()
+        if parent is not None and parent.isVisible():
+            self.setGeometry(parent.geometry())
 
     def _file_settings(self) -> Settings:
         """What the file says now (it may hold restart values not running yet), else the running ones."""
@@ -265,8 +353,12 @@ class SettingsDialog(QDialog):
 
     def _say(self, text: str, warning: bool = False, error: bool = False) -> None:
         color = "#FF3B30" if error else "#FF9F0A" if warning else "#32D74B"
-        self.message.setStyleSheet(f"color: {color}; font-size: 15px;")
+        self.message.setStyleSheet(f"color: {color}; font-size: 15px; font-weight: bold;")
         self.message.setText(text)
+
+    def _save_clicked(self) -> None:
+        self.save_button.setChecked(True)  # keep it filled after the click toggled it
+        self.save()
 
     def collect(self) -> Settings:
         """The settings the widgets show, checked like the loader checks the file."""
