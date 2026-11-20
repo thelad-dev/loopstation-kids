@@ -46,11 +46,11 @@ from loopstation.midi.launchpad import LaunchpadController
 TICK_MS = 30
 SESSION_WAVE_WIDTH = 0.3  # seconds a pad stays lit while the new-session wave passes
 MODE_BAR_HEIGHT = 104  # mode buttons and volume control share one row of this height
-MODE_FONT_PT = 15
+MODE_FONT_PT = 13
 PAD_GAP = 8  # visible gap is larger: each pad keeps a margin for its glow
 # The action row (with "Wiederholen") stays inside a 1024 px wide window at
 # this size (checked by a test).
-BAR_FONT_PT = 19
+BAR_FONT_PT = 17
 BAR_PAD_X = 14
 ACTION_HEIGHT = 92  # as in the mockups
 
