@@ -78,6 +78,10 @@ class Settings:
     # loop start of the other loops, so it falls in without losing length. Off:
     # it begins at once.
     free_pad_on_grid: bool = False
+    # --- Markers (W4-MARKER) ---
+    # An exported single loop carries its markers as WAV cue points (or as a
+    # ``.markers.json`` next to it when the cue chunks cannot be written).
+    export_cue_points: bool = True
 
     @property
     def beats_per_bar(self) -> int:
@@ -209,6 +213,9 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
     # Free pad mode (W4-FREI).
     if "free_pad_on_grid" in raw:
         values["free_pad_on_grid"] = _check_bool(source, "free_pad_on_grid", raw["free_pad_on_grid"])
+    # Markers (W4-MARKER).
+    if "export_cue_points" in raw:
+        values["export_cue_points"] = _check_bool(source, "export_cue_points", raw["export_cue_points"])
     return Settings(**values)
 
 
@@ -286,6 +293,8 @@ SETTING_COMMENTS: dict[str, str] = {
                           "Obergrenze. Wirkt sofort.",
     "free_pad_on_grid": "true = ein Loop auf einem freien Pad beginnt am nächsten Loop-Anfang der anderen "
                         "Loops und behält seine eigene Länge, false = er beginnt sofort. Wirkt sofort.",
+    "export_cue_points": "true = ein einzeln gesicherter Loop bekommt seine Marker als Cue-Punkte in die "
+                         "WAV-Datei (oder als .markers.json daneben). Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 

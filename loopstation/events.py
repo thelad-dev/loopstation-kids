@@ -48,6 +48,12 @@ SESSION_START = "session_start"
 # change. A free pad that records while the session has no grid sets one:
 # ``master_set`` with ``source: "free_pad"`` (there is no second grid event).
 PAD_FREE = "pad_free"
+# Markers the parents set in the waveform: ``marker_set {pad, data: {sample,
+# rate, frames: [...]}}`` replaces the whole marker list of one sample (an empty
+# list removes them). Markers belong to the sample file, not to the pad, so undo,
+# redo and the history bring the right ones back. They are an annotation of the
+# parents and not on the undo stack. Logs without ``marker_set`` read as before.
+MARKER_SET = "marker_set"
 
 EVENT_TYPES = frozenset(
     {
@@ -65,6 +71,7 @@ EVENT_TYPES = frozenset(
         MASTER_SET,
         SESSION_START,
         PAD_FREE,
+        MARKER_SET,
     }
 )
 

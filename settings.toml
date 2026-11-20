@@ -129,3 +129,10 @@ metronome_level_db = -20
 # behält dabei seine eigene Länge und wird nie in den Takt geschnitten oder
 # gezogen. false = er beginnt sofort. Wirkt sofort.
 free_pad_on_grid = false
+
+# --- Marker (Erweitert) ---
+
+# true = ein einzeln gesicherter Loop bekommt seine Marker als Cue-Punkte in die
+# WAV-Datei. Klappt das nicht, liegt eine Begleitdatei (.markers.json) daneben;
+# das Sichern scheitert daran nie. Wirkt sofort.
+export_cue_points = true

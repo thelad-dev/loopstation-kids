@@ -21,7 +21,11 @@ the longest loop", which is written into the file's comment.
 
 from __future__ import annotations
 
+import json
+import logging
 import math
+import os
+import struct
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +39,8 @@ from loopstation.audio.sync import soften_seam
 
 if TYPE_CHECKING:
     from loopstation.controller import Controller
+
+log = logging.getLogger(__name__)
 
 # Bar counts offered by the dialog; any positive number works.
 BAR_CHOICES = (4, 8, 16, 32)
@@ -221,14 +227,150 @@ def export_sum(path: Path, spec: SumSpec) -> SumInfo:
     return info
 
 
-def export_loop(path: Path, data: np.ndarray, sample_rate: int, comment: str = "") -> None:
-    """Write one loop unchanged (no volume, no limiter) as a 24-bit WAV."""
+def export_loop(
+    path: Path,
+    data: np.ndarray,
+    sample_rate: int,
+    comment: str = "",
+    markers: Sequence[int] = (),
+) -> str | None:
+    """Write one loop unchanged (no volume, no limiter) as a 24-bit WAV.
+
+    With ``markers`` (frames) the loop also carries them: as WAV cue points,
+    and when those cannot be written or do not read back, as a ``.markers.json``
+    next to the file. The markers never make the export fail. Returns how they
+    were kept: ``"cue"``, ``"sidecar"``, or None (no markers, or neither worked).
+    """
     if len(data) == 0:
         raise ExportError(NOTHING_TEXT)
     try:
         write_wav(path, data, sample_rate, comment)
     except OSError as exc:
         raise ExportError(f"Die Datei lässt sich nicht schreiben: {exc}") from exc
+    frames = sorted({m for m in markers if 0 < m < len(data)})
+    return write_markers(path, frames, sample_rate, len(data)) if frames else None
+
+
+# ------------------------------------------------------------------ markers
+
+CUE_CHUNK, LIST_CHUNK, LABEL_CHUNK, ADTL = b"cue ", b"LIST", b"labl", b"adtl"
+
+
+def marker_name(index: int) -> str:
+    """Name of the ``index``-th marker (0 = "Marker A"), as the waveform shows it."""
+    return f"Marker {chr(ord('A') + index % 26)}"
+
+
+def _chunk(tag: bytes, payload: bytes) -> bytes:
+    """A RIFF chunk, padded to an even length (the pad byte is not in the size)."""
+    return tag + struct.pack("<I", len(payload)) + payload + (b"\0" if len(payload) % 2 else b"")
+
+
+def cue_chunks(frames: Sequence[int]) -> bytes:
+    """The ``cue `` chunk and a ``LIST adtl`` chunk with a ``labl`` per marker."""
+    points = b"".join(
+        struct.pack("<II4sIII", number, 0, b"data", 0, 0, frame)
+        for number, frame in enumerate(frames, 1)
+    )
+    labels = b"".join(
+        _chunk(LABEL_CHUNK, struct.pack("<I", number) + marker_name(number - 1).encode("ascii") + b"\0")
+        for number in range(1, len(frames) + 1)
+    )
+    return _chunk(CUE_CHUNK, struct.pack("<I", len(frames)) + points) + _chunk(LIST_CHUNK, ADTL + labels)
+
+
+def read_cue_points(raw: bytes) -> list[tuple[int, str]]:
+    """``(frame, label)`` of every cue point in WAV bytes, ``ValueError`` if the chunks are broken."""
+    if len(raw) < 12 or raw[:4] != b"RIFF" or raw[8:12] != b"WAVE":
+        raise ValueError("not a RIFF/WAVE file")
+    offsets: dict[int, int] = {}
+    labels: dict[int, str] = {}
+    position = 12
+    while position + 8 <= len(raw):
+        tag, size = raw[position : position + 4], struct.unpack_from("<I", raw, position + 4)[0]
+        body = raw[position + 8 : position + 8 + size]
+        if len(body) != size:
+            raise ValueError("chunk runs past the end of the file")
+        if tag == CUE_CHUNK:
+            (count,) = struct.unpack_from("<I", body, 0)
+            if size != 4 + 24 * count:
+                raise ValueError("cue chunk has the wrong size")
+            for i in range(count):
+                number, _, _, _, _, frame = struct.unpack_from("<II4sIII", body, 4 + 24 * i)
+                offsets[number] = frame
+        elif tag == LIST_CHUNK and body[:4] == ADTL:
+            inner = 4
+            while inner + 8 <= size:
+                sub, sub_size = body[inner : inner + 4], struct.unpack_from("<I", body, inner + 4)[0]
+                if sub == LABEL_CHUNK:
+                    number = struct.unpack_from("<I", body, inner + 8)[0]
+                    text = body[inner + 12 : inner + 8 + sub_size].split(b"\0")[0]
+                    labels[number] = text.decode("ascii", errors="replace")
+                inner += 8 + sub_size + sub_size % 2
+        position += 8 + size + size % 2
+    return [(frame, labels.get(number, "")) for number, frame in sorted(offsets.items())]
+
+
+def _add_cue_chunks(path: Path, frames: Sequence[int], expected_frames: int) -> None:
+    """Append cue chunks to the finished WAV at ``path``; the file is replaced only if it checks out.
+
+    The new file is read back (chunk structure and the audio frame count, by
+    ``soundfile``) before it takes the old one's place, so a failure here
+    leaves the plain WAV as it was.
+    """
+    raw = path.read_bytes()
+    if len(raw) < 12 or raw[:4] != b"RIFF" or raw[8:12] != b"WAVE":
+        raise ValueError("not a RIFF/WAVE file")
+    if len(raw) % 2:
+        raw += b"\0"
+    new = bytearray(raw + cue_chunks(frames))
+    struct.pack_into("<I", new, 4, len(new) - 8)
+    if [f for f, _ in read_cue_points(bytes(new))] != list(frames):
+        raise ValueError("cue points do not read back")
+    tmp = path.with_name(path.name + ".cue.tmp")
+    try:
+        tmp.write_bytes(bytes(new))
+        if soundfile.info(str(tmp)).frames != expected_frames:
+            raise ValueError("cue chunks changed the audio")
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def sidecar_path(path: Path) -> Path:
+    """The marker file that belongs to the WAV at ``path``."""
+    return path.with_suffix(".markers.json")
+
+
+def write_markers(path: Path, frames: Sequence[int], sample_rate: int, expected_frames: int) -> str | None:
+    """Keep ``frames`` with the WAV at ``path``: cue points, else a sidecar. Never raises.
+
+    WAV cue chunks are not read the same way everywhere, so the file is checked
+    after writing; if anything goes wrong the plain WAV stays and the markers go
+    to ``<name>.markers.json``. Returns ``"cue"``, ``"sidecar"`` or None.
+    """
+    try:
+        _add_cue_chunks(path, frames, expected_frames)
+        return "cue"
+    except Exception as exc:  # the export must never fail on this
+        log.warning("cue points for %s not written (%s); writing a sidecar", path.name, exc)
+    try:
+        side = sidecar_path(path)
+        tmp = side.with_name(side.name + ".tmp")
+        payload = {
+            "file": path.name,
+            "sample_rate": sample_rate,
+            "markers": [
+                {"label": marker_name(i), "frame": f, "seconds": round(f / sample_rate, 6)}
+                for i, f in enumerate(frames)
+            ],
+        }
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.replace(tmp, side)
+        return "sidecar"
+    except Exception as exc:
+        log.warning("marker sidecar for %s not written: %s", path.name, exc)
+        return None
 
 
 def repeats_per_bar(loop_frames: int, bar_frames: int) -> float:

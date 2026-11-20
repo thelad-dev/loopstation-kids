@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -439,6 +440,12 @@ class ExportDialog(QDialog):
         single_layout.addLayout(chips)
         self.loop_info = self._dim("", 13)
         single_layout.addWidget(self.loop_info)
+        self.cue_switch = ToggleSwitch()
+        self.cue_switch.setChecked(self.controller.settings.export_cue_points)
+        self.cue_switch.toggled.connect(self.set_cue_points)
+        single_layout.addLayout(self._switch_row(
+            self.cue_switch, "Marker als Cue-Punkte mitschreiben",
+            self._dim("sonst als Begleitdatei; das Sichern scheitert daran nie", 12)))
         self.loop_message = QLabel("")
         self.loop_message.setWordWrap(True)
         single_layout.addWidget(self.loop_message)
@@ -594,6 +601,12 @@ class ExportDialog(QDialog):
         self._say(self.sum_message, f"Gespeichert: {path}")
         return path
 
+    def set_cue_points(self, on: bool) -> None:
+        """Take the markers into the saved loop (until the settings file is saved with another value)."""
+        settings = self.controller.settings
+        if settings.export_cue_points != on:
+            self.controller.apply_settings(replace(settings, export_cue_points=on))
+
     def _loop_clicked(self) -> None:
         self.export_loop()
 
@@ -606,11 +619,15 @@ class ExportDialog(QDialog):
             self._say(self.loop_message, "Dieses Pad hat keine lesbare Aufnahme.", error=True)
             return None
         path = unique_path(self.export_dir, f"pad{pad + 1:02d}_{self._stamp()}.wav")
+        markers = self.controller.markers(pad) if self.controller.settings.export_cue_points else []
         try:
-            ex.export_loop(path, data, self.controller.sample_rate, f"Loopstation Pad {pad + 1}")
+            kept = ex.export_loop(
+                path, data, self.controller.sample_rate, f"Loopstation Pad {pad + 1}", markers)
         except ex.ExportError as exc:
             self._say(self.loop_message, str(exc), error=True)
             return None
         self.last_path = path
-        self._say(self.loop_message, f"Gespeichert: {path}")
+        note = {"cue": " (mit Markern als Cue-Punkten)",
+                "sidecar": " (Marker als Begleitdatei daneben)"}.get(kept or "", "")
+        self._say(self.loop_message, f"Gespeichert: {path}{note}")
         return path
