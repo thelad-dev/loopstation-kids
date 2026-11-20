@@ -11,7 +11,9 @@ on:
       - "packaging/windows/**"
       - "loopstation/installed.py"
       - "requirements.txt"
+      - "requirements-dev.txt"
       - "pyproject.toml"
+      - "settings.toml"
 
 permissions:
   contents: read
