@@ -213,7 +213,18 @@ def fsync_off(monkeypatch: pytest.MonkeyPatch) -> None:
 def qapp():
     from PySide6.QtWidgets import QApplication
 
-    return QApplication.instance() or QApplication([])
+    app = QApplication.instance() or QApplication([])
+    yield app
+    # Destroy every widget the tests left behind while the application still
+    # exists; otherwise they are torn down in arbitrary order at interpreter
+    # exit and the process aborts after a green run.
+    from PySide6.QtCore import QEvent
+
+    for widget in app.topLevelWidgets():
+        widget.close()
+        widget.deleteLater()
+    app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    app.processEvents()
 
 
 def make_settings(tmp_path: Path, **overrides: Any):
