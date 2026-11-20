@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -89,7 +90,10 @@ def test_windows_workflow_runs_the_consent_and_failure_paths():
     assert "/TASKS=rubberband" not in try_installer  # without consent nothing is downloaded
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+@pytest.mark.skipif(
+    sys.platform == "win32" or shutil.which("bash") is None,
+    reason="needs a real bash (on Windows bash is the WSL launcher stub)",
+)
 @pytest.mark.parametrize(
     ("args", "installs"),
     [([], False), (["--yes"], False), (["--no-rubberband"], False), (["--rubberband"], True)],
