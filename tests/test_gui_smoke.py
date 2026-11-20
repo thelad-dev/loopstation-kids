@@ -267,6 +267,10 @@ def test_badge_is_hidden_while_recording(window, clock):
     assert not any(p.badge for p in window.grid.pads)
 
 
+def test_the_whole_window_fits_a_1024_px_wide_screen(window):
+    assert window.minimumSizeHint().width() <= 1024
+
+
 def test_the_action_row_fits_a_1024_px_wide_window(window):
     """Zurück, Wiederholen, Alles still and Alle löschen stay inside 1024 px (margins 2 x 24, gaps 14)."""
     buttons = [window.undo_button, window.redo_button, window.stop_button, window.delete_all_button]
