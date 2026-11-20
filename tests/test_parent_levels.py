@@ -324,4 +324,4 @@ def test_a_damaged_file_is_not_overwritten_by_a_level_change(parts, dialog):
     path.write_text("max_level_db = kaputt\n", encoding="utf-8")
     dialog.panel.switches["auto_gain"].setChecked(True)
     assert path.read_text(encoding="utf-8") == "max_level_db = kaputt\n"
-    assert "kaputt" in dialog.message.text() or "max_level_db" in dialog.message.text()
+    assert "ungültiges TOML" in dialog.message.text()
