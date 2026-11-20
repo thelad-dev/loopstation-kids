@@ -14,7 +14,10 @@ from loopstation.gui.icons import draw_icon
 from loopstation.gui.widgets import ACCENT_GRAY, PAD_COLORS
 
 MIN_PAD_SIZE = 130  # widget size; the visible pad is about 115 px
-PULSE_HZ = 2.0  # how fast the frame of a waiting pad pulses
+# Waiting pad: one slow, soft swell (cosine, no hard edge, no blinking). Well below 1 Hz on
+# purpose: calm and predictable for children, nothing that flashes (plan 2.2 rule 7, mockup 03).
+WAIT_PULSE_HZ = 0.5
+WAIT_RING_ALPHA = (0.5, 0.3, 0.17)  # opacity of the three glow rings at the top of the swell
 SPARKLE_COLOR = QColor("#5AC8FA")  # new-session wave, visible on empty white pads
 
 
@@ -23,9 +26,9 @@ class PadButton(QAbstractButton):
 
     ``set_look`` only repaints when something visible changed, so the GUI can
     call it on every timer tick. A pad that waits for the next loop start
-    (``waiting`` = how far the loop has got, 0..1) is drawn dimmed with a
-    pulsing white frame and a bar that fills up until the loop starts again;
-    it repaints on every tick so the pulse keeps moving. ``sparkle`` (0..1)
+    (``waiting`` = how far the loop has got, 0..1) keeps its full colour and symbol,
+    gets a slowly swelling sky-blue glow and a bar that fills up until the loop starts
+    again; it repaints on every tick so the glow keeps moving. ``sparkle`` (0..1)
     lights the pad up sky blue for the wave that shows a new session. ``badge``
     puts a round grey "back" badge in the top right corner (the latest change
     of this pad can be taken back); its button ``badge_button`` has its own click.
@@ -167,8 +170,6 @@ class PadButton(QAbstractButton):
         # A free pad is round (mockup 04), the others are rounded squares.
         radius = rect.width() / 2 if self.free else rect.width() * 0.12
         base = QColor(PAD_COLORS[self.color])
-        if self.waiting is not None:
-            base = base.darker(165)  # not yet (or no longer) what the colour says
         lit = self.color in ("green", "red")
 
         # Soft glow around lit pads (playing or recording).
@@ -227,7 +228,7 @@ class PadButton(QAbstractButton):
             self._paint_level(painter, rect, inset)
         elif self.waiting is None and self.hold is not None:
             self._paint_hold(painter, rect, side)
-        elif self.waiting is None and (self.overlay or self.free):
+        elif self.overlay or self.free:
             icon = rect.width() * 0.36
             center = QPointF(rect.center())
             draw_icon(painter, self.overlay or "wave",
@@ -334,15 +335,17 @@ class PadButton(QAbstractButton):
 
     def _paint_waiting(self, painter: QPainter, rect: QRectF, radius: float, side: float,
                        inset: float) -> None:
-        """Pulsing frame plus a bar that is full when the next loop starts."""
-        pulse = 0.5 + 0.5 * math.cos(2 * math.pi * PULSE_HZ * time.monotonic())
-        frame = QColor("#FFFFFF")
-        frame.setAlpha(int(110 + 145 * pulse))
-        width = max(4.0, side * 0.045)
-        painter.setPen(QPen(frame, width))
+        """Soft sky-blue glow (slow cosine swell) plus a bar that is full when the next loop starts."""
+        pulse = 0.5 - 0.5 * math.cos(2 * math.pi * WAIT_PULSE_HZ * time.monotonic())  # 0..1, no kink
+        glow = side * 0.05
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        half = width / 2
-        painter.drawRoundedRect(rect.adjusted(half, half, -half, -half), radius, radius)
+        swell = 0.3 + 0.7 * pulse  # never fully dark, so the pad always shows that it waits
+        for i, weight in enumerate(WAIT_RING_ALPHA):  # inner ring first, fading outwards (mockup 03)
+            ring = QColor(SPARKLE_COLOR)
+            ring.setAlpha(round(255 * weight * swell))
+            grow = glow * (i + 1) / len(WAIT_RING_ALPHA)
+            painter.setPen(QPen(ring, glow / len(WAIT_RING_ALPHA) * 1.4))
+            painter.drawRoundedRect(rect.adjusted(-grow, -grow, grow, grow), radius + grow, radius + grow)
 
         bar_h = rect.height() * 0.11
         track = QRectF(rect.left() + inset, rect.bottom() - inset - bar_h,
@@ -352,5 +355,5 @@ class PadButton(QAbstractButton):
         painter.drawRoundedRect(track, bar_h / 2, bar_h / 2)
         filled = QRectF(track.left(), track.top(),
                         max(bar_h, track.width() * min(1.0, max(0.0, self.waiting))), bar_h)
-        painter.setBrush(QColor("#FFFFFF"))
+        painter.setBrush(SPARKLE_COLOR)  # sky blue as in mockup 03
         painter.drawRoundedRect(filled, bar_h / 2, bar_h / 2)

@@ -25,7 +25,6 @@ from loopstation.config import DEFAULT_CONFIG_NAME, Settings
 from loopstation.controller import Controller, Mode
 from loopstation.gui.advanced_page import AdvancedPage
 from loopstation.gui.changes_page import ChangesPage
-from loopstation.gui.confirm_dialog import ConfirmDialog
 from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
@@ -61,8 +60,6 @@ PAD_GAP = 8  # visible gap is larger: each pad keeps a margin for its glow
 BAR_FONT_PT = 16
 BAR_PAD_X = 10
 ACTION_HEIGHT = 92  # as in the mockups
-DELETE_ALL_FONT_PT = 11  # "Alle löschen" is a small tile next to the lock, not a big action
-DELETE_ALL_PAD_X = 8
 OUTER_MARGIN_X = 28  # window margins of the mockups
 OUTER_MARGIN_Y = 24
 BAR_GAP = 12  # gap between the buttons of the bottom row (mockups)
@@ -166,7 +163,6 @@ class MainWindow(QMainWindow):
         self._dialog_open = False
         self._settings_dialog: QDialog | None = None
         # Factories so tests can replace the modal dialogs.
-        self.confirm_factory: Callable[[QWidget], QDialog] = ConfirmDialog
         self.history_factory: Callable[[Controller, int, QWidget], QDialog] = HistoryDialog
         self.gate_factory: Callable[[QWidget], QDialog] = ParentGate
         self.settings_factory: Callable[..., QDialog] = SettingsDialog
@@ -216,8 +212,7 @@ class MainWindow(QMainWindow):
             pad.on_badge = weak_slot(self.undo_pad, pad.index)
 
         # Bottom row (mockup 01): Zurück, Wiederholen, Alles still, the pulse strip with the status
-        # line, and the lock tile. "Alle löschen" stays on the child page as a small tile next to
-        # the lock (its move to the parents' area is still undecided).
+        # line, and the lock tile. "Alle löschen" lives only in the parents' area (history page).
         self.undo_button = BigButton("undo", "Zurück", ACCENT_GRAY, font_pt=BAR_FONT_PT, pad_x=BAR_PAD_X,
                                      min_height=ACTION_HEIGHT)
         self.undo_button.clicked.connect(self.undo)
@@ -227,12 +222,6 @@ class MainWindow(QMainWindow):
         self.stop_button = BigButton("stop", "Alles still", ACCENT_GRAY, font_pt=BAR_FONT_PT, pad_x=BAR_PAD_X,
                                      min_height=ACTION_HEIGHT)
         self.stop_button.clicked.connect(self.stop_all)
-        self.delete_all_button = BigButton("trash", "Alle löschen", ACCENT_RED, stacked=True,
-                                           font_pt=DELETE_ALL_FONT_PT, pad_x=DELETE_ALL_PAD_X,
-                                           min_height=ACTION_HEIGHT)
-        self.delete_all_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self.delete_all_button.setFixedWidth(self.delete_all_button.sizeHint().width())
-        self.delete_all_button.clicked.connect(self.confirm_delete_all)
         self.pulse_strip = PulseStrip(controller.settings.beats_per_bar)
         self.status_label = self.pulse_strip.status_label  # small status text below the pulse dots
         # Way into the parents' area: a small dim tile, held to open.
@@ -247,7 +236,6 @@ class MainWindow(QMainWindow):
         actions.addWidget(self.redo_button, 236)
         actions.addWidget(self.stop_button, 236)
         actions.addWidget(self.pulse_strip, 380)
-        actions.addWidget(self.delete_all_button)
         actions.addWidget(self.parent_entry)
 
         layout = QVBoxLayout(self.frame)
@@ -320,17 +308,6 @@ class MainWindow(QMainWindow):
 
     def stop_all(self) -> None:
         self.controller.stop_all()
-
-    def confirm_delete_all(self) -> None:
-        dialog = self.confirm_factory(self)
-        self._dialog_open = True
-        try:
-            accepted = self._exec(dialog) == QDialog.DialogCode.Accepted
-        finally:
-            self._dialog_open = False
-        if accepted:
-            self.controller.delete_all()
-        self.refresh()
 
     def _history_requested(self, pad: int) -> None:
         # Open after the current press has been handled completely.
@@ -490,8 +467,9 @@ class MainWindow(QMainWindow):
             color = colors.get(pad.index, "white")
             sparkle = 0.0 if session is None else self._session_wave(pad.index, session)
             if pad.index in waiting:
-                # Waits for the next loop start: pulsing frame, filling bar, no text.
-                pad.set_look(color, None, None, 0.0, progress if progress is not None else 0.0, sparkle,
+                # Waits for the next loop start: full colour and symbol, slow glow, filling bar, no text.
+                pad.set_look(color, self._overlay(controller.mode, color, pad.index), None, 0.0,
+                             progress if progress is not None else 0.0, sparkle,
                              free=controller.is_free(pad.index))
             elif pad.index == controller.recording_pad and remaining is not None:
                 pad.set_look(color, None, remaining, min(1.0, remaining / limit), None, sparkle,

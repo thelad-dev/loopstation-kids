@@ -96,11 +96,11 @@ def world(qapp, tmp_path, clock):
 
 # --------------------------------------------------------------- 2. the child page stays thin
 
-# What the child may touch (plan 3 and mockups 01-07). "Alle löschen" is still on the child page:
-# mockup 12 moves it to the parents' area, which is a decision that waits for confirmation.
+# What the child may touch (plan 3 and mockups 01-07). "Alle löschen" is not among them: it lives
+# only in the parents' area (history page, mockup 12).
 CHILD_BUTTONS = {
     "Spielen", "Aufnehmen", "Loop", "Löschen", "Verlauf",
-    "Zurück", "Wiederholen", "Alles still", "Alle löschen",
+    "Zurück", "Wiederholen", "Alles still",
     "Eltern",  # the small lock tile (mockup 01)
     "\u21b6",  # the back badge of a pad (mockup 05)
 }
@@ -129,6 +129,8 @@ def test_the_child_page_has_only_the_allowed_controls(world):
     QTest.qWaitForWindowExposed(window)
     buttons = {b.text() for b in window.findChildren(QAbstractButton) if b.text()}
     assert buttons == CHILD_BUTTONS
+    assert "Alle löschen" not in buttons  # only in the parents' area (history page)
+    assert not hasattr(window, "delete_all_button")
     assert len(window.grid.pads) == 12
     # No form controls, no menus, no scrolling: those belong to the parents' pages.
     for kind in (QComboBox, QSpinBox, QLineEdit, QCheckBox, QAbstractScrollArea, QMenuBar):
@@ -198,12 +200,12 @@ def test_the_main_window_fits_1024_px(world):
     assert window.width() == MIN_WINDOW_WIDTH
     # Nothing cut off: every bar button is as wide as its word needs, all mode buttons equal.
     for button in [*window.mode_buttons.values(), window.undo_button, window.redo_button,
-                   window.stop_button, window.delete_all_button]:
+                   window.stop_button]:
         assert button.width() >= button.minimumSizeHint().width() - 1, button.text()
     widths = {b.width() for b in window.mode_buttons.values()}
     assert max(widths) - min(widths) <= 1, widths
     for widget in (*window.mode_buttons.values(), window.volume_slider, window.undo_button,
-                   window.redo_button, window.stop_button, window.delete_all_button):
+                   window.redo_button, window.stop_button):
         assert widget.mapTo(window, widget.rect().topLeft()).x() >= 0
         assert widget.mapTo(window, widget.rect().bottomRight()).x() <= MIN_WINDOW_WIDTH
 
@@ -356,7 +358,6 @@ APP_SCRIPT = textwrap.dedent(
             window.gate_factory = lambda parent: Gate(parent)
             window.settings_factory = every_area
             window.controller.press(0)
-            window.confirm_delete_all()
             window.open_history(0)
             for _ in range(2):
                 window.open_parent_area()

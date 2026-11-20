@@ -117,7 +117,7 @@ def test_the_strip_carries_the_status_text_and_the_word_puls(rig):
 def test_the_lock_tile_is_bottom_right_and_the_row_keeps_the_mockup_order(rig):
     window, *_ = rig
     row = [window.undo_button, window.redo_button, window.stop_button, window.pulse_strip,
-           window.delete_all_button, window.parent_entry]
+           window.parent_entry]
     xs = [w.mapTo(window, w.rect().topLeft()).x() for w in row]
     assert xs == sorted(xs)
     assert window.parent_entry.text() == "Eltern"
@@ -196,3 +196,69 @@ def test_many_versions_scroll_in_a_dark_bar_and_the_card_fits_1024(rig):
     assert "#17171B" in area.styleSheet()
     assert dialog.tile_labels[:4] == ["Jetzt", "Vorher", "Davor", "Früher"]
     dialog.close()
+
+
+# ------------------------------------------------------------------ waiting pad (mockup 03)
+
+
+def _waiting_pad(qapp, monkeypatch, now):
+    from loopstation.gui import pad_button
+    from loopstation.gui.pad_button import PadButton
+
+    monkeypatch.setattr(pad_button.time, "monotonic", lambda: now[0])
+    pad = PadButton(1)
+    pad.resize(200, 200)
+    pad.set_look("yellow", "loop", None, 0.0, waiting=0.5)
+    return pad
+
+
+def _glow_pixel(pad, now, at):
+    """One pixel of the glow ring just outside the pad, at time ``at``."""
+    now[0] = at
+    image = pad.grab().toImage()
+    rect = pad._pad_rect()
+    return image.pixelColor(round(rect.center().x()), round(rect.top()) - 4)
+
+
+def test_waiting_pad_keeps_its_full_colour_and_symbol(qapp, monkeypatch):
+    from PySide6.QtGui import QColor
+
+    from loopstation.gui.widgets import PAD_COLORS
+
+    now = [0.0]
+    pad = _waiting_pad(qapp, monkeypatch, now)
+    now[0] = 0.7
+    image = pad.grab().toImage()
+    rect = pad._pad_rect()
+    # Right of the symbol, in the middle of the gradient: the pad colour itself, not dimmed.
+    seen = image.pixelColor(round(rect.left() + rect.width() * 0.85), round(rect.center().y()))
+    want = QColor(PAD_COLORS["yellow"])
+    assert max(abs(seen.red() - want.red()), abs(seen.green() - want.green()),
+               abs(seen.blue() - want.blue())) <= 16  # a dimmed pad would be off by 80+
+    # The loop symbol is still drawn in the middle (darker ink over the yellow).
+    middle = image.pixelColor(round(rect.center().x()), round(rect.center().y()))
+    assert pad.overlay == "loop"
+    centre_ink = [image.pixelColor(round(rect.center().x() + dx), round(rect.center().y() + dy))
+                  for dx in range(-30, 31, 3) for dy in range(-30, 31, 3)]
+    assert any(c.value() < seen.value() - 20 for c in centre_ink + [middle])
+
+
+def test_waiting_pulse_is_slow_soft_and_periodic(qapp, monkeypatch):
+    from loopstation.gui.pad_button import WAIT_PULSE_HZ
+
+    assert 0 < WAIT_PULSE_HZ < 1  # calm and predictable, nothing that flashes
+    now = [0.0]
+    pad = _waiting_pad(qapp, monkeypatch, now)
+
+    def alpha_level(at):
+        c = _glow_pixel(pad, now, at)
+        return c.red() + c.green() + c.blue()
+
+    period = 1 / WAIT_PULSE_HZ
+    start = alpha_level(0.3)
+    assert abs(alpha_level(0.3 + 0.01) - start) <= 6  # steady between two near moments
+    assert alpha_level(0.3 + period) == start  # the same after one full period
+    levels = [alpha_level(period * k / 8) for k in range(8)]
+    assert max(levels) - min(levels) > 30  # it does swell
+    step = 0.4 * (max(levels) - min(levels))  # no jump from one eighth of a period to the next
+    assert all(abs(b - a) <= step for a, b in zip(levels, levels[1:], strict=False))

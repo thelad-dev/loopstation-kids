@@ -6,7 +6,6 @@ import pytest
 from conftest import FakeAudio, make_settings
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QDialog
 
 from loopstation.controller import Controller, Mode
 from loopstation.store import EventStore
@@ -93,26 +92,6 @@ def test_keyboard_shortcuts_reach_the_window(window, clock):
     assert window.controller.pad(3).sample is not None
     QTest.keyClick(window, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     assert window.controller.pad(3).sample is None
-
-
-def test_delete_all_asks_first(window, clock):
-    controller = window.controller
-    click(window.grid.pads[0])
-    clock.advance(1)
-    click(window.grid.pads[0])
-
-    class Answer(QDialog):
-        result_code = QDialog.DialogCode.Rejected
-
-        def exec(self):
-            return self.result_code
-
-    window.confirm_factory = lambda parent: Answer(parent)
-    click(window.delete_all_button)
-    assert controller.pad(0).sample is not None
-    Answer.result_code = QDialog.DialogCode.Accepted
-    click(window.delete_all_button)
-    assert controller.pad(0).sample is None
 
 
 def test_history_dialog_restores_a_version(window, clock, qapp):
@@ -272,8 +251,8 @@ def test_the_whole_window_fits_a_1024_px_wide_screen(window):
 
 
 def test_the_action_row_fits_a_1024_px_wide_window(window):
-    """Zurück, Wiederholen, Alles still and Alle löschen stay inside 1024 px (margins 2 x 24, gaps 14)."""
-    buttons = [window.undo_button, window.redo_button, window.stop_button, window.delete_all_button]
+    """Zurück, Wiederholen and Alles still stay inside 1024 px (margins 2 x 24, gaps 14)."""
+    buttons = [window.undo_button, window.redo_button, window.stop_button]
     needed = sum(b.minimumSizeHint().width() for b in buttons) + 14 * len(buttons) + 48
     assert needed <= 1024
     window.resize(1280, 800)

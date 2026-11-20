@@ -88,6 +88,7 @@ Was sich für Bestandsnutzer ändert:
 - **Takt aus Klatschen** (`auto_grid`) ist standardmäßig aus: die erste Aufnahme bestimmt den Takt wie bisher über ihre Länge.
 - **Standardmäßig an** sind die weiche Loop-Naht (`soft_seam`), das Strecken knapp neben dem Takt (`stretch_to_grid`) und die Pegelanzeige (`peak_meter`).
 - **Neuer Elternbereich** hinter der Kachel „Eltern“ unten rechts (zwei Sekunden halten, Rechenaufgabe), mit sieben Bereichen: Lautstärke & Pegel, Geräte & Audio, Takt & Loop (mit Eltern-Takt und Metronom), Verlauf & Undo, Erweitert (Wellenform, Marker), Sets sichern und öffnen, Export als WAV.
+- **„Alle löschen“ ist von der Kinderseite in den Elternbereich gewandert** (Verlauf & Undo, „Alle Pads löschen …“, mit Rückfrage; „Zurück“ holt alles wieder). Kinder können so nicht mehr versehentlich alles leeren.
 - **Auf der Kinderseite neu:** „Wiederholen“, das Zurück-Abzeichen am Pad, der freie Modus per langem Halten und das rote „zu laut“-Zeichen. Am Launchpad wirkt ein kurzer Tipp jetzt beim Loslassen.
 
 ### Zurück zur vorigen Version
@@ -144,7 +145,7 @@ Oben wählt man den Modus, unten gibt es vier Knöpfe:
 - **Zurück** (Strg+Z): macht die letzte Änderung rückgängig (Aufnahme, Löschen, Zurückholen), beliebig oft.
 - **Wiederholen** (Strg+Y oder Strg+Umschalt+Z): holt zurückgenommene Änderungen wieder; jede neue Änderung beendet diese Kette.
 - **Alles still**: stoppt alle Töne und Loops.
-- **Alle löschen**: leert alle Pads nach einer Ja/Nein-Frage; „Zurück“ holt alles wieder.
+- **Alle löschen** gibt es nicht auf der Kinderseite, sondern nur im Elternbereich unter „Verlauf & Undo“ („Alle Pads löschen …“): leert alle Pads nach einer Ja/Nein-Frage; „Zurück“ holt alles wieder.
 
 Ein zweiter Klick auf den aktiven Modus oder ESC führt zurück zu „Spielen“. Aufnahmen stoppen nach der eingestellten Höchstlänge von selbst.
 
@@ -181,7 +182,7 @@ In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergrö�
 
 ## Elternbereich
 
-Erwachsene erreichen den Elternbereich über die Kachel „Eltern“ unten rechts (zwei Sekunden gedrückt halten, dann eine Rechenaufgabe lösen). Die Kinderseite bleibt bewusst schlicht: Pads, Modi, Zurück und Wiederholen, Alles still, Alle löschen, Lautstärke, ein rotes Zeichen bei zu lauter Aufnahme und der Puls (ein Punkt je Schlag des Takts, der aktuelle leuchtet weich auf). Alles mit Zahlen und Fachbegriffen liegt im Elternbereich. Links stehen sieben Bereiche, oben links geht es „Zur Kinderseite“, oben rechts sitzt derselbe Lautstärke-Regler wie auf der Kinderseite:
+Erwachsene erreichen den Elternbereich über die Kachel „Eltern“ unten rechts (zwei Sekunden gedrückt halten, dann eine Rechenaufgabe lösen). Die Kinderseite bleibt bewusst schlicht: Pads, Modi, Zurück und Wiederholen, Alles still, Lautstärke, ein rotes Zeichen bei zu lauter Aufnahme und der Puls (ein Punkt je Schlag des Takts, der aktuelle leuchtet weich auf). Alles mit Zahlen und Fachbegriffen liegt im Elternbereich. Links stehen sieben Bereiche, oben links geht es „Zur Kinderseite“, oben rechts sitzt derselbe Lautstärke-Regler wie auf der Kinderseite:
 
 - **Lautstärke & Pegel:** Obergrenze, Peak-Limiter, Mikrofonpegel, automatischer Aufnahmepegel, weiche Naht, Pieptöne und die zuletzt zu lauten Aufnahmen.
 - **Geräte & Audio:** Mikrofon und Ausgabe getrennt (mit Testton), Audio-System, Verzögerung (automatisch oder von Hand) und unter „Allgemein“ Vollbild, Launchpad, Rastergröße, Abtastrate, Datenordner. Siehe [Plattformen und Audio](#plattformen-und-audio).

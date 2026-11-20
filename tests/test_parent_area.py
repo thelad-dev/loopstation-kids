@@ -114,8 +114,7 @@ def test_entry_is_small_dim_and_needs_a_hold(parts):
     assert HOLD_MS == 2000  # mockup 08: two seconds
     # It sits beside the buttons of the bottom row: it covers no mode button, pad or action button.
     box = entry.geometry()
-    for widget in [*win.mode_buttons.values(), *win.grid.pads, win.undo_button, win.stop_button,
-                   win.delete_all_button]:
+    for widget in [*win.mode_buttons.values(), *win.grid.pads, win.undo_button, win.stop_button]:
         top_left = widget.mapTo(win.frame, QPoint(0, 0))
         assert not box.intersects(widget.rect().translated(top_left))
     held = []
