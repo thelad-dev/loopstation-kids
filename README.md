@@ -79,14 +79,16 @@ Erneut aufrufen aktualisiert die Installation auf den Stand dieses Ordners; die 
 | Grün | spielt gerade oder läuft als Loop |
 | Rot | nimmt gerade auf (mit Countdown) |
 
-Oben wählt man den Modus, unten gibt es drei Knöpfe:
+Oben wählt man den Modus, unten gibt es vier Knöpfe:
 
 - **Spielen** (Standard): leeres Pad antippen startet eine Aufnahme, nochmal antippen stoppt sie. Ein gelbes Pad spielt einmal ab, ein grünes Pad wird gestoppt.
 - **Aufnehmen**: jedes angetippte Pad nimmt neu auf. Die alte Aufnahme bleibt im Verlauf.
 - **Loop**: gelbes Pad startet den Loop, grünes Pad stoppt ihn.
 - **Löschen**: das nächste angetippte Pad wird geleert, danach geht es zurück zu „Spielen“.
 - **Verlauf**: Pad antippen zeigt alle früheren Aufnahmen dieses Pads zum Anhören und Zurückholen.
+- **Zurück-Abzeichen am Pad** (graue Scheibe mit Pfeil oben rechts): nach einer Änderung an genau einem Pad erscheint es an diesem Pad. Antippen nimmt nur die letzte Änderung dieses Pads zurück.
 - **Zurück** (Strg+Z): macht die letzte Änderung rückgängig (Aufnahme, Löschen, Zurückholen), beliebig oft.
+- **Wiederholen** (Strg+Y oder Strg+Umschalt+Z): holt zurückgenommene Änderungen wieder; jede neue Änderung beendet diese Kette.
 - **Alles still**: stoppt alle Töne und Loops.
 - **Alle löschen**: leert alle Pads nach einer Ja/Nein-Frage; „Zurück“ holt alles wieder.
 

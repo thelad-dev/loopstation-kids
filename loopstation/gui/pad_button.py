@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Callable
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPaintEvent, QPen, QPolygonF
-from PySide6.QtWidgets import QAbstractButton, QWidget
+from PySide6.QtWidgets import QAbstractButton, QPushButton, QWidget
 
 from loopstation.gui.icons import draw_icon
-from loopstation.gui.widgets import PAD_COLORS
+from loopstation.gui.widgets import ACCENT_GRAY, PAD_COLORS
 
 MIN_PAD_SIZE = 130  # widget size; the visible pad is about 115 px
 PULSE_HZ = 2.0  # how fast the frame of a waiting pad pulses
@@ -25,7 +26,9 @@ class PadButton(QAbstractButton):
     (``waiting`` = how far the loop has got, 0..1) is drawn dimmed with a
     pulsing white frame and a bar that fills up until the loop starts again;
     it repaints on every tick so the pulse keeps moving. ``sparkle`` (0..1)
-    lights the pad up sky blue for the wave that shows a new session.
+    lights the pad up sky blue for the wave that shows a new session. ``badge``
+    puts a round grey "back" badge in the top right corner (the latest change
+    of this pad can be taken back); its button ``badge_button`` has its own click.
     """
 
     def __init__(self, index: int, parent: QWidget | None = None) -> None:
@@ -39,6 +42,11 @@ class PadButton(QAbstractButton):
         self.sparkle = 0.0  # new-session wave
         self.clip = False  # the microphone is too loud right now (recording pad)
         self.level = 0  # coarse input level 0..3 while recording
+        self.badge = False  # "back" badge: the latest change of this pad can be undone
+        # The badge is a child button that exists only while it is shown; a press
+        # on it never reaches the pad. ``on_badge`` is called when it is clicked.
+        self.badge_button: QPushButton | None = None
+        self.on_badge: Callable[[], None] | None = None
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setAccessibleName(f"Pad {index + 1}")
@@ -59,18 +67,84 @@ class PadButton(QAbstractButton):
         sparkle: float = 0.0,
         clip: bool = False,
         level: int = 0,
+        badge: bool = False,
     ) -> None:
         # The countdown only needs whole seconds and a bar with ~200 steps.
         shown_remaining = None if remaining is None else max(1, math.ceil(remaining))
         sparkle = round(sparkle, 2)
-        new = (color, overlay, shown_remaining, round(fraction, 3), waiting, sparkle, clip, level)
+        new = (color, overlay, shown_remaining, round(fraction, 3), waiting, sparkle, clip, level,
+               badge)
         old = (self.color, self.overlay, self.remaining, round(self.fraction, 3), self.waiting,
-               self.sparkle, self.clip, self.level)
+               self.sparkle, self.clip, self.level, self.badge)
         if new == old and waiting is None:
+            self._sync_badge()
             return
         self.color, self.overlay, self.remaining, self.fraction = color, overlay, shown_remaining, fraction
         self.waiting, self.sparkle, self.clip, self.level = waiting, sparkle, clip, level
+        self.badge = badge
+        self._sync_badge()
         self.update()
+
+    def _sync_badge(self) -> None:
+        if self._badge_visible() and self.badge_button is None:
+            self.badge_button = self._make_badge_button()
+            self.layout_badge()
+            self.badge_button.show()
+        elif not self._badge_visible() and self.badge_button is not None:
+            self.badge_button.hide()
+            self.badge_button.deleteLater()
+            self.badge_button = None
+
+    def _badge_clicked(self) -> None:
+        if self.on_badge is not None:
+            self.on_badge()
+
+    def _make_badge_button(self) -> QPushButton:
+        button = QPushButton(self)
+        button.clicked.connect(self._badge_clicked)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.setAccessibleName(f"Pad {self.index + 1} zurück")
+        button.setText("\u21b6")
+        return button
+
+    def _badge_visible(self) -> bool:
+        return self.badge and self.remaining is None and self.waiting is None
+
+    def _pad_rect(self) -> QRectF:
+        side = min(self.width(), self.height())
+        outer = QRectF((self.width() - side) / 2, (self.height() - side) / 2, side, side)
+        glow = side * 0.05
+        return outer.adjusted(glow, glow, -glow, -glow)
+
+    def _badge_circle(self) -> tuple[QPointF, float]:
+        """Centre and radius of the badge, in the corner of the visible pad."""
+        rect = self._pad_rect()
+        center = QPointF(rect.right() - rect.width() * 0.17, rect.top() + rect.height() * 0.17)
+        return center, rect.width() * 0.135
+
+    def layout_badge(self) -> None:
+        """Place the badge in the corner of the visible pad (call after every resize).
+
+        The badge is a plain child button, so a press on it never reaches the
+        pad; its disc and arrow are drawn through a style sheet and an icon.
+        """
+        if self.badge_button is None:
+            return
+        center, radius = self._badge_circle()
+        reach = round(radius * 1.35)  # the touch target is a little larger than the drawn disc
+        self.badge_button.setGeometry(round(center.x()) - reach, round(center.y()) - reach,
+                                      2 * reach, 2 * reach)
+        disc = round(radius)
+        self.badge_button.setStyleSheet(
+            f"QPushButton {{ background: {ACCENT_GRAY.name()}; border: 3px solid #FFFFFF;"
+            f" border-radius: {disc}px; color: #111114; margin: {reach - disc}px; padding: 0; }}"
+            f"QPushButton:pressed {{ background: #7C7C82; }}")
+        size = round(radius * 1.35)
+        font = self.badge_button.font()
+        font.setPixelSize(size)
+        font.setBold(True)
+        self.badge_button.setFont(font)
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)

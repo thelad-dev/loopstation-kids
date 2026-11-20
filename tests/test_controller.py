@@ -296,3 +296,110 @@ def test_null_audio_lights_pads_for_the_sample_length(tmp_path, clock):
     clock.advance(2.1)
     assert controller.pad_colors()[0] == "yellow"
     store.close()
+
+
+# ------------------------------------------------------- undo per pad and redo
+
+
+def test_pad_undo_takes_back_only_that_pad(tmp_path, clock):
+    controller, audio = build(tmp_path, clock)
+    record(controller, clock, 0)
+    record(controller, clock, 1)
+    record(controller, clock, 2)
+    first = controller.pad(0).sample
+    controller.set_mode(Mode.LOOP)
+    controller.press(0)  # pad 0 loops
+    assert controller.can_undo(0) and controller.can_undo(5) is False
+    assert controller.last_change_pad() == 2
+    controller.undo(0)
+    assert controller.pad(0).sample is None
+    assert controller.pad(1).sample is not None and controller.pad(2).sample is not None
+    assert 0 not in audio.voices and not controller.pad(0).looping
+    last = json.loads(controller.store.log_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert last["type"] == "undo" and last["pad"] == 0
+    assert controller.pad(0).history == [first]
+
+    controller.undo()  # global: the newest change anywhere, nothing twice
+    assert controller.pad(2).sample is None and controller.pad(1).sample is not None
+    controller.undo()
+    assert not controller.can_undo()
+
+
+def test_pad_undo_of_a_pad_without_changes_says_so(tmp_path, clock):
+    controller, _ = build(tmp_path, clock)
+    record(controller, clock, 0)
+    before = event_types(controller)
+    controller.undo(4)
+    assert controller.notice() == "Hier gibt es nichts zum Zurücknehmen"
+    assert event_types(controller) == before
+    assert controller.last_change_pad() == 0
+    record(controller, clock, 1)
+    controller.delete_all()
+    assert controller.last_change_pad() is None  # many pads: no single pad
+
+
+def test_redo_buttons_state_and_effect(tmp_path, clock):
+    controller, audio = build(tmp_path, clock)
+    assert not controller.can_redo()
+    record(controller, clock, 0)
+    record(controller, clock, 1)
+    assert not controller.can_redo()
+    controller.undo()
+    assert controller.can_redo() and controller.can_redo(1) and not controller.can_redo(0)
+    controller.redo()
+    assert controller.pad(1).sample is not None and not controller.can_redo()
+    controller.redo()  # nothing left: no event, a short hint
+    assert controller.notice() == "Nichts zum Wiederholen"
+    assert event_types(controller)[-1] == "redo"
+    controller.undo()
+    record(controller, clock, 3)  # a new change ends the redo chain
+    assert not controller.can_redo()
+    assert audio.voices == {}
+
+
+def test_redo_is_not_possible_while_recording(tmp_path, clock):
+    controller, _ = build(tmp_path, clock)
+    record(controller, clock, 0)
+    controller.undo()
+    controller.press(1)  # recording
+    assert controller.recording_pad == 1 and not controller.can_redo()
+    controller.redo()
+    assert controller.recording_pad == 1 and controller.pad(0).sample is None
+    assert event_types(controller)[-1] == "record_start"
+
+
+def test_undo_during_a_recording_behaves_as_before(tmp_path, clock):
+    controller, _ = build(tmp_path, clock)
+    record(controller, clock, 0)
+    controller.press(1)
+    clock.advance(1)
+    controller.undo()  # stops the recording, then takes it back
+    assert controller.recording_pad is None and controller.pad(1).sample is None
+    assert controller.pad(0).sample is not None
+    assert controller.can_redo()
+
+
+def test_redo_into_an_empty_session_sets_the_loop_length_again(tmp_path, clock):
+    controller, _ = build(tmp_path, clock)
+    record(controller, clock, 0, 1.0)
+    controller.undo()
+    assert controller.store.state.master is None
+    assert event_types(controller)[-1] == "session_start"
+    controller.redo()
+    assert controller.pad(0).sample is not None
+    assert controller.store.state.master == {"frames": 8000, "rate": 8000}
+    controller.undo()  # taken back again: a new session
+    assert controller.store.state.master is None
+
+
+def test_pad_undo_into_empty_session_logs_session_start(tmp_path, clock):
+    controller, _ = build(tmp_path, clock)
+    record(controller, clock, 0, 1.0)
+    record(controller, clock, 1, 1.0)
+    controller.undo(0)
+    assert event_types(controller)[-1] == "undo"
+    controller.undo(1)
+    assert event_types(controller)[-2:] == ["undo", "session_start"]
+    controller.redo(1)  # brought back into an empty session: sets the grid again
+    assert controller.store.state.master == {"frames": 8000, "rate": 8000}
+    assert controller.pad(1).sample is not None and controller.pad(0).sample is None

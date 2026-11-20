@@ -21,7 +21,12 @@ LOOP_ON = "loop_on"
 LOOP_OFF = "loop_off"
 DELETE_PAD = "delete_pad"
 DELETE_ALL = "delete_all"
+# ``undo {data: {target}}`` takes back the top of the undo stack; with a
+# ``pad`` it takes back the latest change of just that pad. ``redo`` brings an
+# undone change back (a ``pad`` works the same way). Logs without ``redo`` and
+# without a pad on ``undo`` read as before.
 UNDO = "undo"
+REDO = "redo"
 RESTORE_PAD = "restore_pad"
 SNAPSHOT = "snapshot"
 # Loop grid: ``master_set {data: {frames, rate}}`` records the loop length
@@ -41,6 +46,7 @@ EVENT_TYPES = frozenset(
         DELETE_PAD,
         DELETE_ALL,
         UNDO,
+        REDO,
         RESTORE_PAD,
         SNAPSHOT,
         MASTER_SET,

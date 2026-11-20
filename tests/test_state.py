@@ -318,3 +318,309 @@ def test_old_logs_without_grid_fields_replay_unchanged():
     assert state.master is None
     assert samples(state)[0] is None and samples(state)[1] is None
     assert state.pads[1].history == ["b.wav"]
+
+
+# ---------------------------------------------------------------- undo per pad and redo
+
+
+def pad_undo(log: Log, pad: int) -> ev.Event:
+    entry = next(e for e in reversed(log.state.undo_stack) if pad in e["pads"])
+    return log.add(ev.UNDO, pad, target=entry["seq"])
+
+
+def redo(log: Log, pad: int | None = None) -> ev.Event:
+    stack = log.state.redo_stack
+    entry = stack[-1] if pad is None else next(e for e in reversed(stack) if pad in e["pads"])
+    return log.add(ev.REDO, pad, target=entry["seq"])
+
+
+def test_pad_undo_takes_back_that_pad_even_after_other_pads_changed():
+    log = Log()
+    log.record(0, "a.wav")
+    log.record(1, "b.wav")
+    log.record(2, "c.wav")
+    pad_undo(log, 0)
+    assert samples(log.state) == {**{i: None for i in range(12)}, 1: "b.wav", 2: "c.wav"}
+    assert [e["pads"] for e in log.state.undo_stack] == [{1: None}, {2: None}]
+    # The global undo neither repeats the pad undo nor loses a step.
+    log.undo()
+    assert samples(log.state)[2] is None and samples(log.state)[1] == "b.wav"
+    log.undo()
+    assert samples(log.state)[1] is None
+    assert log.state.undo_stack == []
+    assert log.state.pads[0].history == ["a.wav"]
+
+
+def test_pad_undo_walks_back_through_the_versions_of_one_pad():
+    log = Log()
+    log.record(3, "v1.wav")
+    log.record(4, "other.wav")
+    log.record(3, "v2.wav")
+    pad_undo(log, 3)
+    assert log.state.pads[3].sample == "v1.wav"
+    pad_undo(log, 3)
+    assert log.state.pads[3].sample is None
+    assert log.state.pads[4].sample == "other.wav"
+
+
+def test_pad_undo_stops_the_loop_of_a_pad_whose_sound_goes():
+    log = Log()
+    log.record(0, "a.wav")
+    log.add(ev.LOOP_ON, 0)
+    pad_undo(log, 0)
+    assert not log.state.pads[0].looping
+
+
+def test_pad_undo_after_delete_all_restores_only_that_pad():
+    log = Log()
+    log.record(0, "a.wav")
+    log.record(1, "b.wav")
+    log.add(ev.DELETE_ALL)
+    pad_undo(log, 1)
+    assert samples(log.state)[1] == "b.wav" and samples(log.state)[0] is None
+    # The rest of delete_all is still on the stack, on top.
+    assert log.state.undo_stack[-1]["pads"] == {0: "a.wav"}
+    log.undo()
+    assert samples(log.state)[0] == "a.wav" and samples(log.state)[1] == "b.wav"
+    log.undo()  # the second recording
+    assert samples(log.state)[1] is None and samples(log.state)[0] == "a.wav"
+
+
+def test_pad_undo_and_global_undo_in_any_order_lose_nothing():
+    log = Log()
+    log.record(0, "a.wav")
+    log.record(1, "b.wav")
+    log.add(ev.DELETE_ALL)
+    log.undo()  # delete_all taken back as a whole
+    pad_undo(log, 0)
+    log.undo()
+    assert all(s is None for s in samples(log.state).values())
+    assert log.state.undo_stack == []
+
+
+def test_pad_undo_without_a_matching_entry_or_with_wrong_target_is_ignored():
+    log = Log()
+    log.record(0, "a.wav")
+    log.record(1, "b.wav")
+    before = log.state.to_dict()
+    log.add(ev.UNDO, 5, target=2)  # pad 5 never changed
+    log.add(ev.UNDO, 0, target=log.state.undo_stack[-1]["seq"])  # not the latest of pad 0
+    log.add(ev.UNDO, 0)  # a pad but no target: the latest entry of the pad
+    assert samples(log.state)[0] is None
+    assert before["undo_stack"][1:] == log.state.to_dict()["undo_stack"]
+    # Without a pad the target must name the top entry, as before.
+    log.add(ev.UNDO, None)
+    log.add(ev.UNDO, None, target=1)
+    assert samples(log.state)[1] == "b.wav"
+
+
+def test_pad_undo_restores_the_grid_only_for_the_event_that_set_it():
+    log = Log()
+    log.record(0, "a.wav")
+    log.add(ev.MASTER_SET, None, **MASTER)
+    log.record(1, "b.wav")
+    pad_undo(log, 1)
+    assert log.state.master == MASTER  # recording b never changed the grid
+
+    log.add(ev.DELETE_PAD, 0)  # the last sound goes: this event clears the grid
+    log.add(ev.SESSION_START)
+    assert log.state.master is None
+    pad_undo(log, 0)
+    assert samples(log.state)[0] == "a.wav" and log.state.master == MASTER
+
+
+def test_pad_undo_never_replaces_a_grid_that_exists_now():
+    log = Log()
+    log.record(0, "a.wav")
+    log.add(ev.MASTER_SET, None, **MASTER)
+    log.add(ev.DELETE_ALL)  # carries the old grid
+    log.add(ev.SESSION_START)
+    log.record(1, "b.wav")
+    log.add(ev.MASTER_SET, None, frames=6000, rate=8000)
+    pad_undo(log, 0)
+    assert samples(log.state)[0] == "a.wav"
+    assert log.state.master == {"frames": 6000, "rate": 8000}
+
+
+def test_pad_undo_of_delete_all_brings_the_grid_back_once():
+    log = Log()
+    log.record(0, "a.wav")
+    log.record(1, "b.wav")
+    log.add(ev.MASTER_SET, None, **MASTER)
+    log.add(ev.DELETE_ALL)
+    log.add(ev.SESSION_START)
+    pad_undo(log, 1)
+    assert log.state.master == MASTER
+    assert "master" not in log.state.undo_stack[-1]  # the grid is not restored twice
+    log.undo()
+    assert samples(log.state)[0] == "a.wav" and log.state.master == MASTER
+
+
+def test_redo_brings_back_what_undo_took():
+    log = Log()
+    log.record(0, "a.wav")
+    log.record(1, "b.wav")
+    log.undo()
+    assert samples(log.state)[1] is None
+    assert [e["pads"] for e in log.state.redo_stack] == [{1: "b.wav"}]
+    redo(log)
+    assert samples(log.state)[1] == "b.wav"
+    assert log.state.redo_stack == []
+    log.undo()  # and the redone step can be undone again
+    assert samples(log.state)[1] is None
+    redo(log)
+    log.undo()
+    log.undo()
+    redo(log)
+    redo(log)
+    assert samples(log.state)[0] == "a.wav" and samples(log.state)[1] == "b.wav"
+
+
+def test_every_new_content_change_clears_redo():
+    for change in (
+        lambda log: log.record(5, "x.wav"),
+        lambda log: log.add(ev.DELETE_PAD, 0),
+        lambda log: log.add(ev.DELETE_ALL),
+        lambda log: log.add(ev.RESTORE_PAD, 1, sample="c.wav"),
+    ):
+        log = Log()
+        log.record(0, "a.wav")
+        log.record(1, "b.wav")
+        log.record(1, "c.wav")
+        log.undo()
+        assert log.state.redo_stack
+        change(log)
+        assert log.state.redo_stack == [], change
+
+
+def test_playback_and_empty_changes_keep_redo():
+    log = Log()
+    log.record(0, "a.wav")
+    log.undo()
+    log.add(ev.PLAY, 0)
+    log.add(ev.LOOP_ON, 0)
+    log.add(ev.LOOP_OFF, 0)
+    log.add(ev.RECORD_START, 1, stamp=3)
+    log.add(ev.DELETE_PAD, 7)  # empty pad: no content change
+    assert len(log.state.redo_stack) == 1
+    redo(log)
+    assert samples(log.state)[0] == "a.wav"
+
+
+def test_pad_redo_and_global_redo():
+    log = Log()
+    log.record(0, "a.wav")
+    log.record(1, "b.wav")
+    pad_undo(log, 0)
+    pad_undo(log, 1)
+    redo(log, pad=0)
+    assert samples(log.state)[0] == "a.wav" and samples(log.state)[1] is None
+    assert [e["pads"] for e in log.state.redo_stack] == [{1: "b.wav"}]
+    redo(log)
+    assert samples(log.state)[1] == "b.wav"
+    assert [e["pads"] for e in log.state.undo_stack][-2:] == [{0: None}, {1: None}]
+    # A pad redo with a wrong target or without anything to redo is ignored.
+    before = log.state.to_dict()
+    log.add(ev.REDO, 0, target=999)
+    log.add(ev.REDO, 3)
+    log.add(ev.REDO, None, target=1)
+    assert {**log.state.to_dict(), "last_seq": 0} == {**before, "last_seq": 0}
+
+
+def test_redo_after_pad_undo_of_a_delete_all_entry():
+    log = Log()
+    log.record(0, "a.wav")
+    log.record(1, "b.wav")
+    log.add(ev.DELETE_ALL)
+    pad_undo(log, 1)
+    redo(log, pad=1)
+    assert samples(log.state)[1] is None and samples(log.state)[0] is None
+    log.undo()  # the pad redo itself
+    assert samples(log.state)[1] == "b.wav"
+    log.undo()  # what is left of delete_all
+    assert samples(log.state)[0] == "a.wav"
+
+
+def test_redo_of_an_undone_delete_all_restores_the_grid_state():
+    log = Log()
+    log.record(0, "a.wav")
+    log.add(ev.MASTER_SET, None, **MASTER)
+    log.add(ev.DELETE_ALL)
+    log.add(ev.SESSION_START)
+    log.undo()
+    assert log.state.master == MASTER
+    redo(log)
+    assert samples(log.state)[0] is None and log.state.master is None
+    log.undo()  # the redo can be undone: sound and grid are back
+    assert samples(log.state)[0] == "a.wav" and log.state.master == MASTER
+
+
+def test_redo_stack_is_capped():
+    log = Log()
+    for _ in range(UNDO_LIMIT + 5):
+        log.record(0, "x.wav")
+    for _ in range(UNDO_LIMIT):
+        log.undo()
+    assert len(log.state.redo_stack) == UNDO_LIMIT
+
+
+def test_state_after_live_apply_equals_replay_across_snapshots():
+    log = Log()
+    log.record(0, "a.wav")
+    log.add(ev.MASTER_SET, None, **MASTER)
+    log.record(1, "b.wav")
+    log.add(ev.DELETE_ALL)
+    log.snapshot()
+    pad_undo(log, 1)
+    log.snapshot()  # a snapshot with a non-empty redo stack in the middle
+    assert log.state.redo_stack
+    redo(log, pad=1)
+    log.undo()
+    log.undo()
+    log.snapshot()
+    redo(log)
+    pad_undo(log, 0)
+    redo(log, pad=0)
+    live = log.state.to_dict()
+    assert replay(log.events, log.pad_count).to_dict() == live
+    for start, event in enumerate(log.events):
+        if event.type == ev.SNAPSHOT:
+            assert replay(log.events[start:], log.pad_count).to_dict()["undo_stack"] == live["undo_stack"]
+            assert replay(log.events[start:], log.pad_count).to_dict() == live
+
+
+def test_redo_stack_survives_snapshot_and_json():
+    log = Log()
+    log.record(0, "a.wav")
+    log.add(ev.MASTER_SET, None, **MASTER)
+    log.add(ev.DELETE_ALL)
+    log.undo()
+    raw = json.loads(json.dumps(log.state.to_dict()))
+    again = AppState.from_dict(raw)
+    assert again == log.state
+    assert again.redo_stack == log.state.redo_stack and again.redo_stack
+
+
+def test_old_snapshot_without_redo_stack_and_old_undo_events_replay_unchanged():
+    old_snapshot = {
+        "pads": {"0": {"sample": "a.wav", "looping": False, "history": ["a.wav"]}},
+        "undo_stack": [{"seq": 2, "pads": {"0": None}}],
+        "last_seq": 2,
+    }
+    state = AppState.from_dict(old_snapshot)
+    assert state.redo_stack == []
+    lines = [
+        {"seq": 3, "ts": "t", "type": "snapshot", "pad": None, "data": {"state": old_snapshot}},
+        {"seq": 4, "ts": "t", "type": "undo", "pad": None, "data": {"target": 2}},
+    ]
+    replayed = replay([ev.Event.from_json(json.dumps(line)) for line in lines], 12)
+    assert samples(replayed)[0] is None
+    # Only the redo stack is new; the undo entries keep their old shape.
+    assert replayed.undo_stack == []
+    assert [e["pads"] for e in replayed.redo_stack] == [{0: "a.wav"}]
+
+
+def test_redo_is_a_known_event_type_and_pad_undo_is_not():
+    line = '{"seq":1,"ts":"t","type":"redo","pad":2,"data":{"target":9}}'
+    assert ev.Event.from_json(line).type == ev.REDO
+    assert "pad_undo" not in ev.EVENT_TYPES
