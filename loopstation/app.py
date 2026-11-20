@@ -83,8 +83,13 @@ def run(settings: Settings, config_path: Path | None = None) -> int:
         return fail("Die Loopstation läuft schon.")
     try:
         notices: list[str] = []
+        retry: tuple[list[str], list[str]] | None = None
         while True:
-            recover_swap(settings.data_dir)
+            finished = recover_swap(settings.data_dir)
+            if retry is not None:
+                done_notes, failed_notes = retry
+                notices = done_notes if finished else failed_notes
+                retry = None
             outcome = _run_session(app, settings, config_path, notices, fail)
             if isinstance(outcome, int):
                 return outcome
@@ -92,8 +97,12 @@ def run(settings: Settings, config_path: Path | None = None) -> int:
                 commit_open(settings.data_dir, outcome)
                 notices = list(outcome.notes)
             except (SetError, OSError) as exc:
-                # recover_swap at the top of the loop puts the session back in order.
-                notices = [f"Das Set konnte nicht geöffnet werden: {exc}"]
+                # recover_swap at the top of the loop puts the session back in
+                # order; if it rolls the swap forward, the set did open.
+                retry = (
+                    list(outcome.notes),
+                    [f"Das Set konnte nicht geöffnet werden: {exc}"],
+                )
     finally:
         guard.unlock()
 
