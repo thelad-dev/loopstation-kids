@@ -117,7 +117,7 @@ Die Launchpad-Anbindung ist bisher nur mit nachgebauten MIDI-Ports getestet, noc
 
 In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne, Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Lautstärke (`volume`) mit Obergrenze (`max_level_db`), Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`), Pegelanzeige der Aufnahme für Eltern (`peak_meter`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), Datenordner. Fehlt die Datei, gelten die Standardwerte.
 
-Erwachsene erreichen die Einstellungsseite über das kleine Schloss unten rechts (zwei Sekunden gedrückt halten, dann eine Rechenaufgabe lösen). Die Seite schreibt die `settings.toml` mit allen Kommentaren und übernimmt Pieptöne, Loop-Sync, Aufnahmelänge, Latenz, Launchpad und Vollbild sofort; Rastergröße, Abtastrate und Datenordner wirken erst nach einem Neustart.
+Erwachsene erreichen die Einstellungsseite über das kleine Schloss unten rechts (zwei Sekunden gedrückt halten, dann eine Rechenaufgabe lösen). Die Seite schreibt die `settings.toml` mit allen Kommentaren und übernimmt Pieptöne, Loop-Sync, Aufnahmelänge, Latenz, Launchpad und Vollbild sofort. Oben rechts sitzt der Lautstärke-Regler, darunter der Abschnitt für Pegel (Obergrenze, Mikrofonpegel, Schalter, Pegelanzeige und die zuletzt zu lauten Aufnahmen); diese Regler wirken sofort und werden sofort in die `settings.toml` geschrieben, ohne „Speichern“. Die Pegelanzeige (`peak_meter`) ist standardmäßig an; Rastergröße, Abtastrate und Datenordner wirken erst nach einem Neustart.
 
 ## Export
 
@@ -129,6 +129,7 @@ Nur im Elternbereich (Knopf „Export“ unten auf der Einstellungsseite), lokal
 ## Daten
 
 - `samples/pad_<Pad>_<Zeitstempel>.wav`: jede Aufnahme als eigene WAV-Datei. Dateien werden nie automatisch gelöscht, damit „Zurück“ und der Verlauf immer funktionieren.
+- `data/clips.jsonl`: die letzten 50 zu lauten Aufnahmen (Pad, Spitzenpegel, ob das Mikrofon übersteuert hat) für den Elternbereich. Die Datei bleibt auf diesem Rechner und darf jederzeit gelöscht werden.
 - `data/events.jsonl`: das Ereignis-Protokoll, eine Zeile pro Aktion. Die Loop-Länge steht darin als `master_set` (Länge in Samples und Abtastrate), der Beginn einer neuen Runde als `session_start`. Protokolle aus älteren Versionen ohne diese Ereignisse werden weiter gelesen. Der aktuelle Zustand entsteht beim Start durch Nachspielen dieser Ereignisse. Alle 100 Ereignisse wird ein Schnappschuss des ganzen Zustands geschrieben; das aktive Protokoll hat höchstens 2000 Zeilen, ältere Abschnitte wandern nach `data/archive/`.
 - Jedes Ereignis wird sofort auf die Platte geschrieben. Nach einem Absturz startet die Loopstation mit dem letzten Stand, nichts spielt von selbst los.
 
@@ -142,4 +143,4 @@ ruff check .
 
 Die Tests brauchen weder Audiogerät noch Launchpad (Audio, MIDI und Uhr werden nachgebaut, die Oberfläche läuft mit `QT_QPA_PLATFORM=offscreen`).
 
-Aufbau: `loopstation/store.py` (Ereignis-Protokoll), `state.py` (Zustand und Nachspielen), `controller.py` (Bedienlogik ohne Qt), `audio/` (Aufnahme und Wiedergabe, `audio/sync.py` rechnet das Loop-Raster), `midi/` (Launchpad), `gui/` (Oberfläche), `installed.py` (Start der installierten App mit Datenordner im Benutzerprofil), `packaging/windows/` (PyInstaller-Spec, Inno-Setup-Skript, App-Symbol).
+Aufbau: `loopstation/store.py` (Ereignis-Protokoll), `state.py` (Zustand und Nachspielen), `controller.py` (Bedienlogik ohne Qt), `audio/` (Aufnahme und Wiedergabe, `audio/sync.py` rechnet das Loop-Raster), `midi/` (Launchpad), `clips.py` (Merkzettel zu lauter Aufnahmen), `gui/` (Oberfläche), `installed.py` (Start der installierten App mit Datenordner im Benutzerprofil), `packaging/windows/` (PyInstaller-Spec, Inno-Setup-Skript, App-Symbol).

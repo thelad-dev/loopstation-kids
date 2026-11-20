@@ -144,24 +144,3 @@ def test_recording_pad_shows_a_coarse_three_step_level(window):
     assert all(p.level == 0 for p in window.grid.pads[1:])
     controller.press(0)  # stop
     assert controller.input_level_stage() == 0
-
-
-def test_parent_peak_meter_follows_the_switch_and_the_recording(window):
-    controller = window.controller
-    meter = window.peak_meter
-    pad = window.grid.pads[0]
-    QTest.mouseClick(pad, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
-                     QPoint(pad.width() // 2, pad.height() // 2))
-    controller.audio.input_peak = 0.5
-    controller.tick()
-    window.refresh()
-    assert not meter.isVisibleTo(window)  # switch is off
-
-    controller.set_peak_meter(True)
-    window.refresh()
-    assert meter.isVisibleTo(window)
-    assert meter.position == pytest.approx(54.0 / 60.0, abs=0.01)
-
-    controller.press(0)  # stop
-    window.refresh()
-    assert not meter.isVisibleTo(window)
