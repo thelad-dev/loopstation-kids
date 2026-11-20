@@ -7,6 +7,7 @@ the controller and redraw when it notifies them.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -21,11 +22,12 @@ from loopstation import events as ev
 from loopstation.audio.base import PREVIEW_VOICE, AudioBackend
 from loopstation.audio.dynamics import db_to_gain, gain_to_db
 from loopstation.audio.effects import start_beep, stop_beep
+from loopstation.audio.onset import GridResult, derive_grid, detect_onsets, rotate_to_onset
 from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, save_wav
-from loopstation.audio.sync import fit_to_grid, grace_frames, max_grid_frames
+from loopstation.audio.sync import SEAM_FADE_MAX_SECONDS, fit_to_grid, grace_frames, max_grid_frames
 from loopstation.clips import ClipEvent, ClipLog
-from loopstation.config import Settings, restart_keys_changed
-from loopstation.state import PadState, find_entry
+from loopstation.config import SIGNATURES, Settings, restart_keys_changed
+from loopstation.state import PadState, find_entry, master_source
 from loopstation.store import EventStore
 
 log = logging.getLogger(__name__)
@@ -57,6 +59,10 @@ LIVE_SETTINGS = (
     "loop_sync",
     "latency_ms",
     "soft_seam",
+    "auto_grid",
+    "time_signature",
+    "grid_bpm_min",
+    "grid_bpm_max",
 )
 
 # Level settings: applied through their setters, and only when the new value
@@ -89,6 +95,18 @@ class _Recording:
 
 
 @dataclass(frozen=True)
+class GridInfo:
+    """The session grid as the parents' view shows it (one bar = ``beats`` beats)."""
+
+    bpm: float
+    signature: str
+    beats: int
+    seconds: float  # length of one bar
+    source: str  # onset, duration, parent_bpm or free_pad
+    pad: int | None  # the pad that set it, None if the log did not say
+
+
+@dataclass(frozen=True)
 class HistoryEntry:
     sample: str
     recorded_at: datetime | None  # local time, None if the name has no stamp
@@ -116,6 +134,11 @@ class Controller:
         self._grid_sent: int | None = None
         self._session_started: float | None = None
         self._notice: tuple[str, float] | None = None
+        # What the onset analysis decided for a sample (``onset``, ``duration`` or
+        # ``none``), so that bringing it back (redo, restore) sets the same grid.
+        self._sample_grid: dict[str, str] = {}
+        # Outcome of the latest grid-setting recording, for the parents' view.
+        self.last_grid: GridResult | None = None
         self._listeners: list[Callable[[], None]] = []
         self._history_listeners: list[Callable[[int], None]] = []
         self._last_playing: set[int] = set()
@@ -356,21 +379,95 @@ class Controller:
         return grid
 
     def _set_master_from(self, pad: int) -> None:
-        """The first sound of a session sets the loop length (``master_set``)."""
+        """The first sound of a session sets the loop length (``master_set``).
+
+        With ``auto_grid`` the event also says where the bar came from
+        (``source``), the time signature and the pad. A sound that the onset
+        analysis found no usable grid in sets nothing: the session stays free.
+        """
         state = self.store.state
         sample = self.pad(pad).sample
         if not self.settings.loop_sync or state.master is not None or sample is None:
             return
+        origin = self._sample_grid.get(sample)
+        if origin == "none":
+            return
         data = self._load(sample)
         if data is None or len(data) == 0:
             return
-        self.store.append(ev.MASTER_SET, None, {"frames": len(data), "rate": self.audio.sample_rate})
+        event: dict[str, object] = {"frames": len(data), "rate": self.audio.sample_rate}
+        if self.settings.auto_grid:
+            event.update(source=origin or "duration", signature=self.settings.time_signature, pad=pad)
+        self.store.append(ev.MASTER_SET, None, event)
+
+    def _seed_grid(self, data: np.ndarray, rate: int) -> tuple[np.ndarray, GridResult]:
+        """Onset analysis of the grid-setting recording (before ``fit_to_grid``).
+
+        Returns the recording shifted circularly to its first reliable onset (and
+        cut to one bar if the bar came from onset distances) together with the
+        decision. Without a grid (``none``) the recording stays as it is.
+        """
+        settings = self.settings
+        seam = 2 * SEAM_FADE_MAX_SECONDS + 0.05 if settings.soft_seam else 0.0
+        result = derive_grid(
+            detect_onsets(data, rate),
+            len(data),
+            rate,
+            bpm_min=settings.grid_bpm_min,
+            bpm_max=settings.grid_bpm_max,
+            beats_per_bar=settings.beats_per_bar,
+            min_frames=round(max(MIN_RECORD_SECONDS, seam) * rate),
+            max_frames=int(settings.max_record_seconds * rate),
+        )
+        if not result.has_grid:
+            return data, result
+        if result.start_frame > 0:
+            data = rotate_to_onset(data, result.start_frame)
+        if result.source == "onset":
+            data = np.ascontiguousarray(data[: result.bar_frames])
+        return data, result
+
+    def grid_info(self) -> GridInfo | None:
+        """Tempo, time signature, bar length and source of the session grid, None without one."""
+        master = self.store.state.master
+        if master is None or self._grid() is None:
+            return None
+        signature = master.get("signature", self.settings.time_signature)
+        beats = SIGNATURES.get(signature, self.settings.beats_per_bar)
+        return GridInfo(
+            bpm=beats * 60.0 * master["rate"] / master["frames"],
+            signature=signature,
+            beats=beats,
+            seconds=master["frames"] / master["rate"],
+            source=master_source(master),
+            pad=master.get("pad"),
+        )
+
+    def _scan_grid_sources(self) -> None:
+        """Remember from the log what the onset analysis decided for earlier recordings."""
+        try:
+            lines = self.store.log_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return
+        for line in lines:
+            if '"record_stop"' not in line:
+                continue
+            try:
+                data = json.loads(line).get("data", {})
+            except (ValueError, AttributeError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            sample, grid = data.get("sample"), data.get("grid")
+            if isinstance(sample, str) and isinstance(grid, str):
+                self._sample_grid[sample] = grid
 
     def _content_changed(self, had_content: bool) -> None:
         """Log a new session once the last pad has been emptied."""
         if had_content and not self.store.state.has_content():
             self.store.append(ev.SESSION_START)
             self._session_started = self._clock()
+            self.last_grid = None
 
     def session_shown(self) -> float | None:
         """Seconds since a new session began while that is still shown, else None."""
@@ -539,11 +636,21 @@ class Controller:
         duration = 0.0 if data is None else len(data) / rate
         sample: str | None = None
         info: dict[str, object] = {}
+        seeded: GridResult | None = None
         if data is not None and duration >= MIN_RECORD_SECONDS:
             grid = self._grid() if recording.synced else None
             if grid is not None:
                 limit = int(self.settings.max_record_seconds * rate)
                 data = fit_to_grid(data, grid, grace_frames(grid, rate), limit)
+                duration = len(data) / rate
+            elif self.settings.auto_grid and self.settings.loop_sync and self.store.state.master is None:
+                # Only the recording that sets the grid is shifted to its first
+                # onset; recordings on an existing grid keep their latency-
+                # compensated alignment. This runs before any fit_to_grid.
+                data, seeded = self._seed_grid(data, rate)
+                info["grid"] = seeded.source
+                if seeded.has_grid and seeded.start_frame > 0:
+                    info["shift"] = seeded.start_frame
                 duration = len(data) / rate
             name = sample_filename(recording.pad, recording.stamp)
             try:
@@ -551,6 +658,9 @@ class Controller:
                 self._cache[name] = np.asarray(data, dtype=np.float32)
                 sample = name
                 info["frames"] = len(data)
+                if seeded is not None:
+                    self._sample_grid[name] = seeded.source
+                    self.last_grid = seeded
             except OSError as exc:
                 log.error("saving %s failed: %s", name, exc)
                 self._set_notice("Aufnahme konnte nicht gespeichert werden")
@@ -740,6 +850,7 @@ class Controller:
     def startup(self) -> None:
         """Nothing plays after a start: switch off loops left by a crash."""
         self._loops_off()
+        self._scan_grid_sources()
         self._apply_grid()
 
     def shutdown(self) -> None:

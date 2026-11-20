@@ -69,3 +69,21 @@ auto_gain = false
 # true = Pegelanzeige bei der Aufnahme: drei Balken am Pad und die Skala im
 # Eltern-Bereich. Das rote "zu laut"-Zeichen erscheint immer. Wirkt sofort.
 peak_meter = true
+
+# --- Takt aus der ersten Aufnahme (Onset-Grid) ---
+
+# true = die erste Aufnahme einer Sitzung beginnt bei ihrem ersten Schlag
+# (Klatschen, Stampfen). Die Aufnahme wird dabei nur verschoben, nicht gekürzt.
+# Liegen zwei oder mehr Schläge im erlaubten Tempo, bestimmt ihr Abstand den
+# Takt; sonst gilt die Aufnahmelänge. Weitere Aufnahmen werden nie verschoben.
+# false = die Aufnahmelänge ist der Takt wie bisher. Wirkt sofort.
+auto_grid = false
+
+# Taktart der Sitzung: "2/4", "3/4", "4/4" oder "6/8". Ein Takt besteht aus so
+# vielen Schlägen, wie die Taktart hat (4/4 = 4). Wirkt bei der nächsten ersten Aufnahme.
+time_signature = "4/4"
+
+# Erlaubtes Tempo eines Schlags in BPM (20 bis 300) für einen Takt aus
+# Schlag-Abständen. Außerhalb davon gibt es kein Raster aus Schlägen. Wirkt sofort.
+grid_bpm_min = 40
+grid_bpm_max = 200

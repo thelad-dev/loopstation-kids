@@ -30,9 +30,16 @@ REDO = "redo"
 RESTORE_PAD = "restore_pad"
 SNAPSHOT = "snapshot"
 # Loop grid: ``master_set {data: {frames, rate}}`` records the loop length
-# that the first sound of a session defines; ``session_start`` marks that the
-# last pad was emptied, so the next sound starts a new session with a new
-# loop length. Both were added later; logs without them read as before.
+# (one bar) that the first sound of a session defines; ``session_start`` marks
+# that the last pad was emptied, so the next sound starts a new session with a
+# new loop length. Both were added later; logs without them read as before.
+# With the onset grid ``master_set`` also says where the bar came from:
+# ``{frames, rate, source: "onset"|"duration"|"parent_bpm"|"free_pad",
+# signature: "4/4", pad}``. A ``master_set`` without ``source`` reads as
+# ``duration`` (the first recording's length was the bar). ``record_stop`` of
+# the recording that sets the grid may carry ``grid`` (``onset``, ``duration``
+# or ``none``, the outcome of the onset analysis) and ``shift`` (frames the
+# recording was moved circularly to its first onset; the WAV already is moved).
 MASTER_SET = "master_set"
 SESSION_START = "session_start"
 
