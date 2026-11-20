@@ -112,3 +112,13 @@ asio = false
 # oder geschnitten. Das Raster bleibt immer hart. Einfacher Stretch, nicht
 # Studio-Qualität. false = nie ziehen. Wirkt sofort.
 stretch_to_grid = true
+
+# --- Metronom (Erweitert) ---
+
+# true = leiser Ton auf jedem Schlag des Takts, durch Lautstärke und Obergrenze.
+# Das Kind sieht nur den Puls. Wirkt sofort.
+metronome_tone = false
+
+# Pegel des Metronom-Tons in dB(FS) von -40 bis -6, vor Lautstärke und
+# Obergrenze. Wirkt sofort.
+metronome_level_db = -20

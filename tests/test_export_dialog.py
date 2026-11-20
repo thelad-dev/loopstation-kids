@@ -191,8 +191,8 @@ def test_main_window_offers_the_export_only_behind_the_gate(qapp, tmp_path, cloc
         win.export_factory = lambda c, p: exports.append((c, p)) or AutoDialog(QDialog.DialogCode.Rejected)
         win.open_parent_area()
         actions = shown[0][5]
-        assert [a.label for a in actions] == ["Export"]
-        actions[0].open(win)
+        assert [a.label for a in actions] == ["Erweitert", "Export"]
+        actions[1].open(win)
         assert exports == [(controller, win)]
     finally:
         win.timer.stop()

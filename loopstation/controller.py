@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 
 from loopstation import events as ev
+from loopstation.audio import metronome
 from loopstation.audio.base import PREVIEW_VOICE, AudioBackend
 from loopstation.audio.dynamics import db_to_gain, gain_to_db
 from loopstation.audio.effects import start_beep, stop_beep
@@ -48,6 +49,12 @@ NEAR_CLIP_DB = -3.0
 # Range of the parents' ceiling in dB(FS), as in settings.toml.
 MIN_MAX_LEVEL_DB, MAX_MAX_LEVEL_DB = -30.0, 0.0
 
+# The metronome tick is handed to the audio engine this long before its beat
+# (padded with silence), so it sounds on the beat whatever the GUI tick jitter.
+METRONOME_LOOKAHEAD_SECONDS = 0.1
+# Source name of a grid the parents set (``master_set.source``).
+PARENT_BPM = "parent_bpm"
+
 WHITE, YELLOW, GREEN, RED = "white", "yellow", "green", "red"
 
 # Settings that ``apply_settings`` takes over while the app runs; the rest of
@@ -65,6 +72,8 @@ LIVE_SETTINGS = (
     "grid_bpm_min",
     "grid_bpm_max",
     "stretch_to_grid",
+    "metronome_tone",
+    "metronome_level_db",
 )
 
 # Audio devices: the streams are opened again when one of these changes.
@@ -144,6 +153,16 @@ class Controller:
         self._sample_grid: dict[str, str] = {}
         # Outcome of the latest grid-setting recording, for the parents' view.
         self.last_grid: GridResult | None = None
+        # The parents' grid (bpm, signature) while it overrides what recordings
+        # would set (plan 2.2 rule 8). Kept here, not in the log, so that it also
+        # holds while the session is empty (the log has no grid without sound).
+        self._parent_grid: tuple[float, str] | None = None
+        # The grid the session had before the parents' grid replaced it.
+        self._measured_master: dict[str, Any] | None = None
+        # Metronome: controller clock time of the last tick handed to the audio
+        # engine, and the bar start the free-running beat counts from.
+        self._tick_at: float | None = None
+        self._bar_origin: float | None = None
         self._listeners: list[Callable[[], None]] = []
         self._history_listeners: list[Callable[[int], None]] = []
         self._last_playing: set[int] = set()
@@ -394,6 +413,12 @@ class Controller:
         sample = self.pad(pad).sample
         if not self.settings.loop_sync or state.master is not None or sample is None:
             return
+        parent = self._parent_event()
+        if parent is not None:
+            # The parents' tempo wins over anything the sound would say (rule 8).
+            self._measured_master = None
+            self.store.append(ev.MASTER_SET, None, {**parent, "pad": pad})
+            return
         origin = self._sample_grid.get(sample)
         if origin == "none":
             return
@@ -642,11 +667,21 @@ class Controller:
         sample: str | None = None
         info: dict[str, object] = {}
         seeded: GridResult | None = None
+        parent_seeded = False
         if data is not None and duration >= MIN_RECORD_SECONDS:
             grid = self._grid() if recording.synced else None
             if grid is not None:
                 limit = int(self.settings.max_record_seconds * rate)
                 data = self._fit_recording(data, grid, rate, limit)
+                duration = len(data) / rate
+            elif (self._parent_grid is not None and self.settings.loop_sync
+                  and self.store.state.master is None):
+                # The parents set the tempo: onsets may only align this recording.
+                data, shift = self._fit_to_parent_grid(data, rate)
+                info["grid"] = PARENT_BPM
+                if shift > 0:
+                    info["shift"] = shift
+                parent_seeded = True
                 duration = len(data) / rate
             elif self.settings.auto_grid and self.settings.loop_sync and self.store.state.master is None:
                 # Only the recording that sets the grid is shifted to its first
@@ -666,6 +701,8 @@ class Controller:
                 if seeded is not None:
                     self._sample_grid[name] = seeded.source
                     self.last_grid = seeded
+                if parent_seeded:
+                    self._sample_grid[name] = PARENT_BPM
             except OSError as exc:
                 log.error("saving %s failed: %s", name, exc)
                 self._set_notice("Aufnahme konnte nicht gespeichert werden")
@@ -722,6 +759,162 @@ class Controller:
             self._fitted[key] = fit_to_grid(data, grid, grace_frames(grid, self.audio.sample_rate))
         return self._fitted[key]
 
+    # ----------------------------------------- parents' grid and metronome
+
+    def parent_grid(self) -> tuple[float, str] | None:
+        """``(bpm, signature)`` the parents set, None while recordings decide the grid."""
+        return self._parent_grid
+
+    def bpm_range(self) -> tuple[float, float]:
+        """Tempo the parents may set (the window of ``settings.toml``)."""
+        return self.settings.grid_bpm_min, self.settings.grid_bpm_max
+
+    def _parent_event(self) -> dict[str, Any] | None:
+        """``master_set`` data of the parents' grid at the current sample rate."""
+        if self._parent_grid is None:
+            return None
+        bpm, signature = self._parent_grid
+        rate = self.audio.sample_rate
+        frames = max(1, round(SIGNATURES[signature] * 60.0 * rate / bpm))
+        return {"frames": frames, "rate": rate, "source": PARENT_BPM, "signature": signature}
+
+    def set_parent_grid(self, bpm: float, signature: str) -> bool:
+        """Set tempo and time signature (the parents' override); False if not possible.
+
+        It needs ``loop_sync`` and a tempo inside the allowed window, and waits
+        while a recording runs. With sound in the session the grid is replaced
+        by a ``master_set`` with source ``parent_bpm``: the files stay as they
+        are, the loops are fitted again (like ``_loop_data`` does for any grid)
+        and running loops start over on the new bars. Without sound it applies
+        to the next first recording.
+        """
+        low, high = self.bpm_range()
+        if signature not in SIGNATURES or not low <= bpm <= high:
+            return False
+        if not self.settings.loop_sync or self._recording is not None:
+            return False
+        self._parent_grid = (float(bpm), signature)
+        state = self.store.state
+        if state.master is not None:
+            if master_source(state.master) != PARENT_BPM:
+                self._measured_master = dict(state.master)
+            self.store.append(ev.MASTER_SET, None, self._parent_event())
+            self._refit_loops()
+        self._changed()
+        return True
+
+    def use_measured_grid(self) -> bool:
+        """Give the grid back to the recordings ("Gemessenen Takt"); False if nothing was set.
+
+        If the session had a measured grid before, it is restored (a new
+        ``master_set``, loops fitted again). Otherwise the current bars stay
+        and only the override ends, so the next session is measured again.
+        """
+        if self._parent_grid is None:
+            return False
+        self._parent_grid = None
+        state = self.store.state
+        measured, self._measured_master = self._measured_master, None
+        if state.master is not None and master_source(state.master) == PARENT_BPM and measured:
+            self.store.append(ev.MASTER_SET, None, measured)
+            self._refit_loops()
+        self._changed()
+        return True
+
+    def _refit_loops(self) -> None:
+        """Start the running loops again on the grid as it is now (their files stay untouched)."""
+        running = [p for p, state in sorted(self.store.state.pads.items())
+                   if state.looping and state.sample is not None and p in self.audio.playing_pads()]
+        for pad in running:
+            self.audio.stop(pad)
+        for pad in running:
+            data = self._loop_data(self.pad(pad).sample)
+            if data is not None:
+                self.audio.play(pad, data, loop=True)
+        self._apply_grid()
+
+    def _fit_to_parent_grid(self, data: np.ndarray, rate: int) -> tuple[np.ndarray, int]:
+        """The grid-setting recording on the parents' bars; also returns the shift to its first onset.
+
+        Onsets only align the recording (circular shift, as ``auto_grid`` does);
+        the bar length comes from the parents' tempo.
+        """
+        shift = 0
+        if self.settings.auto_grid:
+            onsets = detect_onsets(data, rate)
+            if onsets and onsets[0] > 0:
+                shift = onsets[0]
+                data = rotate_to_onset(data, shift)
+        grid = self._parent_event()["frames"]
+        limit = int(self.settings.max_record_seconds * rate)
+        return fit_to_grid(data, grid, grace_frames(grid, rate), limit), shift
+
+    def _resume_parent_grid(self) -> None:
+        """After a start: a grid of the parents in the log is still their override."""
+        master = self.store.state.master
+        if master is None or master_source(master) != PARENT_BPM or "signature" not in master:
+            return
+        beats = SIGNATURES.get(master["signature"])
+        if beats:
+            self._parent_grid = (beats * 60.0 * master["rate"] / master["frames"], master["signature"])
+
+    def bar_seconds(self) -> float | None:
+        """Length of one bar in seconds, None without a grid."""
+        grid = self._grid()
+        return None if grid is None else grid / self.audio.sample_rate
+
+    def metronome_period(self) -> float | None:
+        """Seconds between two metronome beats: a bar divided into its beats, None without a grid."""
+        info = self.grid_info()
+        bar = self.bar_seconds()
+        if info is None or bar is None:
+            return None
+        return metronome.beat_seconds(bar, info.beats)
+
+    def beat_position(self) -> float | None:
+        """Where the grid is inside the bar, in beats from its start (0 <= x < beats), None without a grid.
+
+        While loops run it follows the audio engine's loop start; otherwise
+        it keeps counting on the clock from where it was, so the parents can
+        hear and see a tempo they just set.
+        """
+        info = self.grid_info()
+        bar = self.bar_seconds()
+        if info is None or bar is None:
+            self._bar_origin = None
+            return None
+        now = self._clock()
+        wait = self.audio.next_boundary_in()
+        if wait is not None:
+            phase = min(1.0, max(0.0, 1.0 - wait / bar))
+            self._bar_origin = now - phase * bar
+        else:
+            if self._bar_origin is None:
+                self._bar_origin = now
+            phase = ((now - self._bar_origin) / bar) % 1.0
+        return (phase * info.beats) % info.beats
+
+    def _tick_metronome(self) -> None:
+        """Hand the tick of the next beat to the audio engine shortly before it is due."""
+        if not self.settings.metronome_tone:
+            self._tick_at = None
+            return
+        period, position = self.metronome_period(), self.beat_position()
+        info = self.grid_info()
+        if period is None or position is None or info is None:
+            return
+        ahead = metronome.seconds_to_next_beat(position, period)
+        if ahead > METRONOME_LOOKAHEAD_SECONDS:
+            return
+        due = self._clock() + ahead
+        if self._tick_at is not None and due - self._tick_at < period / 2:
+            return  # this beat's tick is already on its way
+        self._tick_at = due
+        rate = self.audio.sample_rate
+        beat = metronome.beat_index(position + ahead / period, info.beats)
+        click = metronome.tick(rate, self.settings.metronome_level_db, accent=beat == 0)
+        self.audio.play_effect(metronome.delayed(click, round(ahead * rate)))
+
     # --------------------------------------------- export (read only, parents)
 
     @property
@@ -761,6 +954,7 @@ class Controller:
             changed = True  # waiting pads count down; the new-session wave moves
             if self.session_shown() is None:
                 self._session_started = None
+        self._tick_metronome()
         if changed:
             self._changed()
 
@@ -896,6 +1090,7 @@ class Controller:
         """Nothing plays after a start: switch off loops left by a crash."""
         self._loops_off()
         self._scan_grid_sources()
+        self._resume_parent_grid()
         self._apply_grid()
 
     def shutdown(self) -> None:
