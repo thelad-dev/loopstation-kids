@@ -317,3 +317,11 @@ def test_number_and_date_formats():
     assert format_when(datetime(2026, 11, 3, 7, 30).timestamp(), now) == "3.11. 07:30"
     assert describe_clip(ClipEvent(0, 5, 2.0, True)) == "Pad 6 · Spitze 0 dBFS · übersteuert"
     assert describe_clip(ClipEvent(0, 1, -1.2, False)) == "Pad 2 · Spitze −1 dBFS"
+
+
+def test_a_damaged_file_is_not_overwritten_by_a_level_change(parts, dialog):
+    _, controller, path = parts
+    path.write_text("max_level_db = kaputt\n", encoding="utf-8")
+    dialog.panel.switches["auto_gain"].setChecked(True)
+    assert path.read_text(encoding="utf-8") == "max_level_db = kaputt\n"
+    assert "kaputt" in dialog.message.text() or "max_level_db" in dialog.message.text()

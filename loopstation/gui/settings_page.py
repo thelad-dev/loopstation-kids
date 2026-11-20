@@ -429,14 +429,24 @@ class SettingsDialog(QDialog):
         until "Speichern".
         """
         live = replace(self._applied, **{key: value})
-        if final:
+        if not final:
+            # While dragging only the level setter acts; the page-wide takeover waits for the release.
+            setter = {"max_level_db": "set_max_level_db", "input_gain_db": "set_input_gain_db"}.get(key)
+            if setter is not None and self.controller is not None:
+                getattr(self.controller, setter)(value)
+                self._applied = live
+                self.refresh_levels()
+                return
+        else:
             try:
+                # A damaged file is never overwritten from here; a missing one is written new.
+                base = load_settings(self.config_path) if self.config_path.exists() else self._applied
                 changes = {key: value, "volume": self.editors["volume"].value()}
-                write_settings(self.config_path, replace(self._file_settings(), **changes), self._template)
+                write_settings(self.config_path, replace(base, **changes), self._template)
             except (ConfigError, OSError) as exc:
                 self._say(str(exc), error=True)
                 return
-            self._say("Gespeichert und übernommen.")
+            self._say("Pegelwert übernommen und gespeichert.")
         self._applied = live
         self._apply(live)
         self.refresh_levels()
