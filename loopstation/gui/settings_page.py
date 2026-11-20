@@ -11,7 +11,7 @@ in ``config.SETTING_COMMENTS``).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -65,6 +65,18 @@ NOTES = (
 )
 
 RESTART_TEXT = "wirkt nach Neustart"
+
+
+@dataclass(frozen=True)
+class ParentAction:
+    """A further page of the parents' area, reached by a button next to "Speichern".
+
+    ``open(parent)`` shows that page (modal) on top of the settings page.
+    """
+
+    icon: str
+    label: str
+    open: Callable[[QWidget], None]
 
 
 @dataclass(frozen=True)
@@ -206,6 +218,7 @@ class SettingsDialog(QDialog):
         apply: Callable[[Settings], list[str]],
         template: str | None = None,
         parent: QWidget | None = None,
+        actions: Sequence[ParentAction] = (),
     ) -> None:
         super().__init__(parent)
         self.config_path = config_path
@@ -301,6 +314,12 @@ class SettingsDialog(QDialog):
         texts.addWidget(self.message)
         texts.addWidget(footer)
         bottom.addLayout(texts, 1)
+        self.action_buttons: dict[str, BigButton] = {}
+        for action in actions:
+            button = BigButton(action.icon, action.label, ACCENT_GRAY)
+            button.clicked.connect(lambda _checked=False, a=action: a.open(self))
+            self.action_buttons[action.label] = button
+            bottom.addWidget(button)
         bottom.addWidget(self.save_button)
 
         layout = QVBoxLayout(self)
