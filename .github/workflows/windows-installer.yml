@@ -75,6 +75,11 @@ jobs:
             Write-Host "bundled: $($found.FullName) ($($found.Length) bytes)"
           }
 
+      - name: Check Rubber Band is NOT in the bundle
+        run: |
+          $hits = Get-ChildItem "dist/Loopstation" -Recurse -Include "pylibrb*", "rubberband*"
+          if ($hits) { $hits | ForEach-Object { Write-Host $_.FullName }; throw "Rubber Band must not be bundled" }
+
       - name: Smoke test (start the exe with an empty profile)
         run: |
           $profileDir = Join-Path $env:RUNNER_TEMP "smoke"
@@ -90,6 +95,11 @@ jobs:
           Stop-Process -Id $proc.Id -Force
           foreach ($file in @("settings.toml", "data/events.jsonl")) {
             if (-not (Test-Path (Join-Path $data $file))) { throw "not created in data folder: $file" }
+          }
+          # Rubber Band is GPL and is not shipped: without the optional download the app must report
+          # the simple engine and keep running.
+          if (-not (Test-Path $log) -or -not (Select-String -Path $log -Pattern "stretch engine: Rubber Band nicht installiert, einfache Engine aktiv" -Quiet)) {
+            throw "expected the simple engine without Rubber Band, see log above"
           }
           if ((Test-Path $log) -and (Select-String -Path $log -Pattern "Traceback|No module named|PortAudio library not found|MIDI not available" -Quiet)) {
             throw "bundle problem, see log above"
@@ -127,6 +137,53 @@ jobs:
           for ($i = 0; $i -lt 60 -and (Test-Path $exe); $i++) { Start-Sleep -Seconds 1 }
           foreach ($path in @($exe, $link)) { if (Test-Path $path) { throw "left after uninstall: $path" } }
           if (-not (Test-Path $recording)) { throw "uninstall removed the recordings" }
+
+      - name: Try the optional Rubber Band download (consent given, then a wrong checksum)
+        run: |
+          $setup = (Get-Item dist/Loopstation-Setup-*.exe).FullName
+          $app = Join-Path $env:LOCALAPPDATA "Programs\Loopstation"
+          $exe = Join-Path $app "Loopstation.exe"
+          $rb = Join-Path $app "rubberband"
+          function Invoke-Quiet($file, [string[]]$extra = @()) {
+            $p = Start-Process $file -ArgumentList (@("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") + $extra) -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "$file exited with $($p.ExitCode)" }
+          }
+
+          # 1. Task ticked: the real wheel is downloaded, its SHA-256 is checked, it is unpacked.
+          Invoke-Quiet $setup @("/CURRENTUSER", "/TASKS=rubberband", "/LOG=$env:RUNNER_TEMP\rb-ok.log")
+          if (-not (Get-ChildItem $rb -Recurse -Filter "pylibrb_ext*.pyd")) { Get-Content "$env:RUNNER_TEMP\rb-ok.log"; throw "Rubber Band was not installed" }
+          $sha = (Get-FileHash (Get-ChildItem $rb -Recurse -Filter "pylibrb_ext*.pyd" | Select-Object -First 1).FullName -Algorithm SHA256).Hash
+          Write-Host "installed pylibrb_ext, sha256 $sha"
+
+          # 2. The app finds it next to the exe and says so in its log.
+          $profileDir = Join-Path $env:RUNNER_TEMP "rbsmoke"
+          New-Item -ItemType Directory $profileDir | Out-Null
+          $env:LOCALAPPDATA_BACKUP = $env:LOCALAPPDATA
+          $env:LOCALAPPDATA = $profileDir
+          $proc = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 20
+          $log = Join-Path $profileDir "Loopstation\loopstation.log"
+          if (Test-Path $log) { Get-Content $log }
+          if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          $env:LOCALAPPDATA = $env:LOCALAPPDATA_BACKUP
+          if (-not (Test-Path $log) -or -not (Select-String -Path $log -Pattern "stretch engine: Rubber Band installiert \(pylibrb" -Quiet)) {
+            throw "the installed app did not find the downloaded Rubber Band"
+          }
+
+          # 3. Without the task an update keeps what is there; a wrong checksum fails safe:
+          #    setup still succeeds and no half-installed folder is left.
+          Remove-Item -Recurse -Force $rb
+          $bad = Join-Path $env:RUNNER_TEMP "bad"
+          New-Item -ItemType Directory $bad | Out-Null
+          $iscc = (Get-Item "${env:ProgramFiles(x86)}\Inno Setup *\ISCC.exe" | Select-Object -First 1).FullName
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" "/DRubberBandSha256=0000000000000000000000000000000000000000000000000000000000000000" "/O$bad" "/FBadHash" packaging/windows/loopstation.iss
+          if ($LASTEXITCODE -ne 0) { throw "could not build the bad-checksum installer" }
+          Invoke-Quiet (Join-Path $bad "BadHash.exe") @("/CURRENTUSER", "/TASKS=rubberband", "/LOG=$env:RUNNER_TEMP\rb-bad.log")
+          if (Test-Path $rb) { throw "a failed download left $rb behind" }
+          if (-not (Test-Path $exe)) { throw "the app is missing after a failed Rubber Band download" }
+          if (-not (Select-String -Path "$env:RUNNER_TEMP\rb-bad.log" -Pattern "Rubber Band download failed" -Quiet)) { throw "the failure was not logged" }
+
+          Invoke-Quiet (Join-Path $app "unins000.exe")
 
       - uses: actions/upload-artifact@v4
         with:

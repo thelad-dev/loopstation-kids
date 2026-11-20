@@ -46,9 +46,11 @@ from PySide6.QtWidgets import (
 
 from loopstation.audio.devices import default_hostapi
 from loopstation.audio.effects import beep
+from loopstation.audio.stretch import engine_notice
 from loopstation.config import (
     RESTART_KEYS,
     SIGNATURES,
+    STRETCH_ENGINES,
     ConfigError,
     Settings,
     load_settings,
@@ -598,6 +600,11 @@ class SettingsDialog(QDialog):
                 row.addWidget(editor.widget)
                 if field.hint:
                     row.addWidget(self._hint(field.hint))
+                if field.key == "stretch_engine":
+                    self._engine_hint = self._hint("")
+                    editor._combo.currentTextChanged.connect(self._update_engine_hint)
+                    self._update_engine_hint(editor.value())
+                    row.addWidget(self._engine_hint)
                 numbers.addRow(label, row)
         return switches, numbers
 
@@ -820,6 +827,10 @@ class SettingsDialog(QDialog):
         latency = getattr(self._source, "reported_latency_ms", lambda: None)()
         self.latency_hint.setText("" if latency is None else f"aus den Geräten ermittelt: {latency:.0f} ms")
 
+    def _update_engine_hint(self, choice: str) -> None:
+        """Which stretch engine runs for ``choice``, and why (Rubber Band missing or not)."""
+        self._engine_hint.setText(engine_notice(choice))
+
     @staticmethod
     def _hint(text: str) -> QLabel:
         return dim_label(text, 13)
@@ -977,6 +988,14 @@ register_field(Field("stretch_to_grid", "Aufnahmen weich in den Takt ziehen", "b
                      hint="Knapp neben einem ganzen Takt: auf den Takt ziehen statt auffüllen oder "
                           "schneiden. Aus = immer auffüllen oder schneiden."),
                before="soft_seam")
+
+
+# --- Stretch engine (W3-RUBBERBAND) ---
+register_field(Field("stretch_engine", "Stretch-Engine", "choice", choices=STRETCH_ENGINES,
+                     hint="auto = Rubber Band, wenn vorhanden (sauberer), sonst still der einfache Stretch. "
+                          "rubberband = Rubber Band gewünscht, fehlt es, steht hier ein Hinweis. "
+                          "simple = immer der einfache."),
+               before="latency_ms")
 
 
 # --- Metronome (W3-ERWEITERT) ---

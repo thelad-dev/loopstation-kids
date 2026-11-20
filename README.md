@@ -23,7 +23,7 @@ Ohne Mikrofon, ohne Audiogerät oder ohne Launchpad startet die Loopstation trot
 
 ## Windows
 
-Für Windows gibt es einen Installer (`Loopstation-Setup-<Version>.exe`), der alles mitbringt; Python muss nicht installiert sein. Er entsteht in GitHub Actions (Workflow `windows-installer`, bei einem Tag `v<Version>` oder per Hand gestartet) und liegt dort als Artefakt; bei einem Tag zusätzlich als Entwurf eines Releases. Pull Requests, die `packaging/`, `pyproject.toml`, `requirements*.txt`, `settings.toml` oder `loopstation/installed.py` ändern, bauen und starten den Installer ebenfalls, damit er vor dem Zusammenführen geprüft ist.
+Für Windows gibt es einen Installer (`Loopstation-Setup-<Version>.exe`), der alles mitbringt (außer dem optionalen Rubber Band, siehe [Stretch-Engine](#stretch-engine-rubber-band)); Python muss nicht installiert sein. Er entsteht in GitHub Actions (Workflow `windows-installer`, bei einem Tag `v<Version>` oder per Hand gestartet) und liegt dort als Artefakt; bei einem Tag zusätzlich als Entwurf eines Releases. Pull Requests, die `packaging/`, `pyproject.toml`, `requirements*.txt`, `settings.toml` oder `loopstation/installed.py` ändern, bauen und starten den Installer ebenfalls, damit er vor dem Zusammenführen geprüft ist.
 
 - Installation ohne Adminrechte für den aktuellen Benutzer (auf Wunsch für alle Benutzer), mit Startmenü-Eintrag und optionaler Desktop-Verknüpfung. Deinstallieren über „Apps & Features“.
 - Einstellungen, Aufnahmen und Ereignis-Protokoll liegen in `%LOCALAPPDATA%\Loopstation` (`settings.toml`, `samples/`, `data/`). Beim ersten Start wird dort eine kommentierte `settings.toml` angelegt. Updates und Deinstallation lassen diesen Ordner unangetastet, die Aufnahmen bleiben also erhalten. Wer alles entfernen will, löscht den Ordner von Hand.
@@ -87,6 +87,7 @@ Was sich für Bestandsnutzer ändert:
 - **Leiser als vorher:** neu sind ein Lautstärke-Regler (`volume`, Standard 0.5) und eine Obergrenze (`max_level_db`, Standard -6 dB(FS)) mit Limiter. Version 1.0.0 gab die Summe ungebremst bis zur digitalen Vollaussteuerung aus. Wer es lauter braucht, stellt beides im Elternbereich ein.
 - **Takt aus Klatschen** (`auto_grid`) ist standardmäßig aus: die erste Aufnahme bestimmt den Takt wie bisher über ihre Länge.
 - **Standardmäßig an** sind die weiche Loop-Naht (`soft_seam`), das Strecken knapp neben dem Takt (`stretch_to_grid`) und die Pegelanzeige (`peak_meter`).
+- **Rubber Band ist optional und wird nicht mitgeliefert** (`stretch_engine = "auto"`): ohne Rubber Band läuft wie bisher der einfache Stretch, die App läuft normal. Wer die bessere Qualität will, lädt Rubber Band nur auf eigenen Wunsch nach: unter Windows den neuen Installer erneut laufen lassen und „Rubber Band (GPL) herunterladen“ ankreuzen (standardmäßig aus; der Installer zeigt vorher Name, Lizenz, Herkunft, Größe und Prüfsumme und lädt erst nach Ihrer Zustimmung), unter Linux `scripts/install-linux.sh` erneut aufrufen und der Frage zustimmen (oder `--rubberband`), aus dem Quellcode `pip install pylibrb`. Auch später geht das jederzeit; der Elternbereich zeigt, ob Rubber Band installiert ist. Rubber Band steht unter der GPL, siehe [Drittanbieter-Lizenzen](#drittanbieter-lizenzen).
 - **Neuer Elternbereich** hinter der Kachel „Eltern“ unten rechts (zwei Sekunden halten, Rechenaufgabe), mit sieben Bereichen: Lautstärke & Pegel, Geräte & Audio, Takt & Loop (mit Eltern-Takt und Metronom), Verlauf & Undo, Erweitert (Wellenform, Marker), Sets sichern und öffnen, Export als WAV.
 - **„Alle löschen“ ist von der Kinderseite in den Elternbereich gewandert** (Verlauf & Undo, „Alle Pads löschen …“, mit Rückfrage; „Zurück“ holt alles wieder). Kinder können so nicht mehr versehentlich alles leeren.
 - **Auf der Kinderseite neu:** „Wiederholen“, das Zurück-Abzeichen am Pad, der freie Modus per langem Halten und das rote „zu laut“-Zeichen. Am Launchpad wirkt ein kurzer Tipp jetzt beim Loslassen.
@@ -178,7 +179,7 @@ Die Launchpad-Anbindung ist bisher nur mit nachgebauten MIDI-Ports getestet, noc
 
 ## Einstellungen
 
-In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne, Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Lautstärke (`volume`) mit Obergrenze (`max_level_db`), Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`), Pegelanzeige der Aufnahme für Eltern (`peak_meter`), Takt aus der ersten Aufnahme (`auto_grid`, `time_signature`, `grid_bpm_min`, `grid_bpm_max`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), freie Pads am Takt-Punkt starten (`free_pad_on_grid`), Marker als Cue-Punkte im Export (`export_cue_points`), Strecken knapp neben dem Takt (`stretch_to_grid`), Aufnahme- und Wiedergabegerät (`input_device`, `output_device`) und Audio-System (`audio_hostapi`, Standard WASAPI unter Windows, ALSA unter Linux) sowie ASIO (`asio`), leiser Metronom-Ton (`metronome_tone`, `metronome_level_db`), Datenordner. Fehlt die Datei, gelten die Standardwerte.
+In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne, Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Lautstärke (`volume`) mit Obergrenze (`max_level_db`), Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`), Pegelanzeige der Aufnahme für Eltern (`peak_meter`), Takt aus der ersten Aufnahme (`auto_grid`, `time_signature`, `grid_bpm_min`, `grid_bpm_max`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), freie Pads am Takt-Punkt starten (`free_pad_on_grid`), Marker als Cue-Punkte im Export (`export_cue_points`), Strecken knapp neben dem Takt (`stretch_to_grid`), Aufnahme- und Wiedergabegerät (`input_device`, `output_device`) und Audio-System (`audio_hostapi`, Standard WASAPI unter Windows, ALSA unter Linux) sowie ASIO (`asio`), leiser Metronom-Ton (`metronome_tone`, `metronome_level_db`), Stretch-Engine (`stretch_engine`, siehe [Stretch-Engine](#stretch-engine-rubber-band)), Datenordner. Fehlt die Datei, gelten die Standardwerte.
 
 ## Elternbereich
 
@@ -217,6 +218,33 @@ Erwachsene frieren die laufende Sitzung als Set ein und öffnen gespeicherte Set
 - Beim Öffnen wird das Set vollständig geprüft, bevor etwas ersetzt wird: zu neue Formatversion, falsche Padzahl oder Abtastrate, beschädigte Dateien. Ist die aktuelle Sitzung nicht gesichert, fragt die Seite zuerst („Erst sichern, dann öffnen“, „Ohne sichern“). Die Zurück-Schritte des Sets bleiben, „Wiederholen“ startet leer.
 - Die eigenen Einstellungen des Rechners bleiben maßgeblich. Fehlt ein Gerät aus dem Set, wird der Systemstandard benutzt und die Sets-Seite sagt es.
 - Das Öffnen ersetzt `data/` und `samples/` zwischen zwei Sitzungen im selben Prozess (die Loopstation baut Fenster, Protokoll und Audio neu auf). Wird das mittendrin abgebrochen, schließt der nächste Start den Tausch ab (`loopstation/session.py`).
+
+## Stretch-Engine (Rubber Band)
+
+Eine Aufnahme knapp neben einem ganzen Takt (unter 10 %) wird beim Stopp auf genau diese Länge gezogen, die Tonhöhe bleibt (`stretch_to_grid`). Dafür gibt es zwei Engines hinter derselben Schnittstelle (`loopstation/audio/stretch.py`):
+
+- **Rubber Band** über das Python-Paket `pylibrb` (Wheel mit eingebauter Bibliothek): sauberer, vor allem bei Stimmen. Es ist **nicht Teil der Loopstation und nicht im Windows-Installer enthalten**; es wird nur auf Wunsch nachgeladen (siehe unten). Die Loopstation prüft beim Start, ob es sich laden und rechnen lässt, und schreibt das Ergebnis ins Protokoll (`stretch engine: ...`). Die App selbst greift dafür nie ins Netz.
+- **Einfacher Stretch** (WSOLA, nur numpy): immer eingebaut. Er läuft, wenn Rubber Band fehlt, nicht lädt oder bei einem einzelnen Stretch einen Fehler meldet. Eine Aufnahme geht deshalb nie verloren.
+
+Die Einstellung `stretch_engine` (im Elternbereich „Stretch-Engine“) wählt: `auto` (Standard) nimmt Rubber Band, wenn es gefunden wird, sonst still den einfachen Stretch (ohne Hinweis); `rubberband` will Rubber Band: fehlt es, meldet der Elternbereich deutlich „Rubber Band nicht installiert, einfache Engine aktiv“ mit dem Weg zum Nachinstallieren, und die App läuft mit dem einfachen Stretch weiter; `simple` nimmt immer den einfachen Stretch. Der Elternbereich zeigt den Status: installiert (mit Version) oder nicht installiert.
+
+So kommt Rubber Band auf den Rechner (immer nur mit Zustimmung):
+
+- **Windows:** im Installer die Aufgabe „Rubber Band (GPL) herunterladen“ ankreuzen (standardmäßig aus). Der Installer lädt `pylibrb` von PyPI (siehe `packaging/windows/rubberband.inc`: URL, Version, SHA-256), prüft die Prüfsumme und entpackt es nach `<Programmordner>\rubberband`. Schlägt Download oder Prüfsumme fehl, wird die Loopstation trotzdem installiert und die App meldet „Rubber Band nicht installiert, einfache Engine aktiv“. Bestandsnutzer lassen den Installer erneut laufen und setzen den Haken; Deinstallieren entfernt den Ordner wieder.
+- **Linux:** `scripts/install-linux.sh` fragt danach (Standard: nein). `--rubberband` stimmt zu, `--no-rubberband` fragt nicht; ohne Terminal und ohne `--rubberband` wird nichts geladen, auch nicht mit `--yes`. Es wird nur ein fertiges Wheel installiert (x86_64); sonst bleibt es beim einfachen Stretch.
+- **Aus dem Quellcode:** `pip install pylibrb` in der Umgebung der Loopstation.
+
+## Drittanbieter-Lizenzen
+
+Dieses Projekt hat selbst noch keine Lizenzdatei; das ist eine offene Entscheidung. Die Programme und Bibliotheken, die es benutzt, haben ihre eigenen Lizenzen:
+
+| Bestandteil | Lizenz | Hinweis |
+|---|---|---|
+| Rubber Band (über `pylibrb`) | GPL (Rubber Band: GPL-2.0 oder neuer, `pylibrb`: GPL-2.0), kommerzielle Lizenz beim Hersteller möglich | wird nicht mitgeliefert, nur auf Wunsch des Nutzers geladen, siehe unten |
+| PortAudio (über `sounddevice`) | MIT-ähnlich | wird mit dem Windows-Installer ausgeliefert |
+| Qt / PySide6 | LGPL-3.0 (Qt for Python), Qt zusätzlich auch GPL und kommerziell | wird mit dem Windows-Installer ausgeliefert; die LGPL verlangt u. a. den Lizenztext und die Möglichkeit, die Bibliothek auszutauschen |
+
+Ehrlicher Hinweis zu Rubber Band: Rubber Band steht unter der GPL. Die Loopstation liefert es nicht aus: weder der Windows-Installer noch das Quellcode-Archiv enthalten es, und die App lädt nichts nach. Es kommt nur auf ausdrücklichen Wunsch des Nutzers auf dessen Rechner (Installer-Haken, Zustimmung in `install-linux.sh` oder eigenes `pip install pylibrb`). Die GPL des geladenen Pakets und ihre Pflichten bleiben bei dem, der es lädt und weitergibt. Wer einen Rechner oder ein Abbild mit installiertem Rubber Band weitergibt, löst die GPL-Pflichten aus (vor allem das Angebot des Quellcodes), solange keine kommerzielle Lizenz vorliegt. Rechtlich bewertet das hier niemand; vor einer Weitergabe also Lizenzen prüfen oder die kommerzielle Lizenz klären.
 
 ## Daten
 

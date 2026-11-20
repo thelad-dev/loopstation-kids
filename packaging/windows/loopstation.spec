@@ -6,7 +6,8 @@
 # Result: dist/Loopstation/Loopstation.exe plus its _internal folder.
 # The hooks from pyinstaller-hooks-contrib bundle Qt (PySide6), the PortAudio
 # DLLs of sounddevice (with and without ASIO) and the libsndfile DLL of soundfile. mido loads its MIDI
-# backend by name at run time, so it is listed as a hidden import here.
+# backend by name at run time, so it is listed as a hidden import here. Rubber Band (pylibrb, GPL) is
+# deliberately excluded; the windows-installer workflow checks that it is not in the bundle.
 
 from pathlib import Path
 
@@ -20,7 +21,9 @@ a = Analysis(  # noqa: F821
     pathex=[str(ROOT)],
     datas=[(str(ROOT / "settings.toml"), ".")],
     hiddenimports=["loopstation.installed", "mido.backends.rtmidi", "rtmidi"],
-    excludes=["tkinter"],
+    # pylibrb (Rubber Band, GPL) must never end up in the bundle, even if the build
+    # environment has it: the installer downloads it only on request.
+    excludes=["tkinter", "pylibrb"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)  # noqa: F821

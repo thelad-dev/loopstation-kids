@@ -11,3 +11,4 @@ cffi==2.1.1
 mido==1.3.3
 packaging==26.3
 python-rtmidi==1.5.8
+pylibrb==0.1.2  # tests only, see requirements-dev.txt
