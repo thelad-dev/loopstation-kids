@@ -103,3 +103,12 @@ audio_hostapi = ""
 # Nur Windows: true = ASIO-Treiber für Audio-Interfaces zulassen. ASIO öffnet
 # ein Gerät oft exklusiv: Andere Programme sind dann still. Neustart nötig.
 asio = false
+
+# --- Takt weich ziehen (Stretch) ---
+
+# true = eine Aufnahme auf dem Takt, die weniger als 10 % neben einem oder
+# mehreren ganzen Takten liegt, wird beim Stopp auf genau diese Länge gezogen
+# (Tonhöhe bleibt). Alles weiter daneben wird wie bisher mit Stille aufgefüllt
+# oder geschnitten. Das Raster bleibt immer hart. Einfacher Stretch, nicht
+# Studio-Qualität. false = nie ziehen. Wirkt sofort.
+stretch_to_grid = true
