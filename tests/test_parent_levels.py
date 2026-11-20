@@ -249,7 +249,7 @@ def test_a_live_change_leaves_unsaved_other_fields_alone(parts, dialog):
 def test_latency_is_live_from_the_page(parts, dialog):
     _, controller, path = parts
     editor = dialog.editors["latency_ms"]
-    editor._auto.setChecked(False)
+    editor._manual.setChecked(True)
     editor._dspin.setValue(85.0)
     assert dialog.save()
     assert controller.settings.latency_ms == 85.0 and load_settings(path).latency_ms == 85.0

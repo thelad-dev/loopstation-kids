@@ -167,6 +167,19 @@ class HistoryEntry:
     recorded_at: datetime | None  # local time, None if the name has no stamp
 
 
+@dataclass(frozen=True)
+class ChangeEntry:
+    """One step of the undo or redo stack, described for the parents' list."""
+
+    seq: int
+    kind: str | None  # event type of the original change; None if its log line is archived
+    pads: tuple[int, ...]
+    when: datetime | None  # local time of the event in the log, not the time of showing
+    undone: bool  # on the redo stack: taken back, can be brought back
+    detail: dict[str, Any]
+    replaces: bool  # the change replaced an earlier sound on the pad
+
+
 class Controller:
     def __init__(
         self,
@@ -294,6 +307,10 @@ class Controller:
             return None
         loop_seconds = grid / self.audio.sample_rate
         return min(1.0, max(0.0, 1.0 - wait / loop_seconds))
+
+    def now(self) -> float:
+        """The controller's clock (seconds since the epoch): the child page measures times against it."""
+        return self._clock()
 
     def notice(self) -> str | None:
         """A short hint for the status line, or None."""
@@ -582,6 +599,50 @@ class Controller:
     def can_redo(self, pad: int | None = None) -> bool:
         """Is there an undone change to bring back? Not while recording."""
         return self._recording is None and find_entry(self.store.state.redo_stack, pad) is not None
+
+    def undo_depth(self) -> int:
+        """Number of steps "Zurück" can take."""
+        return len(self.store.state.undo_stack)
+
+    def redo_depth(self) -> int:
+        """Number of steps "Wiederholen" can bring back (none while recording)."""
+        return 0 if self._recording is not None else len(self.store.state.redo_stack)
+
+    def changes(self) -> list[ChangeEntry]:
+        """The undone changes, then the done ones, each newest first (next redo beside next undo)."""
+        state = self.store.state
+        known = self.store.active_events()
+        entries = [(entry, True) for entry in state.redo_stack]
+        entries += [(entry, False) for entry in reversed(state.undo_stack)]
+        result = []
+        for entry, undone in entries:
+            origin = self._origin_event(entry["seq"], known)
+            when = None
+            if origin is not None:
+                utc = datetime.fromisoformat(origin.ts.replace("Z", "+00:00"))
+                when = utc.astimezone().replace(tzinfo=None)
+            result.append(ChangeEntry(
+                seq=entry["seq"],
+                kind=origin.type if origin is not None else None,
+                pads=tuple(sorted(entry["pads"])),
+                when=when,
+                undone=undone,
+                detail=dict(origin.data) if origin is not None else {},
+                # Only a change that was never undone knows what it replaced.
+                replaces=origin is not None and origin.seq == entry["seq"]
+                and any(sample is not None for sample in entry["pads"].values()),
+            ))
+        return result
+
+    @staticmethod
+    def _origin_event(seq: int, known: dict[int, ev.Event]) -> ev.Event | None:
+        """The content event behind a stack entry (an undo or redo entry leads back to it)."""
+        event = known.get(seq)
+        for _ in range(len(known) + 1):
+            if event is None or event.type not in (ev.UNDO, ev.REDO):
+                return event
+            event = known.get(event.data.get("target"))
+        return None
 
     def pad_colors(self) -> dict[int, str]:
         """Colour of every pad on the grid."""

@@ -34,7 +34,7 @@ from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.main_window import MainWindow
 from loopstation.gui.parent_gate import ParentEntryButton, ParentGate
 from loopstation.gui.sets_page import SetsDialog
-from loopstation.gui.settings_page import ParentAction, SettingsDialog
+from loopstation.gui.settings_page import SettingsDialog
 from loopstation.gui.volume_slider import VolumeSlider
 from loopstation.gui.widgets import DARK_SCROLLBAR_QSS
 from loopstation.session import SetSession
@@ -66,16 +66,15 @@ class World:
         self.clock.advance(seconds)
         self.controller.press(pad)
 
-    def parent_pages(self) -> dict[str, QDialog]:
-        actions = [ParentAction("layers", "Erweitert", lambda p: None),
-                   ParentAction("download", "Export", lambda p: None),
-                   ParentAction("save", "Sets", lambda p: None)]
+    def parent_pages(self) -> dict[str, QWidget]:
+        pages = self.window.parent_pages()
         return {
             "settings": SettingsDialog(self.config, self.controller.settings, self.window.apply_settings,
-                                       None, self.window, actions),
-            "advanced": AdvancedDialog(self.controller, self.window),
-            "sets": SetsDialog(self.session, None, self.window),
-            "export": ExportDialog(self.controller, self.window, export_dir=self.config.parent / "out",
+                                       None, self.window, pages),
+            # The areas are widgets of the parents' area; on their own they are top level windows here.
+            "advanced": AdvancedDialog(self.controller, None),
+            "sets": SetsDialog(self.session, None, None),
+            "export": ExportDialog(self.controller, None, export_dir=self.config.parent / "out",
                                    clock=self.clock),
             "history": HistoryDialog(self.controller, 0, self.window),
         }
@@ -102,6 +101,7 @@ def world(qapp, tmp_path, clock):
 CHILD_BUTTONS = {
     "Spielen", "Aufnehmen", "Loop", "Löschen", "Verlauf",
     "Zurück", "Wiederholen", "Alles still", "Alle löschen",
+    "Eltern",  # the small lock tile (mockup 01)
     "\u21b6",  # the back badge of a pad (mockup 05)
 }
 # Terms the plan gives to the parents' pages: they must not show up as words on the child page.
@@ -110,6 +110,11 @@ PARENT_TERMS = re.compile(
     r"Ger[aä]t|Mikrofon|Lautsprecher|WAV|MP3|Hz|ASIO|Grid|Onset|Metronom|Einstellung|Eltern(?!-)",
     re.IGNORECASE,
 )
+
+
+# Words of the child page that the vocabulary check would flag but the mockups show on it:
+# the lock tile "Eltern" (the way in, held for two seconds) and, painted by the pulse strip, "Puls".
+CHILD_WORDS = {"Eltern", "Puls"}
 
 
 def visible_texts(root: QWidget) -> list[str]:
@@ -143,7 +148,7 @@ def test_the_child_page_shows_no_parent_vocabulary_in_any_state(world):
     def check(label: str) -> None:
         window.refresh()
         words = visible_texts(window)
-        bad = [t for t in words if PARENT_TERMS.search(t)]
+        bad = [t for t in words if t not in CHILD_WORDS and PARENT_TERMS.search(t)]
         assert not bad, f"{label}: {bad}"
         # Numbers belong to the parents too; the pad numbers are painted by the pads themselves.
         assert not [t for t in words if re.search(r"\d", t)], f"{label}: {words}"
@@ -240,7 +245,9 @@ def test_scroll_bars_are_dark_not_the_white_native_ones(world, name):
     dialog.resize(MIN_WINDOW_WIDTH, 360)  # short, so that every page has something to scroll
     dialog.show()
     QTest.qWaitForWindowExposed(dialog)
-    areas = [a for a in dialog.findChildren(QScrollArea) if a.verticalScrollBar().maximum() > 0]
+    # Only the areas on show: the other areas of the parents' area sit hidden behind the shown one.
+    areas = [a for a in dialog.findChildren(QScrollArea)
+             if a.isVisible() and a.verticalScrollBar().maximum() > 0]
     assert areas, f"{name}: nothing to scroll in this state"
     for area in areas:
         bar = area.verticalScrollBar()
@@ -338,15 +345,21 @@ APP_SCRIPT = textwrap.dedent(
                 def exec(self):
                     return QDialog.DialogCode.Accepted
 
+            def every_area(*args):
+                from loopstation.gui.settings_page import SettingsDialog
+
+                dialog = SettingsDialog(*args)
+                for key in dialog.page_keys:  # history, Erweitert, sets and export are built on a visit
+                    dialog.show_page(key)
+                return dialog
+
             window.gate_factory = lambda parent: Gate(parent)
+            window.settings_factory = every_area
             window.controller.press(0)
             window.confirm_delete_all()
             window.open_history(0)
             for _ in range(2):
                 window.open_parent_area()
-            window.open_export(window)
-            window.open_advanced(window)
-            window.open_sets(window)
             timer.stop()
         QTimer.singleShot(0, app.quit)
 

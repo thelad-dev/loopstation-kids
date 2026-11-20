@@ -1,8 +1,8 @@
-"""Sets page of the parents' area: save the session as a set, open a saved one (mockups 14 and 15).
+"""Sets area of the parents' area: save the session as a set, open a saved one (mockups 14 and 15).
 
-Nothing of this is on the child page. The dialog only talks to a
-``SetSession``; opening hands the verified set to ``on_open`` and closes, the
-app then replaces the session between two runs of its event loop.
+Nothing of this is on the child page. The page only talks to a
+``SetSession``; opening hands the verified set to ``on_open`` and reports ``done(True)``, the
+app then replaces the session between two runs of its event loop. "Abbrechen" reports ``done(False)``.
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPaintEvent, QPen, QShowEvent
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import (
     QAbstractButton,
     QDialog,
@@ -24,18 +24,19 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QRadioButton,
-    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from loopstation import sets
 from loopstation.gui.icons import draw_icon
-from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
+from loopstation.gui.parent_gate import PARENT_ACCENT
+from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardGrid, CurrentPageStack, scrolled
 from loopstation.gui.widgets import (
     ACCENT_GRAY,
     ACCENT_ORANGE,
     BACKGROUND,
+    DARK_SCROLLBAR_QSS,
     SURFACE,
     TEXT,
     TEXT_DIM,
@@ -199,8 +200,10 @@ class _SetRow(QAbstractButton):
         painter.end()
 
 
-class SetsDialog(QDialog):
-    """Save the session as a set / open a saved one. Modal, fills the window it was opened from."""
+class SetsPage(QWidget):
+    """Save the session as a set / open a saved one. ``done`` says when the page is finished with."""
+
+    done = Signal(bool)  # True: a set was opened (the parents' area ends); False: "Abbrechen"
 
     def __init__(
         self,
@@ -214,6 +217,7 @@ class SetsDialog(QDialog):
         self._on_open = on_open
         self._clock = clock
         self.opened: PreparedOpen | None = None
+        self._result = QDialog.DialogCode.Rejected
         self.infos: list[SetInfo] = []
         self.rows: list[_SetRow] = []
         self.selected: SetInfo | None = None
@@ -221,10 +225,10 @@ class SetsDialog(QDialog):
         self.folder_chooser: Callable[[QWidget, str], str] = (
             lambda parent_, start: QFileDialog.getExistingDirectory(parent_, "Ordner für Sets", start))
         self.setWindowTitle("Sets")
-        self.setModal(True)
         self.setStyleSheet(
-            f"SetsDialog {{ background: {BACKGROUND.name()}; border: 5px solid {PARENT_ACCENT}; }} "
-            f"QLabel, QRadioButton {{ color: {TEXT.name()}; font-size: 16px; }} "
+            "QScrollArea, #scroll_inner { background: transparent; border: none; } "
+            + DARK_SCROLLBAR_QSS + SCROLLBAR_GAP_QSS
+            + f"QLabel, QRadioButton {{ color: {TEXT.name()}; font-size: 16px; }} "
             f"#card {{ background: {CARD}; border: 1px solid {CARD_BORDER}; border-radius: 18px; }} "
             f"#good {{ background: #12201A; border: 1px solid #1F5A32; border-radius: 18px; }} "
             f"#warn {{ background: #2A2314; border: 2px solid {ORANGE}; border-radius: 18px; }} "
@@ -238,24 +242,6 @@ class SetsDialog(QDialog):
             f"stop:0 {PARENT_ACCENT}, stop:0.5 {PARENT_ACCENT}, stop:0.56 {BACKGROUND.name()}, "
             f"stop:1 {BACKGROUND.name()}); }}")
 
-        # Header: back to the child page, the open lock, title.
-        self.close_button = BigButton("back", "Zur Kinderseite", ACCENT_GRAY, min_height=64)
-        self.close_button.setToolTip("Eltern-Modus beenden")
-        self.close_button.clicked.connect(self.reject)
-        title = QLabel("Elternbereich")
-        title.setStyleSheet("font-size: 34px; font-weight: bold;")
-        subtitle = QLabel("Sets · lokal, ohne Konto, ohne Internet")
-        subtitle.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 15px;")
-        title_box = QVBoxLayout()
-        title_box.setSpacing(0)
-        title_box.addWidget(title)
-        title_box.addWidget(subtitle)
-        header = QHBoxLayout()
-        header.setSpacing(24)
-        header.addWidget(self.close_button)
-        header.addWidget(_IconLabel("unlock", PARENT_ACCENT, 40))
-        header.addLayout(title_box, 1)
-
         # Tabs.
         self.save_tab = TabButton("save", "Set speichern")
         self.open_tab = TabButton("folder", "Set öffnen …")
@@ -267,7 +253,7 @@ class SetsDialog(QDialog):
         tabs.addWidget(self.open_tab)
         tabs.addStretch(1)
 
-        self.stack = QStackedWidget()
+        self.stack = CurrentPageStack()
         self.stack.addWidget(self._build_save_page())
         self.stack.addWidget(self._build_open_page())
 
@@ -275,13 +261,11 @@ class SetsDialog(QDialog):
         self.message.setWordWrap(True)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 16, 32, 16)
-        layout.setSpacing(10)
-        layout.addLayout(header)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(16)
         layout.addLayout(tabs)
-        layout.addWidget(self.stack, 1)
+        layout.addWidget(scrolled(self.stack), 1)
         layout.addWidget(self.message)
-        self.resize(1280, 800)
         self.show_tab("save")
 
     # -------------------------------------------------------------- pages
@@ -376,10 +360,10 @@ class SetsDialog(QDialog):
         form.addStretch(1)
 
         self.save_button = BigButton(
-            "check", "Speichern", QColor(PARENT_ACCENT), checkable=True, min_height=60)
+            "check", "Speichern", QColor(PARENT_ACCENT), checkable=True, min_height=56, font_pt=13)
         self.save_button.setChecked(True)  # filled: the one main action
         self.save_button.clicked.connect(self._save_clicked)
-        self.cancel_button = BigButton("close", "Abbrechen", ACCENT_GRAY, min_height=60)
+        self.cancel_button = BigButton("close", "Abbrechen", ACCENT_GRAY, min_height=56, font_pt=13)
         self.cancel_button.clicked.connect(self.reject)
         buttons = QHBoxLayout()
         buttons.setSpacing(14)
@@ -406,13 +390,14 @@ class SetsDialog(QDialog):
 
         right = QVBoxLayout()
         right.setSpacing(16)
+        right.setContentsMargins(0, 0, 0, 0)
         right.addWidget(facts_card, 3)
         right.addWidget(good_card, 2)
-        columns = QHBoxLayout(page)
+        right_widget = QWidget()
+        right_widget.setLayout(right)
+        columns = QVBoxLayout(page)
         columns.setContentsMargins(0, 0, 0, 0)
-        columns.setSpacing(20)
-        columns.addWidget(form_card, 3)
-        columns.addLayout(right, 2)
+        columns.addWidget(CardGrid([[form_card, right_widget]], ratio=(29, 17), gap=20, stretch_last=True), 1)
         return page
 
     def _build_open_page(self) -> QWidget:
@@ -475,7 +460,8 @@ class SetsDialog(QDialog):
 
         # Plain open button: shown when nothing would be lost.
         self.open_card, plain = self._card("")
-        self.open_button = BigButton("play", "Öffnen", QColor(PARENT_ACCENT), checkable=True, min_height=60)
+        self.open_button = BigButton(
+            "play", "Öffnen", QColor(PARENT_ACCENT), checkable=True, min_height=56, font_pt=13)
         self.open_button.setChecked(True)
         self.open_button.clicked.connect(self._open_selected)
         plain.addWidget(self._small("Die aktuelle Sitzung wird durch das Set ersetzt.", TEXT.name(), 14))
@@ -483,14 +469,15 @@ class SetsDialog(QDialog):
 
         right = QVBoxLayout()
         right.setSpacing(16)
+        right.setContentsMargins(0, 0, 0, 0)
         right.addWidget(self.detail_card, 3)
         right.addWidget(self.unsaved_card, 3)
         right.addWidget(self.open_card, 2)
-        columns = QHBoxLayout(page)
+        right_widget = QWidget()
+        right_widget.setLayout(right)
+        columns = QVBoxLayout(page)
         columns.setContentsMargins(0, 0, 0, 0)
-        columns.setSpacing(20)
-        columns.addWidget(list_card, 3)
-        columns.addLayout(right, 2)
+        columns.addWidget(CardGrid([[list_card, right_widget]], ratio=(29, 17), gap=20, stretch_last=True), 1)
         return page
 
     @staticmethod
@@ -506,11 +493,18 @@ class SetsDialog(QDialog):
 
     # ---------------------------------------------------------- behaviour
 
-    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt API
-        super().showEvent(event)
-        parent = self.parentWidget()
-        if parent is not None and parent.isVisible():
-            self.setGeometry(parent.geometry())
+    # What a dialog offered, kept for callers and tests: the page reports through ``done``.
+
+    def result(self) -> QDialog.DialogCode:
+        return self._result
+
+    def accept(self) -> None:
+        self._result = QDialog.DialogCode.Accepted
+        self.done.emit(True)
+
+    def reject(self) -> None:
+        self._result = QDialog.DialogCode.Rejected
+        self.done.emit(False)
 
     def show_tab(self, which: str) -> None:
         saving = which == "save"
@@ -650,3 +644,7 @@ class SetsDialog(QDialog):
         if self._on_open is not None:
             self._on_open(prepared)
         self.accept()
+
+
+# The page used to be a dialog of its own; the name stays for code that still imports it.
+SetsDialog = SetsPage

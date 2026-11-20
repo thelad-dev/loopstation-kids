@@ -16,6 +16,7 @@ from loopstation.config import Settings, load_settings
 from loopstation.controller import Controller
 from loopstation.gui import settings_page
 from loopstation.gui.parent_gate import ENTRY_SIZE, HOLD_MS, GateQuestion, ParentGate, new_question
+from loopstation.gui.parent_tile import TILE_HEIGHT, TILE_WIDTH
 from loopstation.gui.settings_page import NOTES, Field, SettingsDialog, ToggleSwitch, register_field
 from loopstation.store import EventStore
 
@@ -107,9 +108,11 @@ def parts(qapp, tmp_path, clock):
 def test_entry_is_small_dim_and_needs_a_hold(parts):
     win, _controller, _path = parts
     entry = win.parent_entry
-    assert entry.width() == entry.height() == ENTRY_SIZE
+    # A small tile in the bottom right corner (mockup 01): lock and the word "Eltern".
+    assert (entry.width(), entry.height()) == (TILE_WIDTH, TILE_HEIGHT) and entry.text() == "Eltern"
+    assert ENTRY_SIZE < TILE_WIDTH  # the bare lock of the gate itself stays small
     assert HOLD_MS == 2000  # mockup 08: two seconds
-    # In the window margin: it covers no mode button, pad or action button.
+    # It sits beside the buttons of the bottom row: it covers no mode button, pad or action button.
     box = entry.geometry()
     for widget in [*win.mode_buttons.values(), *win.grid.pads, win.undo_button, win.stop_button,
                    win.delete_all_button]:
@@ -248,10 +251,12 @@ def test_restart_rows_are_marked_in_the_label(page):
     from PySide6.QtWidgets import QFormLayout
 
     dialog, *_ = page
-    form = dialog.findChildren(QFormLayout)[0]
-    labels = {form.itemAt(i, QFormLayout.ItemRole.LabelRole).widget().text() for i in range(form.rowCount())}
+    labels = set()
+    for form in dialog.findChildren(QFormLayout):
+        for row in range(form.rowCount()):
+            labels.add(form.itemAt(row, QFormLayout.ItemRole.LabelRole).widget().text())
     marked = {label for label in labels if "wirkt nach Neustart" in label}
-    assert len(marked) == 4
+    assert len(marked) == 4  # rows, cols, sample_rate, data_dir (the ASIO switch is a switch row)
     assert not any("wirkt nach Neustart" in label for label in labels - marked)
 
 
@@ -283,7 +288,7 @@ def test_auto_latency_roundtrip(page):
     dialog, path, applied, _running = page
     editor = dialog.editors["latency_ms"]
     assert editor.value() == "auto"
-    editor._auto.setChecked(False)
+    editor._manual.setChecked(True)
     editor._dspin.setValue(90)
     assert dialog.save()
     assert load_settings(path).latency_ms == 90.0

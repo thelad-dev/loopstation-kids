@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 from conftest import FakeAudio, FakeClock, FakeSoundDevice, make_settings
 from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QWidget
 
 from loopstation.audio import metronome
 from loopstation.audio.dynamics import block_peak, db_to_gain
@@ -21,7 +22,9 @@ from loopstation.audio.samples import load_wav
 from loopstation.audio.sounddevice_backend import SoundDeviceAudio
 from loopstation.config import ConfigError, Settings, parse_settings
 from loopstation.controller import Controller, Mode
-from loopstation.gui.advanced_page import AdvancedDialog, MetronomeStrip, loop_title
+from loopstation.gui.advanced_page import AdvancedPage, loop_title
+from loopstation.gui.grid_panel import GridPanel
+from loopstation.gui.tempo_card import MetronomeCard, MetronomeStrip, TempoCard
 from loopstation.gui.waveform import WAVE_COLOR, WaveformWidget, beat_lines, peak_columns
 from loopstation.state import master_source
 from loopstation.store import EventStore
@@ -397,72 +400,107 @@ def test_loop_titles_say_how_the_loop_sits_on_the_grid():
     assert loop_title(2, None, None, None, SR) == "Pad 3 · noch kein Loop"
 
 
-# --- the page ----------------------------------------------------------------------------------
+# --- the pages -------------------------------------------------------------------------------
 
 
 @pytest.fixture
 def page(qapp, tmp_path, clock):
     controller, audio = build(tmp_path, clock, claps=[0.5, 1.0])
     record(controller, clock, 0, 3.0)
-    dialog = AdvancedDialog(controller)
+    dialog = AdvancedPage(controller, export_dir=tmp_path / "out")
     yield dialog, controller, audio
     dialog.close()
     controller.store.close()
 
 
-def test_the_page_shows_the_loop_and_the_grid_of_the_session(page):
+@pytest.fixture
+def tempo(qapp, tmp_path, clock):
+    """The tempo correction and the current-bar card of the "Takt & Loop" area."""
+    controller, audio = build(tmp_path, clock, claps=[0.5, 1.0])
+    record(controller, clock, 0, 3.0)
+    card, grid_panel = TempoCard(controller), GridPanel(controller)
+    yield card, grid_panel, controller, audio
+    card.close()
+    grid_panel.close()
+    controller.store.close()
+
+
+def test_the_page_shows_the_loop_of_the_session(page):
     dialog, controller, _ = page
     assert dialog.pad == 0
     assert dialog.wave_title.text().startswith("Pad 1 · Aufnahme 2,00 s")
     assert len(dialog.waveform.lines()) == 4
-    assert dialog.grid_panel.texts()[0][1] == "120 BPM"
-    assert dialog.bpm_spin.value() == 120 and dialog.signature == "4/4"
-    assert not dialog.measured_button.isEnabled()  # nothing of the parents' set yet
     dialog.choose_pad(5)
     assert dialog.waveform.lines() == [] and "noch kein Loop" in dialog.wave_title.text()
+    assert not dialog.save_button.isEnabled()  # nothing to save on an empty pad
 
 
-def test_the_page_sets_the_parents_tempo_and_gives_the_measured_one_back(page):
-    dialog, controller, audio = page
-    dialog.bpm_spin.setValue(90)
-    dialog.signature_chips["3/4"].click()
-    assert dialog.apply_parent_grid() is True
+def test_the_page_saves_the_shown_loop_as_wav(page, tmp_path):
+    dialog, controller, _ = page
+    assert "pad01_" in dialog.target_label.text()
+    path = dialog.export_loop()
+    assert path is not None and path.parent == tmp_path / "out" and path.suffix == ".wav"
+    assert path.exists() and dialog.last_path == path
+    assert "Gespeichert" in dialog.loop_message.text()
+    dialog.choose_pad(5)
+    assert dialog.export_loop() is None
+    assert "keine lesbare Aufnahme" in dialog.loop_message.text()
+
+
+def test_the_cue_switch_of_the_page_acts_at_once(page):
+    dialog, controller, _ = page
+    assert controller.settings.export_cue_points is True
+    dialog.cue_switch.setChecked(False)
+    assert controller.settings.export_cue_points is False
+
+
+def test_the_tempo_card_shows_the_grid_of_the_session(tempo):
+    card, grid_panel, controller, _ = tempo
+    assert grid_panel.texts()[0][1] == "120 BPM"
+    assert card.bpm_spin.value() == 120 and card.signature == "4/4"
+    assert not card.measured_button.isEnabled()  # nothing of the parents' set yet
+
+
+def test_the_tempo_card_sets_the_parents_tempo_and_gives_the_measured_one_back(tempo):
+    card, grid_panel, controller, audio = tempo
+    card.bpm_spin.setValue(90)
+    card.signature_chips["3/4"].click()
+    assert card.apply_parent_grid() is True
     info = controller.grid_info()
     assert round(info.bpm) == 90 and info.signature == "3/4" and info.source == "parent_bpm"
-    assert dialog.grid_panel.texts()[3][1] == "Eltern-BPM"
-    assert dialog.measured_button.isEnabled()
-    assert dialog.tempo_status.text().startswith("Vorgegeben: 90 BPM · 3/4")
-    assert len(dialog.waveform.lines()) == 3 * round(len(controller.loop_audio(controller.pad(0).sample))
-                                                     / controller.grid_frames())
-    assert dialog.use_measured_grid() is True
-    assert controller.grid_info().source == "onset" and dialog.bpm_spin.value() == 120
+    grid_panel.refresh()
+    assert grid_panel.texts()[3][1] == "Eltern-BPM"
+    assert card.measured_button.isEnabled()
+    assert card.tempo_status.text().startswith("Vorgegeben: 90 BPM · 3/4")
+    assert card.use_measured_grid() is True
+    assert controller.grid_info().source == "onset" and card.bpm_spin.value() == 120
 
 
-def test_the_page_says_so_when_the_tempo_cannot_be_set(qapp, tmp_path, clock):
+def test_the_tempo_card_says_so_when_the_tempo_cannot_be_set(qapp, tmp_path, clock):
     controller, _ = build(tmp_path, clock, loop_sync=False)
-    dialog = AdvancedDialog(controller)
+    card = TempoCard(controller)
     try:
-        assert dialog.apply_parent_grid() is False
-        assert "Loops im Takt halten" in dialog.tempo_status.text()
+        assert card.apply_parent_grid() is False
+        assert "Loops im Takt halten" in card.tempo_status.text()
     finally:
-        dialog.close()
+        card.close()
 
 
 def test_the_refusal_goes_away_once_setting_the_tempo_is_possible_again(qapp, tmp_path, clock):
     controller, _ = build(tmp_path, clock)
-    dialog = AdvancedDialog(controller)
+    card = TempoCard(controller)
     try:
         controller.press(0)  # a recording runs
-        assert dialog.apply_parent_grid() is False
-        assert "Das geht gerade nicht" in dialog.tempo_status.text()
-        dialog.refresh()
-        assert "Das geht gerade nicht" in dialog.tempo_status.text()
+        assert card.apply_parent_grid() is False
+        assert "Das geht gerade nicht" in card.tempo_status.text()
+        card.refresh()
+        assert "Das geht gerade nicht" in card.tempo_status.text()
         clock.advance(2.0)
         controller.press(0)
-        dialog.refresh()
-        assert dialog.tempo_status.text() == ""
+        card.refresh()
+        assert card.tempo_status.text() == ""
     finally:
-        dialog.close()
+        card.close()
 
 
 def test_the_first_recording_on_the_parents_bar_is_fitted_not_stretched(tmp_path, clock):
@@ -475,28 +513,42 @@ def test_the_first_recording_on_the_parents_bar_is_fitted_not_stretched(tmp_path
     assert np.abs(data[-grid // 20 :]).max() == 0.0  # padded with silence, content not stretched
 
 
-def test_the_page_on_an_empty_session_waits_for_the_first_recording(qapp, tmp_path, clock):
+def test_the_tempo_card_on_an_empty_session_waits_for_the_first_recording(qapp, tmp_path, clock):
     controller, _ = build(tmp_path, clock)
-    dialog = AdvancedDialog(controller)
+    card, metronome_card = TempoCard(controller), MetronomeCard(controller)
     try:
-        dialog.bpm_spin.setValue(72)
-        assert dialog.apply_parent_grid() is True
-        assert "gilt ab der nächsten ersten Aufnahme" in dialog.tempo_status.text()
-        assert dialog.strip.beats is None
+        card.bpm_spin.setValue(72)
+        assert card.apply_parent_grid() is True
+        assert "gilt ab der nächsten ersten Aufnahme" in card.tempo_status.text()
+        assert metronome_card.strip.beats is None
+    finally:
+        card.close()
+        metronome_card.close()
+
+
+def test_the_metronome_strip_marks_the_current_beat(tempo):
+    _card, _grid, controller, audio = tempo
+    metronome_card = MetronomeCard(controller)
+    audio.boundary_in = 1.2  # 0.8 s into a 2 s bar: beat 2 of 4 (0-based 1)
+    metronome_card.refresh()
+    assert metronome_card.strip.beats == 4 and metronome_card.strip.active == 1
+    assert "120 BPM" in metronome_card.period_label.text() and "0,50 s" in metronome_card.period_label.text()
+    metronome_card.close()
+
+
+def test_the_metronome_tone_switch_of_the_area_acts_at_once(tempo, tmp_path):
+    from loopstation.gui.settings_page import SettingsDialog
+
+    _card, _grid, controller, _audio = tempo
+    dialog = SettingsDialog(
+        tmp_path / "settings.toml", controller.settings, lambda new: [], controller=controller)
+    try:
+        dialog.editors["metronome_tone"]._box.setChecked(True)
+        assert controller.settings.metronome_tone is True
+        dialog.editors["metronome_tone"]._box.setChecked(False)
+        assert controller.settings.metronome_tone is False
     finally:
         dialog.close()
-
-
-def test_the_metronome_strip_marks_the_current_beat_and_the_tone_switch_acts_at_once(page):
-    dialog, controller, audio = page
-    audio.boundary_in = 1.2  # 0.8 s into a 2 s bar: beat 2 of 4 (0-based 1)
-    dialog.refresh()
-    assert dialog.strip.beats == 4 and dialog.strip.active == 1
-    assert "120 BPM" in dialog.period_label.text() and "0,50 s" in dialog.period_label.text()
-    dialog.tone_switch.setChecked(True)
-    assert controller.settings.metronome_tone is True
-    dialog.tone_switch.setChecked(False)
-    assert controller.settings.metronome_tone is False
 
 
 def test_the_strip_renders_with_and_without_a_grid(qapp):
@@ -533,12 +585,12 @@ def test_the_parents_area_offers_erweitert_and_the_child_page_has_nothing_of_it(
         shown, opened = [], []
         window.gate_factory = lambda _parent: Auto(QDialog.DialogCode.Accepted)
         window.settings_factory = lambda *a: shown.append(a) or Auto(QDialog.DialogCode.Rejected)
-        window.advanced_factory = lambda c, p: opened.append((c, p)) or Auto(QDialog.DialogCode.Rejected)
+        window.advanced_factory = lambda c, p: opened.append((c, p)) or QWidget()
         window.open_parent_area()
-        actions = shown[0][5]
-        assert actions[0].label == "Erweitert" and actions[0].icon == "layers"
-        actions[0].open(window)
-        assert opened == [(controller, window)]
+        pages = {page.key: page for page in shown[0][5]}
+        assert pages["advanced"].label == "Erweitert" and pages["advanced"].icon == "layers"
+        pages["advanced"].build()
+        assert opened == [(controller, None)]
     finally:
         window.timer.stop()
         window.close()

@@ -79,8 +79,8 @@ class PeakMeter(QWidget):
         font.setBold(True)
         painter.setFont(font)
         painter.setPen(QColor(ACCENT_GREEN))
-        painter.drawText(QRectF(x_of(low) - 40, 0, x_of(high) - x_of(low) + 80, LABEL_HEIGHT - 4),
-                         Qt.AlignmentFlag.AlignCenter, "Ziel −12 … −6 dBFS")
+        painter.drawText(QRectF(left, 0, width, LABEL_HEIGHT - 4),
+                         Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, "Ziel −12 … −6 dBFS")
 
         # Frame, target zone, bar, hold tick.
         frame = QRectF(left, top, width, BAR_HEIGHT)

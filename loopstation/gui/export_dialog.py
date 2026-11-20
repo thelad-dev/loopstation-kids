@@ -1,7 +1,7 @@
-"""Export page of the parents' area (mockup 16): the sum over N bars, and single loops.
+"""Export area of the parents' area (mockup 16): the sum over N bars, and single loops.
 
 Only the parents reach it (behind the parental gate); the files stay on this
-computer. The dialog only collects choices and shows them; the rendering and
+computer. The page only collects choices and shows them; the rendering and
 the checks live in ``loopstation.export``.
 """
 
@@ -14,10 +14,9 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, QStandardPaths, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPaintEvent, QPen, QShowEvent
+from PySide6.QtGui import QColor, QFont, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import (
     QButtonGroup,
-    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -33,11 +32,11 @@ from PySide6.QtWidgets import (
 from loopstation import export as ex
 from loopstation.controller import Controller
 from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
+from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardGrid, scrolled
 from loopstation.gui.settings_page import ToggleSwitch
 from loopstation.gui.widgets import (
     ACCENT_GRAY,
     ACCENT_GREEN,
-    BACKGROUND,
     DARK_SCROLLBAR_QSS,
     TEXT,
     TEXT_DIM,
@@ -83,6 +82,29 @@ def unique_path(folder: Path, name: str) -> Path:
     return path
 
 
+def save_loop(
+    controller: Controller, pad: int | None, export_dir: Path, stamp: str,
+) -> tuple[Path | None, str, bool]:
+    """Write the loop of ``pad`` unchanged as WAV into ``export_dir``.
+
+    Returns ``(path, text, is_error)``: the path (None if it could not be made) and the line to show.
+    Shared by the Export and the Erweitert area.
+    """
+    sample = None if pad is None else controller.pad(pad).sample
+    data = None if sample is None else controller.sample_audio(sample)
+    if pad is None or data is None:
+        return None, "Dieses Pad hat keine lesbare Aufnahme.", True
+    path = unique_path(export_dir, f"pad{pad + 1:02d}_{stamp}.wav")
+    markers = controller.markers(pad) if controller.settings.export_cue_points else []
+    try:
+        kept = ex.export_loop(path, data, controller.sample_rate, f"Loopstation Pad {pad + 1}", markers)
+    except ex.ExportError as exc:
+        return None, str(exc), True
+    note = {"cue": " (mit Markern als Cue-Punkten)",
+            "sidecar": " (Marker als Begleitdatei daneben)"}.get(kept or "", "")
+    return path, f"Gespeichert: {path}{note}", False
+
+
 class PreviewRows(QWidget):
     """Which pads repeat how often over the bars (green = loop, grey = one-shot at the start)."""
 
@@ -96,7 +118,7 @@ class PreviewRows(QWidget):
         # (label, pass length in bars, one-shot)
         self.rows: list[tuple[str, float, bool]] = []
         self.bars = 8
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(220)
 
     def set_rows(self, rows: list[tuple[str, float, bool]], bars: int) -> None:
         self.rows, self.bars = rows, max(1, bars)
@@ -146,7 +168,7 @@ class PreviewRows(QWidget):
         painter.end()
 
 
-class ExportDialog(QDialog):
+class ExportPage(QWidget):
     """Export of the sum over N bars and of single loops as WAV (parents only, local files)."""
 
     def __init__(
@@ -162,11 +184,9 @@ class ExportDialog(QDialog):
         self._clock = clock
         self.last_path: Path | None = None
         self.setWindowTitle("Export")
-        self.setModal(True)
         self.setStyleSheet(
-            f"ExportDialog {{ background: {BACKGROUND.name()}; border: 5px solid {PARENT_ACCENT}; }} "
             "QScrollArea { background: transparent; border: none; } "
-            + DARK_SCROLLBAR_QSS
+            + DARK_SCROLLBAR_QSS + SCROLLBAR_GAP_QSS
             + f"QLabel, QRadioButton {{ color: {TEXT.name()}; font-size: 16px; }} "
             "#card { background: #1B1B1F; border: 1px solid #2C2C31; border-radius: 18px; } "
             "#length_box { background: #141418; border-radius: 14px; } "
@@ -188,36 +208,17 @@ class ExportDialog(QDialog):
             f"QSpinBox {{ color: {TEXT.name()}; background: #26262B; font-size: 18px; "
             f"border: 1px solid {PARENT_ACCENT}; border-radius: 10px; padding: 6px 10px; }}")
 
-        # Header: back to the child page, the open lock, the title.
-        self.close_button = BigButton("back", "Zur Kinderseite", ACCENT_GRAY)
-        self.close_button.setToolTip("Eltern-Modus beenden")
-        self.close_button.clicked.connect(self.reject)
-        title = QLabel("Elternbereich · Export")
-        title.setStyleSheet("font-size: 34px; font-weight: bold;")
-        subtitle = QLabel("Lokal · ohne Konto · ohne Internet · die Dateien bleiben auf diesem Rechner")
-        subtitle.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 15px;")
-        subtitle.setWordWrap(True)  # wraps in a narrow window instead of widening it
-        title_box = QVBoxLayout()
-        title_box.setSpacing(0)
-        title_box.addWidget(title)
-        title_box.addWidget(subtitle)
-        header = QHBoxLayout()
-        header.setSpacing(24)
-        header.addWidget(self.close_button)
-        header.addWidget(_IconLabel("unlock", PARENT_ACCENT, 40))
-        header.addLayout(title_box, 1)
-
-        columns = QHBoxLayout()
-        columns.setSpacing(20)
-        columns.addWidget(self._sum_card(), 29)
-        columns.addLayout(self._right_column(), 17)
-
+        right = QWidget()
+        right.setLayout(self._right_column())
+        right.layout().setContentsMargins(0, 0, 0, 0)
+        inner = QWidget()
+        inner_layout = QVBoxLayout(inner)
+        inner_layout.setContentsMargins(0, 0, 0, 0)
+        inner_layout.addWidget(
+            CardGrid([[self._sum_card(), right]], ratio=(29, 17), gap=20, stretch_last=True), 1)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(16)
-        layout.addLayout(header)
-        layout.addLayout(columns, 1)
-        self.resize(1280, 800)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(scrolled(inner))
         self.refresh()
 
     # ----------------------------------------------------------- building
@@ -225,6 +226,7 @@ class ExportDialog(QDialog):
     @staticmethod
     def _heading(text: str, size: int = 15) -> QLabel:
         label = QLabel(text)
+        label.setWordWrap(True)
         label.setStyleSheet(f"font-size: {size}px; font-weight: bold;")
         return label
 
@@ -258,7 +260,7 @@ class ExportDialog(QDialog):
     def _radio(self, text: str, hint: QLabel, checked: bool = False) -> tuple[QRadioButton, QVBoxLayout]:
         radio = QRadioButton(text)
         radio.setChecked(checked)
-        radio.setStyleSheet("font-size: 15.5px; font-weight: bold;")
+        radio.setStyleSheet("font-size: 14.5px; font-weight: bold;")
         box = QVBoxLayout()
         box.setSpacing(0)
         box.addWidget(radio)
@@ -395,17 +397,18 @@ class ExportDialog(QDialog):
 
     def _right_column(self) -> QVBoxLayout:
         column = QVBoxLayout()
-        column.setSpacing(14)
+        column.setSpacing(12)
 
         preview = self._card()
         preview_layout = QVBoxLayout(preview)
         preview_layout.setContentsMargins(22, 18, 22, 12)
-        preview_layout.addWidget(self._heading("Vorschau: was wiederholt wird", 19))
+        preview_layout.addWidget(self._heading("Vorschau: was wiederholt wird", 17))
         self.preview = PreviewRows()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll.setWidget(self.preview)
+        scroll.setMinimumHeight(150)  # the page scrolls; the preview keeps a size that shows its own bar
         scroll.viewport().setAutoFillBackground(False)
         self.preview.setAutoFillBackground(False)
         preview_layout.addWidget(scroll, 1)
@@ -415,8 +418,8 @@ class ExportDialog(QDialog):
 
         single = self._card()
         single_layout = QVBoxLayout(single)
-        single_layout.setContentsMargins(22, 14, 22, 14)
-        single_layout.setSpacing(6)
+        single_layout.setContentsMargins(22, 10, 22, 10)
+        single_layout.setSpacing(4)
         single_layout.addWidget(self._heading("Einzelnen Loop sichern", 19))
         chips = QGridLayout()
         chips.setSpacing(6)
@@ -459,7 +462,7 @@ class ExportDialog(QDialog):
         info = QFrame()
         info.setObjectName("info_card")
         info_layout = QHBoxLayout(info)
-        info_layout.setContentsMargins(16, 12, 16, 12)
+        info_layout.setContentsMargins(16, 10, 16, 10)
         info_layout.addWidget(_IconLabel("check", PARENT_ACCENT, 26), 0, Qt.AlignmentFlag.AlignTop)
         texts = QVBoxLayout()
         texts.setSpacing(2)
@@ -473,13 +476,6 @@ class ExportDialog(QDialog):
         return column
 
     # -------------------------------------------------------------- state
-
-    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt API
-        super().showEvent(event)
-        # Fill the window it was opened from, like the page in the mockup.
-        parent = self.parentWidget()
-        if parent is not None and parent.isVisible():
-            self.setGeometry(parent.geometry())
 
     def _bars_chosen(self, _id: int) -> None:
         self.custom_row.setVisible(self.bar_group.checkedId() == CUSTOM_BARS)
@@ -613,22 +609,13 @@ class ExportDialog(QDialog):
 
     def export_loop(self) -> Path | None:
         """Write the chosen pad's loop unchanged as WAV; the path, or None (the reason is shown)."""
-        pad = self.selected_loop_pad()
-        sample = None if pad is None else self.controller.pad(pad).sample
-        data = None if sample is None else self.controller.sample_audio(sample)
-        if pad is None or data is None:
-            self._say(self.loop_message, "Dieses Pad hat keine lesbare Aufnahme.", error=True)
-            return None
-        path = unique_path(self.export_dir, f"pad{pad + 1:02d}_{self._stamp()}.wav")
-        markers = self.controller.markers(pad) if self.controller.settings.export_cue_points else []
-        try:
-            kept = ex.export_loop(
-                path, data, self.controller.sample_rate, f"Loopstation Pad {pad + 1}", markers)
-        except ex.ExportError as exc:
-            self._say(self.loop_message, str(exc), error=True)
-            return None
-        self.last_path = path
-        note = {"cue": " (mit Markern als Cue-Punkten)",
-                "sidecar": " (Marker als Begleitdatei daneben)"}.get(kept or "", "")
-        self._say(self.loop_message, f"Gespeichert: {path}{note}")
+        path, text, error = save_loop(
+            self.controller, self.selected_loop_pad(), self.export_dir, self._stamp())
+        self._say(self.loop_message, text, error=error)
+        if path is not None:
+            self.last_path = path
         return path
+
+
+# The page used to be a dialog of its own; the name stays for code that still imports it.
+ExportDialog = ExportPage

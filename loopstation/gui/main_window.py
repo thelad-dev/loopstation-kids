@@ -15,7 +15,6 @@ from PySide6.QtGui import QColor, QKeySequence, QPainter, QPaintEvent, QPen, QRe
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
-    QLabel,
     QMainWindow,
     QSizePolicy,
     QVBoxLayout,
@@ -24,14 +23,18 @@ from PySide6.QtWidgets import (
 
 from loopstation.config import DEFAULT_CONFIG_NAME, Settings
 from loopstation.controller import Controller, Mode
-from loopstation.gui.advanced_page import AdvancedDialog
+from loopstation.gui.advanced_page import AdvancedPage
+from loopstation.gui.changes_page import ChangesPage
 from loopstation.gui.confirm_dialog import ConfirmDialog
-from loopstation.gui.export_dialog import ExportDialog
+from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
-from loopstation.gui.parent_gate import ENTRY_SIZE, ParentEntryButton, ParentGate
-from loopstation.gui.sets_page import SetsDialog
-from loopstation.gui.settings_page import ParentAction, SettingsDialog
+from loopstation.gui.parent_gate import ParentGate
+from loopstation.gui.parent_nav import ParentPage
+from loopstation.gui.parent_tile import ParentTile
+from loopstation.gui.pulse_strip import PulseStrip
+from loopstation.gui.sets_page import SetsPage
+from loopstation.gui.settings_page import SettingsDialog
 from loopstation.gui.volume_slider import VolumeSlider
 from loopstation.gui.widgets import (
     ACCENT_BLUE,
@@ -41,9 +44,7 @@ from loopstation.gui.widgets import (
     ACCENT_PURPLE,
     ACCENT_RED,
     BACKGROUND,
-    TEXT_DIM,
     BigButton,
-    big_font,
     weak_slot,
 )
 from loopstation.midi.launchpad import LaunchpadController
@@ -53,13 +54,20 @@ TICK_MS = 30
 SESSION_WAVE_WIDTH = 0.3  # seconds a pad stays lit while the new-session wave passes
 MODE_BAR_HEIGHT = 104  # mode buttons and volume control share one row of this height
 MODE_FONT_PT = 13
-MODE_PAD_X = 8  # sides of a mode button: the five words and the volume control must fit 1024 px
+MODE_PAD_X = 6  # sides of a mode button: the five words and the volume control must fit 1024 px
 PAD_GAP = 8  # visible gap is larger: each pad keeps a margin for its glow
 # The action row (with "Wiederholen") stays inside a 1024 px wide window at
 # this size (checked by a test).
-BAR_FONT_PT = 17
-BAR_PAD_X = 14
+BAR_FONT_PT = 16
+BAR_PAD_X = 10
 ACTION_HEIGHT = 92  # as in the mockups
+DELETE_ALL_FONT_PT = 11  # "Alle löschen" is a small tile next to the lock, not a big action
+DELETE_ALL_PAD_X = 8
+OUTER_MARGIN_X = 28  # window margins of the mockups
+OUTER_MARGIN_Y = 24
+BAR_GAP = 12  # gap between the buttons of the bottom row (mockups)
+PULSE_CONFIRM_SECONDS = 3.0  # a new grid shows the pulse at least this long (plan 2.2 rule 7)
+_UNSET = object()
 
 # (mode, icon, word, accent colour)
 MODES = [
@@ -89,13 +97,10 @@ class Frame(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.fillRect(self.rect(), BACKGROUND)
         if self.accent is not None:
-            # A faint wash of the mode colour plus a clear coloured border.
-            wash = QColor(self.accent)
-            wash.setAlpha(22)
-            painter.fillRect(self.rect(), wash)
-            painter.setPen(QPen(self.accent, 8))
+            # A clear border in the mode colour (the mockups have no wash over the background).
+            painter.setPen(QPen(self.accent, 5))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(QRectF(self.rect()).adjusted(4, 4, -4, -4), 22, 22)
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(2.5, 2.5, -2.5, -2.5), 22, 22)
         painter.end()
 
 
@@ -165,9 +170,11 @@ class MainWindow(QMainWindow):
         self.history_factory: Callable[[Controller, int, QWidget], QDialog] = HistoryDialog
         self.gate_factory: Callable[[QWidget], QDialog] = ParentGate
         self.settings_factory: Callable[..., QDialog] = SettingsDialog
-        self.export_factory: Callable[[Controller, QWidget], QDialog] = ExportDialog
-        self.sets_factory: Callable[..., QDialog] = SetsDialog
-        self.advanced_factory: Callable[[Controller, QWidget], QDialog] = AdvancedDialog
+        # The areas of the parents' area (widgets, built on their first visit).
+        self.export_factory: Callable[[Controller, QWidget | None], QWidget] = ExportPage
+        self.sets_factory: Callable[..., QWidget] = SetsPage
+        self.advanced_factory: Callable[[Controller, QWidget | None], QWidget] = AdvancedPage
+        self.changes_factory: Callable[[Controller, QWidget | None], QWidget] = ChangesPage
 
         self.setWindowTitle("Loopstation")
         self.frame = Frame()
@@ -192,7 +199,7 @@ class MainWindow(QMainWindow):
             button.setMinimumWidth(floor)
         self.volume_slider = VolumeSlider()
         self.volume_slider.volumeChanged.connect(self.controller.set_volume)
-        mode_bar.addSpacing(20)
+        mode_bar.addSpacing(12)
         mode_bar.addWidget(self.volume_slider, 5)
 
         # Pads.
@@ -208,45 +215,47 @@ class MainWindow(QMainWindow):
             pad.clicked.connect(weak_slot(self._pad_clicked, pad.index))
             pad.on_badge = weak_slot(self.undo_pad, pad.index)
 
-        # Action buttons. "Alle löschen" sits apart on the right.
+        # Bottom row (mockup 01): Zurück, Wiederholen, Alles still, the pulse strip with the status
+        # line, and the lock tile. "Alle löschen" stays on the child page as a small tile next to
+        # the lock (its move to the parents' area is still undecided).
         self.undo_button = BigButton("undo", "Zurück", ACCENT_GRAY, font_pt=BAR_FONT_PT, pad_x=BAR_PAD_X,
-                                   min_height=ACTION_HEIGHT)
+                                     min_height=ACTION_HEIGHT)
         self.undo_button.clicked.connect(self.undo)
         self.redo_button = BigButton("redo", "Wiederholen", ACCENT_GRAY, font_pt=BAR_FONT_PT, pad_x=BAR_PAD_X,
-                                   min_height=ACTION_HEIGHT)
+                                     min_height=ACTION_HEIGHT)
         self.redo_button.clicked.connect(self.redo)
         self.stop_button = BigButton("stop", "Alles still", ACCENT_GRAY, font_pt=BAR_FONT_PT, pad_x=BAR_PAD_X,
-                                   min_height=ACTION_HEIGHT)
+                                     min_height=ACTION_HEIGHT)
         self.stop_button.clicked.connect(self.stop_all)
-        self.delete_all_button = BigButton("trash", "Alle löschen", ACCENT_RED, font_pt=BAR_FONT_PT,
-                                     pad_x=BAR_PAD_X, min_height=ACTION_HEIGHT)
+        self.delete_all_button = BigButton("trash", "Alle löschen", ACCENT_RED, stacked=True,
+                                           font_pt=DELETE_ALL_FONT_PT, pad_x=DELETE_ALL_PAD_X,
+                                           min_height=ACTION_HEIGHT)
+        self.delete_all_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.delete_all_button.setFixedWidth(self.delete_all_button.sizeHint().width())
         self.delete_all_button.clicked.connect(self.confirm_delete_all)
-        # Small, unobtrusive status text in the gap between the buttons.
-        self.status_label = QLabel("")
-        self.status_label.setFont(big_font(13, bold=False))
-        self.status_label.setStyleSheet(f"color: {TEXT_DIM.name()};")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setWordWrap(True)
-        self.status_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.pulse_strip = PulseStrip(controller.settings.beats_per_bar)
+        self.status_label = self.pulse_strip.status_label  # small status text below the pulse dots
+        # Way into the parents' area: a small dim tile, held to open.
+        self.parent_entry = ParentTile()
+        self.parent_entry.held.connect(self.open_parent_area)
+        self._grid_key: object = _UNSET
+        self._pulse_until = 0.0
 
         actions = QHBoxLayout()
-        actions.setSpacing(14)
-        actions.addWidget(self.undo_button, 2)
-        actions.addWidget(self.redo_button, 2)
-        actions.addWidget(self.stop_button, 2)
-        actions.addWidget(self.status_label, 2)
-        actions.addWidget(self.delete_all_button, 2)
+        actions.setSpacing(BAR_GAP)
+        actions.addWidget(self.undo_button, 236)
+        actions.addWidget(self.redo_button, 236)
+        actions.addWidget(self.stop_button, 236)
+        actions.addWidget(self.pulse_strip, 380)
+        actions.addWidget(self.delete_all_button)
+        actions.addWidget(self.parent_entry)
 
         layout = QVBoxLayout(self.frame)
-        layout.setContentsMargins(24, 18, 24, 18)
+        layout.setContentsMargins(OUTER_MARGIN_X, OUTER_MARGIN_Y, OUTER_MARGIN_X, OUTER_MARGIN_Y)
         layout.setSpacing(14)
         layout.addLayout(mode_bar)
         layout.addWidget(self.grid, 1)
         layout.addLayout(actions)
-
-        # Way into the parents' area: a dim lock in the window margin, held to open.
-        self.parent_entry = ParentEntryButton(self.frame)
-        self.parent_entry.held.connect(self.open_parent_area)
 
         # Keyboard: Strg+Z undo, Strg+Y / Strg+Umschalt+Z redo, ESC leaves the mode. No menus.
         self.undo_shortcut = QShortcut(QKeySequence.StandardKey.Undo, self)
@@ -266,12 +275,6 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self._tick)
         self.timer.start()
         self.refresh()
-
-    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt API
-        super().resizeEvent(event)
-        # Bottom right corner, inside the window margin: no layout and no child control moves.
-        self.parent_entry.move(self.frame.width() - 24, self.frame.height() - ENTRY_SIZE - 1)
-        self.parent_entry.raise_()
 
     # -------------------------------------------------------------- actions
 
@@ -350,13 +353,10 @@ class MainWindow(QMainWindow):
         try:
             if self._exec(self.gate_factory(self)) != QDialog.DialogCode.Accepted:
                 return
-            actions = [ParentAction("layers", "Erweitert", self.open_advanced),
-                       ParentAction("download", "Export", self.open_export)]
-            if self.set_session is not None:
-                actions.append(ParentAction("save", "Sets", self.open_sets))
+            pages = self.parent_pages()
             dialog = self.settings_factory(
                 self.config_path, self.controller.settings, self.apply_settings,
-                self.settings_template, self, actions,
+                self.settings_template, self, pages,
             )
             self._settings_dialog = dialog
             self._exec(dialog)
@@ -365,22 +365,25 @@ class MainWindow(QMainWindow):
             self._dialog_open = False
             self.refresh()
 
-    def open_advanced(self, parent: QWidget) -> None:
-        """Waveform, the parents' tempo and the metronome, opened from the parents' area."""
-        self._exec(self.advanced_factory(self.controller, parent))
+    def parent_pages(self) -> list[ParentPage]:
+        """The areas of the parents' area behind the three settings pages: history, Erweitert, sets, export.
 
-    def open_export(self, parent: QWidget) -> None:
-        """Export page, opened from the parents' area (the pads are already locked)."""
-        self._exec(self.export_factory(self.controller, parent))
-
-    def open_sets(self, parent: QWidget) -> None:
-        """The sets page, opened from the parents' area. A set that was opened ends the parents' area."""
-        if self.set_session is None:
-            return
-        dialog = self.sets_factory(self.set_session, self.on_open_set, parent)
-        self._exec(dialog)
-        if getattr(dialog, "opened", None) is not None and isinstance(parent, QDialog):
-            parent.accept()
+        A set that was opened ends the parents' area (the sets page says so through ``done``).
+        """
+        controller = self.controller
+        # The builders hold the factories and the controller, not the window: the page tree must not keep
+        # the window alive through a cycle (see ``weak_slot``).
+        changes, advanced = self.changes_factory, self.advanced_factory
+        sets, export = self.sets_factory, self.export_factory
+        pages = [
+            ParentPage("changes", "history", "Verlauf & Undo", lambda: changes(controller, None)),
+            ParentPage("advanced", "layers", "Erweitert", lambda: advanced(controller, None)),
+        ]
+        if self.set_session is not None:
+            session, on_open = self.set_session, self.on_open_set
+            pages.append(ParentPage("sets", "save", "Sets", lambda: sets(session, on_open, None)))
+        pages.append(ParentPage("export", "download", "Export", lambda: export(controller, None)))
+        return pages
 
     @property
     def audio_devices(self) -> Any:
@@ -450,6 +453,26 @@ class MainWindow(QMainWindow):
         delay = 0.15 + 0.75 * (row + col) / spread
         return max(0.0, 1.0 - abs(elapsed - delay) / SESSION_WAVE_WIDTH)
 
+    def _update_pulse(self, colors: dict[int, str], waiting: set[int]) -> None:
+        """Dots for the beats of the bar, lit softly by the grid; at rest when nothing plays.
+
+        A grid that has just been set shows the pulse for a few seconds even if no loop runs
+        yet (plan 2.2 rule 7). No grid in the session: dim dots.
+        """
+        controller = self.controller
+        info = controller.grid_info()
+        now = controller.now()
+        key = None if info is None else (info.beats, round(info.seconds, 3))
+        if key != self._grid_key:
+            if self._grid_key is not _UNSET and info is not None:
+                self._pulse_until = now + max(PULSE_CONFIRM_SECONDS, 2 * info.seconds)
+            self._grid_key = key
+        beats = controller.settings.beats_per_bar if info is None else info.beats
+        playing = "green" in colors.values() or bool(waiting)
+        lit = info is not None and (playing or now < self._pulse_until)
+        position = controller.beat_position() if lit else None
+        self.pulse_strip.set_pulse(beats, position)
+
     def refresh(self) -> None:
         """Bring every widget (and the Launchpad LEDs) in line with the controller."""
         controller = self.controller
@@ -488,9 +511,8 @@ class MainWindow(QMainWindow):
         if self.launchpad is not None and self.launchpad.status_text:
             parts.append(self.launchpad.status_text)
         unique = list(dict.fromkeys(p for p in parts if p))
-        text = "   ·   ".join(unique)
-        if text != self.status_label.text():
-            self.status_label.setText(text)
+        self.pulse_strip.set_status("   ·   ".join(unique))
+        self._update_pulse(colors, waiting)
 
         if self.launchpad is not None:
             self.launchpad.set_colors(colors)
