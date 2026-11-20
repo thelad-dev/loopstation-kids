@@ -350,7 +350,7 @@ def test_the_page_lists_the_devices_of_the_chosen_audio_system(page) -> None:
     hostapi = dialog.editors["audio_hostapi"].list  # a list of radio buttons, one per audio system
     assert hostapi.labels() == ["MME", "Windows WASAPI"]
     assert hostapi.value() == "Windows WASAPI"
-    assert hostapi.radios["Windows WASAPI"].isChecked()
+    assert hostapi.by_name["Windows WASAPI"].isChecked()
     assert _labels(dialog.editors["input_device"].box) == ["Systemstandard", "Mikro", "Kids Mic"]
     assert _labels(dialog.editors["output_device"].box) == ["Systemstandard", "Boxen", "Kopfhörer"]
     hostapi.select("MME")

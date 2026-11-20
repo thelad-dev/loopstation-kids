@@ -238,9 +238,13 @@ def fsync_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(scope="session")
 def qapp():
+    from PySide6.QtGui import QFont
     from PySide6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
+    # The layout tests measure text widths, so every platform gets the same face: Arial on Windows,
+    # Liberation Sans (metric-compatible) on Linux where installed, else the platform fallback.
+    app.setFont(QFont("Arial", 9))
     yield app
 
 
