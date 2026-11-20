@@ -87,3 +87,19 @@ time_signature = "4/4"
 # Schlag-Abständen. Außerhalb davon gibt es kein Raster aus Schlägen. Wirkt sofort.
 grid_bpm_min = 40
 grid_bpm_max = 200
+
+# --- Geräte und Audio-System ---
+# Aufnahme- und Wiedergabegerät (Name wie in der Einstellungsseite). "" = der
+# Systemstandard des gewählten Audio-Systems. Wirkt sofort, die Audio-Streams
+# starten dafür kurz neu. Ist das Gerät nicht angeschlossen, nimmt die
+# Loopstation den Systemstandard und sagt es in der Statuszeile.
+input_device = ""
+output_device = ""
+
+# Audio-System (PortAudio-Host-API), z. B. "Windows WASAPI", "ALSA".
+# "" = Standard der Plattform (Windows: WASAPI geteilt, Linux: ALSA). Wirkt sofort.
+audio_hostapi = ""
+
+# Nur Windows: true = ASIO-Treiber für Audio-Interfaces zulassen. ASIO öffnet
+# ein Gerät oft exklusiv: Andere Programme sind dann still. Neustart nötig.
+asio = false

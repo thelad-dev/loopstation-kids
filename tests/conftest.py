@@ -258,9 +258,11 @@ def make_settings(tmp_path: Path, **overrides: Any):
 class FakeStream:
     """A PortAudio stream whose callback the test calls itself."""
 
-    def __init__(self, callback: Any, latency: float) -> None:
+    def __init__(self, callback: Any, latency: float, device: Any = None, extra: Any = None) -> None:
         self.callback = callback
         self.latency = latency
+        self.device = device  # the device index it was opened on (None = system default)
+        self.extra_settings = extra
         self.active = False
         self.closed = False
 
@@ -298,12 +300,17 @@ class FakeSoundDevice:
         loopback: bool = False,
         devices: list[dict[str, Any]] | None = None,
         hostapis: list[dict[str, Any]] | None = None,
+        broken_devices: tuple[int, ...] = (),
     ) -> None:
         # Catalog data for query_devices/query_hostapis; the stream tests leave
         # both empty.
         self.devices = devices if devices is not None else []
         self.hostapis = hostapis if hostapis is not None else []
         self.default = types.SimpleNamespace(device=(-1, -1))
+        # Device indices that refuse to open (unplugged between listing and opening).
+        self.broken_devices = set(broken_devices)
+        self.opened_outputs: list[FakeStream] = []
+        self.opened_inputs: list[FakeStream] = []
         self.block = block
         self.delay = delay
         self.input_latency = input_latency
@@ -319,21 +326,41 @@ class FakeSoundDevice:
 
     # -- sounddevice API used by SoundDeviceAudio
 
-    def OutputStream(self, samplerate: int, channels: int, dtype: str, callback: Any) -> FakeStream:  # noqa: N802
-        self.output = FakeStream(callback, self.output_latency)
+    def OutputStream(  # noqa: N802
+        self, samplerate: int, channels: int, dtype: str, callback: Any,
+        device: Any = None, extra_settings: Any = None,
+    ) -> FakeStream:
+        if device in self.broken_devices:
+            raise RuntimeError(f"cannot open device {device}")
+        self.output = FakeStream(callback, self.output_latency, device, extra_settings)
+        self.opened_outputs.append(self.output)
         return self.output
 
-    def InputStream(self, samplerate: int, channels: int, dtype: str, callback: Any) -> FakeStream:  # noqa: N802
-        self.input = FakeStream(callback, self.input_latency)
+    def InputStream(  # noqa: N802
+        self, samplerate: int, channels: int, dtype: str, callback: Any,
+        device: Any = None, extra_settings: Any = None,
+    ) -> FakeStream:
+        if device in self.broken_devices:
+            raise RuntimeError(f"cannot open device {device}")
+        self.input = FakeStream(callback, self.input_latency, device, extra_settings)
+        self.opened_inputs.append(self.input)
         self._mic_skipped = 0
         return self.input
 
-    def check_input_settings(self, **_kwargs: Any) -> None:
-        if not self.has_input:
+    def WasapiSettings(self, **kwargs: Any) -> types.SimpleNamespace:  # noqa: N802
+        return types.SimpleNamespace(kind="wasapi", **kwargs)
+
+    def check_input_settings(self, device: Any = None, **_kwargs: Any) -> None:
+        if not self.has_input or device in self.broken_devices:
             raise RuntimeError("no input device")
 
-    def query_devices(self) -> list[dict[str, Any]]:
-        return [{"index": i, **d} for i, d in enumerate(self.devices)]
+    def query_devices(self, device: Any = None, kind: str | None = None) -> Any:
+        listed = [{"index": i, **d} for i, d in enumerate(self.devices)]
+        if device is not None:
+            return listed[device]
+        if kind is not None:
+            raise ValueError("no default device in the stand-in")
+        return listed
 
     def query_hostapis(self) -> list[dict[str, Any]]:
         return list(self.hostapis)
