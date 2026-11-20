@@ -288,6 +288,7 @@ class AdvancedDialog(QDialog):
         buttons.addStretch(1)
         layout.addLayout(buttons)
         self.tempo_status = self._dim("", 13.5)
+        self._tempo_refused = False
         layout.addWidget(self.tempo_status)
         layout.addWidget(self._dim(NO_GRID_HINT))
         layout.addStretch(1)
@@ -352,6 +353,7 @@ class AdvancedDialog(QDialog):
     def apply_parent_grid(self) -> bool:
         """"Übernehmen": the tempo and time signature become the session grid."""
         ok = self.controller.set_parent_grid(float(self.bpm_spin.value()), self.signature)
+        self._tempo_refused = not ok
         if not ok:
             self.tempo_status.setText(
                 "Das geht gerade nicht: »Loops im Takt halten« muss an sein, und es darf keine "
@@ -363,6 +365,7 @@ class AdvancedDialog(QDialog):
         """"Gemessenen Takt": the recordings decide the grid again."""
         ok = self.controller.use_measured_grid()
         if ok:
+            self._tempo_refused = False
             self._load_tempo_inputs()
         self.refresh()
         return ok
@@ -405,12 +408,14 @@ class AdvancedDialog(QDialog):
             "" if period is None or info is None
             else f"{round(info.bpm)} BPM · ein Schlag alle {format_seconds(period)}")
         pending = controller.parent_grid()
+        if self._tempo_refused and controller.settings.loop_sync and controller.recording_pad is None:
+            self._tempo_refused = False
         self.measured_button.setEnabled(pending is not None)
         if pending is not None:
             bpm, signature = pending
             suffix = "" if info is not None else " · gilt ab der nächsten ersten Aufnahme"
             self.tempo_status.setText(f"Vorgegeben: {round(bpm)} BPM · {signature}{suffix}")
-        elif not self.tempo_status.text().startswith("Das geht"):
+        elif not self._tempo_refused:
             self.tempo_status.setText("")
 
     def _show_loop(self) -> None:

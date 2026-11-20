@@ -677,6 +677,10 @@ class Controller:
             elif (self._parent_grid is not None and self.settings.loop_sync
                   and self.store.state.master is None):
                 # The parents set the tempo: onsets may only align this recording.
+                # It goes through fit_to_grid, not _fit_recording: it is the
+                # first recording on the parents' bar, so it is aligned to that
+                # grid (padded or cut) and not stretched. stretch_to_grid
+                # applies to the recordings that follow.
                 data, shift = self._fit_to_parent_grid(data, rate)
                 info["grid"] = PARENT_BPM
                 if shift > 0:

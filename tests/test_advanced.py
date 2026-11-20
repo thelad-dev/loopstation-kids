@@ -16,6 +16,7 @@ from conftest import FakeAudio, FakeClock, FakeSoundDevice, make_settings
 from PySide6.QtGui import QColor
 
 from loopstation.audio import metronome
+from loopstation.audio.samples import load_wav
 from loopstation.audio.dynamics import block_peak, db_to_gain
 from loopstation.audio.sounddevice_backend import SoundDeviceAudio
 from loopstation.config import ConfigError, Settings, parse_settings
@@ -445,6 +446,33 @@ def test_the_page_says_so_when_the_tempo_cannot_be_set(qapp, tmp_path, clock):
         assert "Loops im Takt halten" in dialog.tempo_status.text()
     finally:
         dialog.close()
+
+
+def test_the_refusal_goes_away_once_setting_the_tempo_is_possible_again(qapp, tmp_path, clock):
+    controller, _ = build(tmp_path, clock)
+    dialog = AdvancedDialog(controller)
+    try:
+        controller.press(0)  # a recording runs
+        assert dialog.apply_parent_grid() is False
+        assert "Das geht gerade nicht" in dialog.tempo_status.text()
+        dialog.refresh()
+        assert "Das geht gerade nicht" in dialog.tempo_status.text()
+        clock.advance(2.0)
+        controller.press(0)
+        dialog.refresh()
+        assert dialog.tempo_status.text() == ""
+    finally:
+        dialog.close()
+
+
+def test_the_first_recording_on_the_parents_bar_is_fitted_not_stretched(tmp_path, clock):
+    controller, _ = build(tmp_path, clock, auto_grid=False)
+    controller.set_parent_grid(96, "4/4")
+    grid = bar_frames(96)
+    record(controller, clock, 0, grid / SR * 0.95)  # 5 % short: would be stretched on a later take
+    data = load_wav(tmp_path / "samples" / controller.pad(0).sample, SR)
+    assert len(data) == grid
+    assert np.abs(data[-grid // 20 :]).max() == 0.0  # padded with silence, content not stretched
 
 
 def test_the_page_on_an_empty_session_waits_for_the_first_recording(qapp, tmp_path, clock):
