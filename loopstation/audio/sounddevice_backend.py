@@ -373,6 +373,12 @@ class SoundDeviceAudio:
             return False
         return True
 
+    def configure(self, max_record_seconds: float, latency_seconds: float | None) -> None:
+        """Take over the recording limit and the latency from the settings while running."""
+        with self._lock:
+            self._max_frames = int((max_record_seconds + 1) * self.sample_rate)
+            self._latency_seconds = latency_seconds
+
     def stop_recording(self) -> np.ndarray | None:
         self._discard_input()
         with self._lock:

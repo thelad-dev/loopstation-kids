@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum
 
@@ -22,7 +22,7 @@ from loopstation.audio.dynamics import db_to_gain
 from loopstation.audio.effects import start_beep, stop_beep
 from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, save_wav
 from loopstation.audio.sync import fit_to_grid, grace_frames, max_grid_frames
-from loopstation.config import Settings
+from loopstation.config import Settings, restart_keys_changed
 from loopstation.state import PadState
 from loopstation.store import EventStore
 
@@ -42,6 +42,10 @@ LEVEL_QUIET, LEVEL_MEDIUM, LEVEL_LOUD = 0.02, 0.25, 0.7
 MIN_MAX_LEVEL_DB, MAX_MAX_LEVEL_DB = -30.0, 0.0
 
 WHITE, YELLOW, GREEN, RED = "white", "yellow", "green", "red"
+
+# Settings that ``apply_settings`` takes over while the app runs; the rest of
+# ``Settings`` (see ``config.RESTART_KEYS``) keeps its running value.
+LIVE_SETTINGS = ("max_record_seconds", "sound_effects", "fullscreen", "launchpad", "loop_sync", "latency_ms")
 
 
 class Mode(Enum):
@@ -596,6 +600,24 @@ class Controller:
         for pad_id, pad in sorted(self.store.state.pads.items()):
             if pad.looping:
                 self.store.append(ev.LOOP_OFF, pad_id)
+
+    # ------------------------------------------------------------- settings
+
+    def apply_settings(self, new: Settings) -> list[str]:
+        """Take over the live settings of ``new`` (all at once) without a restart.
+
+        Returns the keys that differ from the running ones but only act after
+        a restart (``rows``, ``cols``, ``sample_rate``, ``data_dir``); those keep
+        their running value here. Nothing changes if the audio engine refuses.
+        """
+        updated = replace(self.settings, **{key: getattr(new, key) for key in LIVE_SETTINGS})
+        configure = getattr(self.audio, "configure", None)
+        if configure is not None:
+            latency = None if updated.latency_ms is None else updated.latency_ms / 1000
+            configure(updated.max_record_seconds, latency)
+        self.settings = updated
+        self._changed()
+        return restart_keys_changed(updated, new)
 
     # ------------------------------------------------------------ lifecycle
 

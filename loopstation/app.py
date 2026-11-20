@@ -8,7 +8,7 @@ import signal
 import sys
 from pathlib import Path
 
-from loopstation.config import ConfigError, Settings, load_settings
+from loopstation.config import ConfigError, Settings, load_settings, resolve_config_path
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -16,6 +16,16 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=None,
                         help="Pfad zur settings.toml (Standard: ./settings.toml, falls vorhanden)")
     return parser.parse_args(argv)
+
+
+def _default_settings_text() -> str | None:
+    """The commented default ``settings.toml`` a new settings file starts from."""
+    from loopstation.installed import bundled_settings
+
+    try:
+        return bundled_settings().read_text(encoding="utf-8")
+    except OSError:
+        return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -26,10 +36,12 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"Fehler in den Einstellungen: {exc}", file=sys.stderr)
         return 2
-    return run(settings)
+    # The settings page writes back to the file that was loaded (or, if there
+    # is none yet, to the place the next start will look for it).
+    return run(settings, resolve_config_path(args.config))
 
 
-def run(settings: Settings) -> int:
+def run(settings: Settings, config_path: Path | None = None) -> int:
     # Qt and the hardware layers are imported here so that config errors are
     # reported without loading them.
     from PySide6.QtCore import QLockFile
@@ -61,19 +73,26 @@ def run(settings: Settings) -> int:
         lock.unlock()
         return fail(f"Das Ereignis-Protokoll kann nicht gelesen werden:\n{exc}")
 
+    def make_launchpad(current: Settings) -> LaunchpadController | None:
+        if not current.launchpad:
+            return None
+        return LaunchpadController(MidoPorts, current.rows, current.cols)
+
     audio, audio_status = create_audio(settings)
-    launchpad = (
-        LaunchpadController(MidoPorts, settings.rows, settings.cols) if settings.launchpad else None
-    )
+    launchpad = make_launchpad(settings)
     controller = Controller(store, audio, settings)
     controller.startup()
 
-    window = MainWindow(controller, launchpad, [audio_status] if audio_status else [])
+    window = MainWindow(
+        controller, launchpad, [audio_status] if audio_status else [],
+        config_path=config_path, launchpad_factory=make_launchpad,
+        settings_template=_default_settings_text(),
+    )
 
     def shutdown() -> None:
         controller.shutdown()
-        if launchpad is not None:
-            launchpad.close()
+        if window.launchpad is not None:
+            window.launchpad.close()
         lock.unlock()
 
     app.aboutToQuit.connect(shutdown)

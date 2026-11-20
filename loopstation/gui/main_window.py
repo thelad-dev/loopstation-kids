@@ -7,6 +7,7 @@ Launchpad); it contains no audio, MIDI or event-store logic of its own.
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPaintEvent, QPen, QResizeEvent, QShortcut
@@ -20,11 +21,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from loopstation.config import DEFAULT_CONFIG_NAME, Settings
 from loopstation.controller import Controller, Mode
 from loopstation.gui.confirm_dialog import ConfirmDialog
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
+from loopstation.gui.parent_gate import ENTRY_SIZE, ParentEntryButton, ParentGate
 from loopstation.gui.peak_meter import PeakMeter
+from loopstation.gui.settings_page import SettingsDialog
 from loopstation.gui.volume_slider import VolumeSlider
 from loopstation.gui.widgets import (
     ACCENT_BLUE,
@@ -125,15 +129,23 @@ class MainWindow(QMainWindow):
         controller: Controller,
         launchpad: LaunchpadController | None = None,
         device_status: list[str] | None = None,
+        config_path: Path | None = None,
+        launchpad_factory: Callable[[Settings], LaunchpadController | None] | None = None,
+        settings_template: str | None = None,
     ) -> None:
         super().__init__()
         self.controller = controller
         self.launchpad = launchpad
+        self.config_path = config_path if config_path is not None else Path(DEFAULT_CONFIG_NAME).resolve()
+        self.launchpad_factory = launchpad_factory
+        self.settings_template = settings_template
         self.device_status = list(device_status or [])
         self._dialog_open = False
         # Factories so tests can replace the modal dialogs.
         self.confirm_factory: Callable[[QWidget], QDialog] = ConfirmDialog
         self.history_factory: Callable[[Controller, int, QWidget], QDialog] = HistoryDialog
+        self.gate_factory: Callable[[QWidget], QDialog] = ParentGate
+        self.settings_factory: Callable[..., QDialog] = SettingsDialog
 
         self.setWindowTitle("Loopstation")
         self.frame = Frame()
@@ -194,6 +206,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.grid, 1)
         layout.addLayout(actions)
 
+        # Way into the parents' area: a dim gear in the window margin, held to open.
+        self.parent_entry = ParentEntryButton(self.frame)
+        self.parent_entry.held.connect(self.open_parent_area)
+
         # Keyboard: Strg+Z undo, ESC leaves the mode. No menus.
         self.undo_shortcut = QShortcut(QKeySequence.StandardKey.Undo, self)
         self.undo_shortcut.activated.connect(self.undo)
@@ -208,6 +224,12 @@ class MainWindow(QMainWindow):
         self.timer.timeout.connect(self._tick)
         self.timer.start()
         self.refresh()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt API
+        super().resizeEvent(event)
+        # Bottom left corner, inside the window margin: no layout and no child control moves.
+        self.parent_entry.move(2, self.frame.height() - ENTRY_SIZE - 2)
+        self.parent_entry.raise_()
 
     # -------------------------------------------------------------- actions
 
@@ -250,6 +272,37 @@ class MainWindow(QMainWindow):
         finally:
             self._dialog_open = False
         self.refresh()
+
+    def open_parent_area(self) -> None:
+        """Parental gate, then the settings page. Pads are locked while either is open."""
+        if self._dialog_open:
+            return
+        self._dialog_open = True
+        try:
+            if self.gate_factory(self).exec() != QDialog.DialogCode.Accepted:
+                return
+            self.settings_factory(
+                self.config_path, self.controller.settings, self.apply_settings,
+                self.settings_template, self,
+            ).exec()
+        finally:
+            self._dialog_open = False
+            self.refresh()
+
+    def apply_settings(self, settings: Settings) -> list[str]:
+        """Live-apply ``settings``; returns the keys that need a restart."""
+        restart = self.controller.apply_settings(settings)
+        wanted = self.controller.settings
+        if wanted.launchpad != (self.launchpad is not None) and self.launchpad_factory is not None:
+            if self.launchpad is not None:
+                self.launchpad.close()
+            self.launchpad = self.launchpad_factory(wanted)
+        if wanted.fullscreen != self.isFullScreen():
+            if wanted.fullscreen:
+                self.showFullScreen()
+            else:
+                self.showMaximized()
+        return restart
 
     # ------------------------------------------------------------- refresh
 

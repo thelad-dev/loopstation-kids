@@ -134,4 +134,14 @@ def draw_icon(painter: QPainter, name: str, rect: QRectF, color: QColor) -> None
             body = body.subtracted(slot)
         painter.drawPath(body)
 
+    elif name == "settings":
+        # Gear: a ring with eight teeth.
+        painter.setPen(_pen(color, s * 0.12))
+        painter.drawEllipse(c, s * 0.2, s * 0.2)
+        for step in range(8):
+            angle = math.radians(step * 45)
+            inner = QPointF(c.x() + s * 0.30 * math.cos(angle), c.y() + s * 0.30 * math.sin(angle))
+            outer = QPointF(c.x() + s * 0.43 * math.cos(angle), c.y() + s * 0.43 * math.sin(angle))
+            painter.drawLine(inner, outer)
+
     painter.restore()

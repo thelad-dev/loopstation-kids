@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import re
 import tomllib
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -147,3 +149,139 @@ def load_settings(path: Path | None = None) -> Settings:
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{path}: ungültiges TOML ({exc})") from exc
     return parse_settings(raw, str(path))
+
+
+# ---------------------------------------------------------------- writing
+#
+# The settings page writes ``settings.toml`` back. Instead of a TOML library
+# the file is edited line by line: the value of a known key is replaced in
+# place, every comment stays, and a key the file does not have yet is appended
+# with its comment from ``SETTING_COMMENTS``. Values are scalars, so this is
+# exact. A later package adds a setting by giving ``Settings`` a field, a
+# check in ``parse_settings``, one entry in ``SETTING_COMMENTS`` (and in
+# ``RESTART_KEYS`` if it only takes effect after a restart).
+
+# Keys that only take effect after a restart: the pad grid, the audio format
+# and the data folder are fixed once the window, the store and the audio
+# engine exist. Every other key is applied while the app runs.
+RESTART_KEYS = ("rows", "cols", "sample_rate", "data_dir")
+
+# Comment written above a key that the file does not contain yet.
+SETTING_COMMENTS: dict[str, str] = {
+    "rows": "Zeilen des Pad-Rasters (1 bis 16). Wirkt erst nach einem Neustart.",
+    "cols": "Spalten des Pad-Rasters (1 bis 16). Wirkt erst nach einem Neustart.",
+    "max_record_seconds": "Längste Aufnahme in Sekunden (1 bis 120). Wirkt sofort.",
+    "sample_rate": "Abtastrate für Aufnahme und Wiedergabe in Hz. Wirkt erst nach einem Neustart.",
+    "sound_effects": "Kurzer Piepton beim Start und Ende einer Aufnahme. Wirkt sofort.",
+    "fullscreen": "true = Vollbild ohne Fensterrahmen, false = maximiertes Fenster. Wirkt sofort.",
+    "launchpad": "Novation Launchpad automatisch suchen und benutzen. Wirkt sofort.",
+    "loop_sync": "Taktgenauer Schnitt der Loops (true) oder jede Aufnahme mit eigener Länge (false). "
+                 "Wirkt sofort.",
+    "latency_ms": "Verzögerung zwischen Lautsprecher und Mikrofon in Millisekunden (0 bis 1000) "
+                  'oder "auto". Wirkt sofort.',
+    "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
+}
+
+
+def restart_keys_changed(old: Settings, new: Settings) -> list[str]:
+    """Keys in ``RESTART_KEYS`` whose value differs: they only act after a restart."""
+    return [key for key in RESTART_KEYS if getattr(old, key) != getattr(new, key)]
+
+
+def resolve_config_path(path: Path | None = None) -> Path:
+    """Absolute path of the active ``settings.toml``, whether or not it exists yet.
+
+    ``--config`` (``path``) wins; otherwise it is ``settings.toml`` in the
+    working directory, which for the installed app is the folder in
+    ``%LOCALAPPDATA%``. Call it before the working directory changes.
+    """
+    return (path if path is not None else Path(DEFAULT_CONFIG_NAME)).resolve()
+
+
+def format_toml_value(key: str, value: Any) -> str:
+    """The TOML text of one setting value (the inverse of what ``parse_settings`` reads)."""
+    if key == "latency_ms" and value is None:
+        return '"auto"'
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, Path):
+        value = value.as_posix()
+    if isinstance(value, str):
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    if isinstance(value, float):
+        return str(int(value)) if value == int(value) else repr(value)
+    return str(value)
+
+
+def settings_values(settings: Settings) -> dict[str, Any]:
+    """All settings as the plain values that go into the file."""
+    return {f.name: getattr(settings, f.name) for f in fields(Settings)}
+
+
+# ``key = value`` at the start of a line; the value is a quoted string or a bare
+# token, followed by whatever (a trailing comment) the line already had.
+_ASSIGNMENT = re.compile(
+    r'^(?P<head>(?P<key>[A-Za-z_][A-Za-z0-9_-]*)\s*=\s*)'
+    r'(?P<value>"(?:[^"\\]|\\.)*"|[^\s#]+)(?P<tail>.*)$'
+)
+
+
+def render_settings_text(text: str, settings: Settings) -> str:
+    """``text`` (an existing settings file, may be empty) with every value set from ``settings``."""
+    values = settings_values(settings)
+    seen: set[str] = set()
+    lines = []
+    for line in text.splitlines():
+        match = _ASSIGNMENT.match(line)
+        if match and match["key"] in values and match["key"] not in seen:
+            key = match["key"]
+            seen.add(key)
+            line = f"{match['head']}{format_toml_value(key, values[key])}{match['tail']}"
+        lines.append(line)
+    missing = [key for key in values if key not in seen]
+    if missing:
+        if lines and lines[-1].strip():
+            lines.append("")
+        for key in missing:
+            comment = SETTING_COMMENTS.get(key)
+            if comment:
+                lines.append(f"# {comment}")
+            lines.append(f"{key} = {format_toml_value(key, values[key])}")
+            lines.append("")
+        lines.pop()
+    return "\n".join(lines) + "\n"
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """Replace ``path`` with ``text`` atomically (temp file, fsync, rename)."""
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def write_settings(path: Path, settings: Settings, template: str | None = None) -> None:
+    """Write ``settings`` to ``path``, keeping the comments of the file already there.
+
+    Without a file, ``template`` (the commented default file) is the starting
+    point, so a new file is as readable as the shipped one.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        text = template or ""
+    rendered = render_settings_text(text, settings)
+    # Never write what the loader would refuse.
+    try:
+        parse_settings(tomllib.loads(rendered), str(path))
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path}: ungültiges TOML ({exc})") from exc
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_atomic(path, rendered)
