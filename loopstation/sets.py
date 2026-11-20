@@ -3,7 +3,8 @@
 A set is a frozen copy of a session. Folder and ZIP have the same layout::
 
     manifest.toml       format_version, app_version, created_at, sample_rate,
-                        pad_count, grid, payload_bytes, samples, missing_samples
+                        pad_count, grid (frames, rate and, if known, source, signature, pad),
+                        payload_bytes, samples, missing_samples
     settings.toml       copy of the settings file (only if one was given)
     data/events.jsonl   the active log from its last snapshot on
     samples/*.wav       exactly the samples the state still refers to
@@ -42,7 +43,7 @@ from typing import Any
 
 import loopstation
 from loopstation import events as ev
-from loopstation.state import AppState, replay
+from loopstation.state import AppState, parse_master, replay
 from loopstation.store import LOG_NAME
 
 log = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ class SetManifest:
     created_at: str
     sample_rate: int
     pad_count: int
-    grid: dict[str, int] | None
+    grid: dict[str, Any] | None
     payload_bytes: int
     samples: tuple[str, ...]
     missing_samples: tuple[str, ...] = ()
@@ -227,7 +228,14 @@ def _manifest_to_toml(manifest: SetManifest) -> str:
         f"missing_samples = {str_list(manifest.missing_samples)}",
     ]
     if manifest.grid is not None:
-        lines += ["", "[grid]", f"frames = {manifest.grid['frames']}", f"rate = {manifest.grid['rate']}"]
+        grid = manifest.grid
+        lines += ["", "[grid]", f"frames = {grid['frames']}", f"rate = {grid['rate']}"]
+        # Where the bar came from (``master_set`` data); optional, older sets have none.
+        for key in ("source", "signature"):
+            if key in grid:
+                lines.append(f"{key} = {_toml_str(grid[key])}")
+        if "pad" in grid:
+            lines.append(f"pad = {grid['pad']}")
     return "\n".join(lines) + "\n"
 
 
@@ -444,7 +452,7 @@ def _parse_manifest(raw: bytes) -> SetManifest:
         frames, rate = raw.get("frames"), raw.get("rate")
         if not all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in (frames, rate)):
             raise SetCorruptError(f"{MANIFEST_NAME}: 'grid' ist ungültig")
-        grid = {"frames": frames, "rate": rate}
+        grid = parse_master(raw)  # frames and rate checked above; source, signature, pad if well formed
     return SetManifest(
         format_version=data["format_version"],
         app_version=text("app_version"),
