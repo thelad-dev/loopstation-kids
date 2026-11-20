@@ -1,9 +1,10 @@
 """Rubber Band is not shipped (GPL): the installer downloads it only on request.
 
-These tests pin what can be checked without Windows: the download constants, that the task
-is off by default and has a consent page, that the bundle excludes pylibrb, and the Linux
-script's consent switches. The download itself (real URL, checksum, failure path) is proven
-by the windows-installer workflow.
+These tests pin what can be checked without Windows: the download constants, the spec's
+excludes (the real spec is run with stubbed build classes), the workflow's steps (parsed, not
+grepped) and the Linux script's consent switches. The checksum check itself is Inno Setup's
+DownloadTemporaryFile and only runs on Windows: the windows-installer workflow installs with
+consent (right and wrong checksum) and without, and fails if the app is missing afterwards.
 """
 
 from __future__ import annotations
@@ -12,8 +13,10 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).parent.parent
 WINDOWS = ROOT / "packaging" / "windows"
@@ -38,37 +41,52 @@ def test_the_wheel_version_matches_the_pin_used_for_the_tests():
     assert f"pylibrb=={defines()['RubberBandVersion']}" in constraints
 
 
-def test_installer_task_is_off_by_default_and_has_a_consent_page():
-    iss = (WINDOWS / "loopstation.iss").read_text()
-    task = next(line for line in iss.splitlines() if line.startswith('Name: "rubberband"'))
-    assert "Flags: unchecked" in task and "(GPL)" in task
-    assert 'Name: "{app}\\rubberband"' in iss  # removed again on uninstall
-    for needed in ("Lizenz: GNU General Public License", "Herkunft: {#RubberBandUrl}",
-                   "Größe:", "Prüfsumme (SHA-256): {#RubberBandSha256}"):
-        assert needed in iss
-    # The page only shows when the task is ticked, and the download is checked and fails safe.
-    assert "not WizardIsTaskSelected('rubberband')" in iss
-    assert "DownloadTemporaryFile('{#RubberBandUrl}', 'pylibrb.zip', '{#RubberBandSha256}'" in iss
-    assert "Rubber Band nicht installiert, einfache Engine aktiv" in iss
+def load_spec_arguments() -> dict[str, dict]:
+    """Run the real PyInstaller spec with stubbed build classes and return each call's keyword arguments."""
+    calls: dict[str, dict] = {}
+
+    def stub(name):
+        def build(*args, **kwargs):
+            calls[name] = kwargs
+            return SimpleNamespace(pure=[], scripts=[], binaries=[], datas=[])
+        return build
+
+    icon = ROOT / "build" / "loopstation.ico"
+    created = not icon.exists()
+    if created:
+        icon.parent.mkdir(exist_ok=True)
+        icon.write_bytes(b"")
+    try:
+        namespace = {"SPECPATH": str(WINDOWS), "Analysis": stub("Analysis"), "PYZ": stub("PYZ"),
+                     "EXE": stub("EXE"), "COLLECT": stub("COLLECT")}
+        exec(compile((WINDOWS / "loopstation.spec").read_text(), "loopstation.spec", "exec"), namespace)
+    finally:
+        if created:
+            icon.unlink()
+    return calls
 
 
 def test_the_bundle_never_contains_rubber_band():
-    spec = (WINDOWS / "loopstation.spec").read_text()
-    assert '"pylibrb"' in re.search(r"excludes=\[(.*?)\]", spec).group(1)
-    assert "hiddenimports" in spec and "pylibrb" not in re.search(r"hiddenimports=\[(.*?)\]", spec).group(1)
+    analysis = load_spec_arguments()["Analysis"]
+    assert "pylibrb" in analysis["excludes"]
+    assert "pylibrb" not in analysis["hiddenimports"]
     for name in ("requirements.txt", "pyproject.toml"):
         text = (ROOT / name).read_text()
         deps = text.split("[project.optional-dependencies]")[0] if name == "pyproject.toml" else text
         assert "pylibrb" not in deps  # not a dependency of the app
 
 
-def test_windows_workflow_checks_the_download_and_not_a_bundle():
-    flow = (ROOT / ".github" / "workflows" / "windows-installer.yml").read_text()
-    bundle_check = next(line for line in flow.splitlines() if "foreach ($pattern in @(" in line)
-    assert "pylibrb" not in bundle_check  # the bundle check no longer expects Rubber Band
-    assert "Rubber Band must not be bundled" in flow
-    assert "/TASKS=rubberband" in flow and "/DRubberBandSha256=" in flow
-    assert "a failed download left" in flow
+def test_windows_workflow_runs_the_consent_and_failure_paths():
+    flow = yaml.safe_load((ROOT / ".github" / "workflows" / "windows-installer.yml").read_text())
+    steps = next(iter(flow["jobs"].values()))["steps"]
+    by_name = {step["name"]: step.get("run", "") for step in steps if "name" in step}
+    bundle = by_name["Check Rubber Band is NOT in the bundle"]
+    assert "pylibrb*" in bundle and "throw" in bundle
+    download = by_name["Try the optional Rubber Band download (consent given, then a wrong checksum)"]
+    assert download.count("/TASKS=rubberband") == 2  # consent given: right and wrong checksum
+    assert "throw" in download
+    try_installer = by_name["Try the installer (install, update, uninstall; recordings stay)"]
+    assert "/TASKS=rubberband" not in try_installer  # without consent nothing is downloaded
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")

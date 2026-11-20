@@ -992,7 +992,8 @@ register_field(Field("stretch_to_grid", "Aufnahmen weich in den Takt ziehen", "b
 
 # --- Stretch engine (W3-RUBBERBAND) ---
 register_field(Field("stretch_engine", "Stretch-Engine", "choice", choices=STRETCH_ENGINES,
-                     hint="auto = Rubber Band, wenn vorhanden (sauberer), sonst der einfache Stretch. "
+                     hint="auto = Rubber Band, wenn vorhanden (sauberer), sonst still der einfache Stretch. "
+                          "rubberband = Rubber Band gewünscht, fehlt es, steht hier ein Hinweis. "
                           "simple = immer der einfache."),
                before="latency_ms")
 

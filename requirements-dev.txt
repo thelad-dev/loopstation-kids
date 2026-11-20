@@ -1,5 +1,6 @@
 -r requirements.txt
 pytest>=8
+pyyaml>=6
 ruff>=0.5
 # Rubber Band (GPL) only so the tests can run the real engine. Not an app dependency: the
 # Windows bundle excludes it (loopstation.spec), the installer downloads it on request.

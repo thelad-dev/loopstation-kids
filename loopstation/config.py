@@ -71,9 +71,10 @@ class Settings:
     # stretched to exactly that length instead of padded or cut.
     stretch_to_grid: bool = True
     # --- Stretch engine (W3-RUBBERBAND) ---
-    # auto = Rubber Band when it is installed and runs, else the simple built-in
-    # stretch; rubberband = the same, but the parents' page says so when it is
-    # missing; simple = always the built-in stretch.
+    # auto = Rubber Band when it is installed and runs, else silently the simple
+    # built-in stretch; rubberband = Rubber Band wanted, the parents' page says so
+    # (with how to install it) when it is missing and the simple stretch runs;
+    # simple = always the built-in stretch.
     stretch_engine: str = "auto"
     # --- Metronome (W3-ERWEITERT) ---
     # A quiet tick on every beat of the session grid, through the master and
@@ -304,8 +305,8 @@ SETTING_COMMENTS: dict[str, str] = {
             "Wirkt erst nach einem Neustart.",
     "stretch_to_grid": "true = eine Aufnahme knapp neben einem ganzen Takt wird weich auf den Takt gezogen, "
                        "false = immer mit Stille aufgefüllt oder geschnitten. Wirkt sofort.",
-    "stretch_engine": 'Stretch-Engine: "auto" = Rubber Band, wenn vorhanden, sonst der einfache Stretch; '
-                      '"rubberband" = Rubber Band bevorzugt; "simple" = immer der einfache Stretch. '
+    "stretch_engine": 'Stretch-Engine: "auto" = Rubber Band, wenn vorhanden, sonst still der einfache Stretch; '
+                      '"rubberband" = Rubber Band gewünscht, der Elternbereich meldet, wenn es fehlt; "simple" = immer der einfache Stretch. '
                       "Wirkt sofort.",
     "metronome_tone": "true = leiser Metronom-Ton auf jedem Schlag des Takts (nur im Elternbereich "
                       "einzustellen, das Kind sieht nur den Puls). Wirkt sofort.",

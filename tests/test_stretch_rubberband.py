@@ -117,10 +117,12 @@ def test_missing_library_falls_back_for_auto_and_rubberband(no_rubberband):
 
 
 def test_missing_library_is_explained_to_the_parents(no_rubberband):
-    notice = engine_notice("auto")
-    assert "Rubber Band nicht installiert, einfache Engine aktiv" in notice
-    assert "nachinstallieren" in notice.lower()
-    assert "nicht installiert" in engine_notice("rubberband")
+    asked = engine_notice("rubberband")
+    assert "Rubber Band nicht installiert, einfache Engine aktiv" in asked
+    assert "nachinstallieren" in asked.lower()
+    quiet = engine_notice("auto")
+    assert quiet == "Rubber Band nicht installiert, einfache Engine aktiv."
+    assert "nachinstallieren" not in quiet.lower()  # auto falls back silently, no call to action
     simple = engine_notice("simple")
     assert simple.startswith("Der einfache Stretch ist gewählt.") and "nicht installiert" in simple
     assert "nachinstallieren" not in simple.lower()  # nothing to fix if simple is what they chose

@@ -244,6 +244,8 @@ def engine_notice(choice: str) -> str:
         return f"Der einfache Stretch ist gewählt. {status}."
     if available:
         return f"{status}, wird benutzt."
+    if choice == "auto":
+        return f"{status}, einfache Engine aktiv."
     return f"{status}, einfache Engine aktiv. {install_hint()}"
 
 

@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.5"]
+dev = ["pytest>=8", "pyyaml>=6", "ruff>=0.5"]
 # Rubber Band (GPL) for the better time stretch, only on request; the simple stretch runs without it.
 rubberband = ["pylibrb>=0.1.2"]
 
