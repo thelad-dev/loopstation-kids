@@ -194,7 +194,11 @@ def _snapshot_of_log(path: Path) -> tuple[bytes, AppState]:
     if start is None:
         raise SetError(f"Das Protokoll {path} enthält keinen Snapshot")
     kept = lines[start:]
-    state = replay(parsed[start:], 0)
+    try:
+        state = replay(parsed[start:], 0)
+        sorted(referenced_samples(state))
+    except (KeyError, ValueError, TypeError, AttributeError) as exc:
+        raise SetError(f"Das Protokoll {path} enthält einen unlesbaren Snapshot ({exc!r})") from exc
     return ("".join(line + "\n" for line in kept)).encode("utf-8"), state
 
 
@@ -477,8 +481,12 @@ def _verify(root: Path, manifest: SetManifest) -> None:
         raise SetCorruptError(f"Das Protokoll im Set ist beschädigt ({exc})") from exc
     if not events or events[0].type != ev.SNAPSHOT:
         raise SetCorruptError("Das Protokoll im Set beginnt nicht mit einem Snapshot")
-    state = replay(events, manifest.pad_count)
-    for name in sorted(referenced_samples(state)):
+    try:
+        state = replay(events, manifest.pad_count)
+        names = sorted(referenced_samples(state))
+    except (KeyError, ValueError, TypeError, AttributeError) as exc:
+        raise SetCorruptError(f"Das Protokoll im Set hat einen unlesbaren Snapshot ({exc!r})") from exc
+    for name in names:
         if not valid_sample_name(name):
             raise SetCorruptError(f"Das Protokoll nennt einen ungültigen Sample-Namen: {name!r}")
         if name not in manifest.missing_samples and not (root / SAMPLES_PREFIX / name).is_file():
