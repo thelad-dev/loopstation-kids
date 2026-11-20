@@ -219,6 +219,7 @@ class SettingsDialog(QDialog):
         template: str | None = None,
         parent: QWidget | None = None,
         actions: Sequence[ParentAction] = (),
+        open_sets: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.config_path = config_path
@@ -257,6 +258,12 @@ class SettingsDialog(QDialog):
         header.addWidget(self.close_button)
         header.addWidget(_IconLabel("unlock", PARENT_ACCENT, 40))
         header.addLayout(title_box, 1)
+        # Way to the sets page (save and open sets); only if the window offers it.
+        self.sets_button: BigButton | None = None
+        if open_sets is not None:
+            self.sets_button = BigButton("save", "Sets", QColor(PARENT_ACCENT))
+            self.sets_button.clicked.connect(open_sets)
+            header.addWidget(self.sets_button)
 
         self.editors: dict[str, _Editor] = {}
         shown = self._file_settings()

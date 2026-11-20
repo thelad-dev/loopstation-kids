@@ -29,6 +29,7 @@ from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
 from loopstation.gui.parent_gate import ENTRY_SIZE, ParentEntryButton, ParentGate
 from loopstation.gui.peak_meter import PeakMeter
+from loopstation.gui.sets_page import SetsDialog
 from loopstation.gui.settings_page import ParentAction, SettingsDialog
 from loopstation.gui.volume_slider import VolumeSlider
 from loopstation.gui.widgets import (
@@ -44,6 +45,7 @@ from loopstation.gui.widgets import (
     big_font,
 )
 from loopstation.midi.launchpad import LaunchpadController
+from loopstation.session import PreparedOpen, SetSession
 
 TICK_MS = 30
 SESSION_WAVE_WIDTH = 0.3  # seconds a pad stays lit while the new-session wave passes
@@ -133,6 +135,8 @@ class MainWindow(QMainWindow):
         config_path: Path | None = None,
         launchpad_factory: Callable[[Settings], LaunchpadController | None] | None = None,
         settings_template: str | None = None,
+        set_session: SetSession | None = None,
+        on_open_set: Callable[[PreparedOpen], None] | None = None,
     ) -> None:
         super().__init__()
         self.controller = controller
@@ -141,13 +145,18 @@ class MainWindow(QMainWindow):
         self.launchpad_factory = launchpad_factory
         self.settings_template = settings_template
         self.device_status = list(device_status or [])
+        # Sets (parents' area only): the session they work on and what to do with a set to open.
+        self.set_session = set_session
+        self.on_open_set = on_open_set
         self._dialog_open = False
+        self._settings_dialog: QDialog | None = None
         # Factories so tests can replace the modal dialogs.
         self.confirm_factory: Callable[[QWidget], QDialog] = ConfirmDialog
         self.history_factory: Callable[[Controller, int, QWidget], QDialog] = HistoryDialog
         self.gate_factory: Callable[[QWidget], QDialog] = ParentGate
         self.settings_factory: Callable[..., QDialog] = SettingsDialog
         self.export_factory: Callable[[Controller, QWidget], QDialog] = ExportDialog
+        self.sets_factory: Callable[..., QDialog] = SetsDialog
 
         self.setWindowTitle("Loopstation")
         self.frame = Frame()
@@ -283,18 +292,32 @@ class MainWindow(QMainWindow):
         try:
             if self.gate_factory(self).exec() != QDialog.DialogCode.Accepted:
                 return
-            self.settings_factory(
+            extra = {"open_sets": self.open_sets} if self.set_session is not None else {}
+            dialog = self.settings_factory(
                 self.config_path, self.controller.settings, self.apply_settings,
                 self.settings_template, self,
                 [ParentAction("download", "Export", self.open_export)],
-            ).exec()
+                **extra,
+            )
+            self._settings_dialog = dialog
+            dialog.exec()
         finally:
+            self._settings_dialog = None
             self._dialog_open = False
             self.refresh()
 
     def open_export(self, parent: QWidget) -> None:
         """Export page, opened from the parents' area (the pads are already locked)."""
         self.export_factory(self.controller, parent).exec()
+    def open_sets(self) -> None:
+        """The sets page (from the settings page). A set that was opened ends the parents' area."""
+        if self.set_session is None:
+            return
+        parent = self._settings_dialog if self._settings_dialog is not None else self
+        dialog = self.sets_factory(self.set_session, self.on_open_set, parent)
+        dialog.exec()
+        if getattr(dialog, "opened", None) is not None and self._settings_dialog is not None:
+            self._settings_dialog.accept()
 
     def apply_settings(self, settings: Settings) -> list[str]:
         """Live-apply ``settings``; returns the keys that need a restart."""

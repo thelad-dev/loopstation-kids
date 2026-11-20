@@ -15,8 +15,9 @@ their history and the undo stack, and nothing else.
 
 ``open_set`` extracts into a work folder that is itself a valid ``data_dir``
 (``data/``, ``samples/``, ``settings.toml``), so ``EventStore(work / "data", ...)``
-loads the saved state, undo stack included. The redo stack is not persisted
-by the store and therefore starts empty.
+loads the saved state, undo stack included. The redo stack always starts
+empty after opening (plan 10.3): if the saved state carries one, the log of
+the opened set is reduced to a single snapshot without it.
 
 Format versions: ``FORMAT_VERSION`` is the version this code writes. Newer
 sets are refused (``SetTooNewError``). There is no older version yet; when
@@ -60,7 +61,11 @@ class SetError(Exception):
 
 
 class SetTooNewError(SetError):
-    """The set was written by a newer Loopstation."""
+    """The set was written by a newer Loopstation (``version`` is the format it claims)."""
+
+    def __init__(self, message: str, version: int | None = None) -> None:
+        super().__init__(message)
+        self.version = version
 
 
 class SetCorruptError(SetError):
@@ -333,6 +338,7 @@ def open_set(source: Path, work_dir: Path) -> SetManifest:
     try:
         manifest = _extract_folder(source, tmp) if source.is_dir() else _extract_zip(source, tmp)
         _verify(tmp, manifest)
+        _clear_redo(tmp, manifest)
         if work_dir.exists():
             work_dir.rmdir()
         os.replace(tmp, work_dir)
@@ -458,7 +464,8 @@ def _check_version(version: object) -> None:
     if version > FORMAT_VERSION:
         raise SetTooNewError(
             f"Dieses Set hat das Format {version}, diese Loopstation kennt nur bis {FORMAT_VERSION}. "
-            "Eine neuere Loopstation ist nötig."
+            "Eine neuere Loopstation ist nötig.",
+            version,
         )
     # Versions below FORMAT_VERSION: none exist yet, so there is nothing to migrate.
 
@@ -491,3 +498,25 @@ def _verify(root: Path, manifest: SetManifest) -> None:
             raise SetCorruptError(f"Das Protokoll nennt einen ungültigen Sample-Namen: {name!r}")
         if name not in manifest.missing_samples and not (root / SAMPLES_PREFIX / name).is_file():
             raise SetCorruptError(f"Das Sample {name} fehlt im Set")
+
+
+def _clear_redo(root: Path, manifest: SetManifest) -> None:
+    """Opening a set starts with an empty redo stack; the undo stack stays.
+
+    Only if the replayed state has redo entries, the log is replaced by one
+    snapshot of that state without them (same last seq + 1, so the sequence
+    goes on). Sets without redo entries are left byte for byte as they are.
+    """
+    log_path = root / LOG_MEMBER
+    events = [ev.Event.from_json(line) for line in log_path.read_text(encoding="utf-8").splitlines()
+              if line.strip()]
+    state = replay(events, manifest.pad_count).to_dict()
+    if not state.get("redo_stack"):
+        return
+    state["redo_stack"] = []
+    last = events[-1]
+    snapshot = ev.Event(seq=last.seq + 1, ts=last.ts, type=ev.SNAPSHOT, pad=None, data={"state": state})
+    tmp = log_path.with_name(log_path.name + ".tmp")
+    tmp.write_text(snapshot.to_json() + "\n", encoding="utf-8", newline="\n")
+    _fsync_path(tmp)
+    os.replace(tmp, log_path)

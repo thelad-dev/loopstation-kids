@@ -126,6 +126,15 @@ Nur im Elternbereich (Knopf „Export“ unten auf der Einstellungsseite), lokal
 - **Summe:** alles, was gerade loopt (oder alle belegten Pads als Loop), über N Takte (4, 8, 16, 32 oder eine eigene Zahl). Die Länge ist genau N × Taktlänge in ganzen Frames, jeder Loop startet vorn und wiederholt sich wie live. Es gilt dieselbe Pegelkette wie live: Lautstärke, dann der Limiter mit der Eltern-Obergrenze auf die Summe. Optional ein kurzer Ausklang (15 ms) und Einmal-Pads am Anfang. Ohne Takt in der Sitzung (`loop_sync` aus) wird nicht geraten: die Seite erklärt das, und nur auf ausdrückliche Wahl gilt „N × längstes Sample“ als Notbehelf, vermerkt im Kommentar der Datei.
 - **Einzelner Loop:** das aufgenommene Sample unverändert, ohne Lautstärke und Limiter.
 
+## Sets sichern und öffnen
+
+Erwachsene frieren die laufende Sitzung als Set ein und öffnen gespeicherte Sets wieder: Elternbereich, oben „Sets“. Ein Set ist eine Kopie der Sitzung (Ereignis-Protokoll samt Zurück-Schritten, alle Aufnahmen als WAV, Kopie der `settings.toml`) als `.loopset`-Datei (ZIP) oder als Ordner, standardmäßig unter `Dokumente/Loopstation/Sets`. Das Kind spielt nach dem Sichern einfach weiter.
+
+- Gesichert wird erst in eine temporäre Datei, dann umbenannt: ein Abbruch überschreibt kein altes Set halb. Läuft eine Aufnahme, wird das Sichern verweigert.
+- Beim Öffnen wird das Set vollständig geprüft, bevor etwas ersetzt wird: zu neue Formatversion, falsche Padzahl oder Abtastrate, beschädigte Dateien. Ist die aktuelle Sitzung nicht gesichert, fragt die Seite zuerst („Erst sichern, dann öffnen“, „Ohne sichern“). Die Zurück-Schritte des Sets bleiben, „Wiederholen“ startet leer.
+- Die eigenen Einstellungen des Rechners bleiben maßgeblich. Fehlt ein Gerät aus dem Set, wird der Systemstandard benutzt und die Sets-Seite sagt es.
+- Das Öffnen ersetzt `data/` und `samples/` zwischen zwei Sitzungen im selben Prozess (die Loopstation baut Fenster, Protokoll und Audio neu auf). Wird das mittendrin abgebrochen, schließt der nächste Start den Tausch ab (`loopstation/session.py`).
+
 ## Daten
 
 - `samples/pad_<Pad>_<Zeitstempel>.wav`: jede Aufnahme als eigene WAV-Datei. Dateien werden nie automatisch gelöscht, damit „Zurück“ und der Verlauf immer funktionieren.
@@ -142,4 +151,4 @@ ruff check .
 
 Die Tests brauchen weder Audiogerät noch Launchpad (Audio, MIDI und Uhr werden nachgebaut, die Oberfläche läuft mit `QT_QPA_PLATFORM=offscreen`).
 
-Aufbau: `loopstation/store.py` (Ereignis-Protokoll), `state.py` (Zustand und Nachspielen), `controller.py` (Bedienlogik ohne Qt), `audio/` (Aufnahme und Wiedergabe, `audio/sync.py` rechnet das Loop-Raster), `midi/` (Launchpad), `gui/` (Oberfläche), `installed.py` (Start der installierten App mit Datenordner im Benutzerprofil), `packaging/windows/` (PyInstaller-Spec, Inno-Setup-Skript, App-Symbol).
+Aufbau: `loopstation/store.py` (Ereignis-Protokoll), `state.py` (Zustand und Nachspielen), `controller.py` (Bedienlogik ohne Qt), `audio/` (Aufnahme und Wiedergabe, `audio/sync.py` rechnet das Loop-Raster), `midi/` (Launchpad), `gui/` (Oberfläche), `sets.py` und `session.py` (Sets schreiben, lesen, Sitzung tauschen), `installed.py` (Start der installierten App mit Datenordner im Benutzerprofil), `packaging/windows/` (PyInstaller-Spec, Inno-Setup-Skript, App-Symbol).
