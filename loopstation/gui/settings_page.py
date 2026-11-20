@@ -627,12 +627,11 @@ class SettingsDialog(QDialog):
             self._say(str(exc), error=True)
             return False
         restart = self._apply(new)
-        self._applied = replace(new, **{key: getattr(self._applied, key) for key in RESTART_KEYS})
+        switched = any(getattr(new, key) != getattr(self._applied, key)
+                       for key in ("input_device", "output_device", "audio_hostapi"))
         self.saved = True
         labels = {f.key: f.label for f in FIELDS}
         labels["asio"] = "ASIO"
-        switched = any(getattr(new, key) != getattr(self._applied, key)
-                       for key in ("input_device", "output_device", "audio_hostapi"))
         self._applied = new
         if restart:
             names = ", ".join(labels.get(key, key) for key in restart)
