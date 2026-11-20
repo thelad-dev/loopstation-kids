@@ -179,6 +179,7 @@ SETTING_COMMENTS: dict[str, str] = {
                  "Wirkt sofort.",
     "latency_ms": "Verzögerung zwischen Lautsprecher und Mikrofon in Millisekunden (0 bis 1000) "
                   'oder "auto". Wirkt sofort.',
+    "soft_seam": "Loop-Naht weich ein- und ausblenden (true) oder harter Sprung (false). Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 

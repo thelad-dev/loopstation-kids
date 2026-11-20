@@ -87,6 +87,8 @@ class Field:
 FIELDS: list[Field] = [
     Field("loop_sync", "Loops im Takt halten", "bool",
           hint="Die erste Aufnahme bestimmt die Loop-Länge, alle weiteren passen dazu."),
+    Field("soft_seam", "Weiche Loop-Naht", "bool",
+          hint="Blendet Anfang und Ende jedes Loops kurz aus, damit es nicht knackt."),
     Field("sound_effects", "Piepton bei Aufnahme", "bool"),
     Field("max_record_seconds", "Längste Aufnahme", "float", 1, 120, suffix=" s"),
     Field("latency_ms", "Latenz Lautsprecher zu Mikrofon", "auto_float", 0, 1000, suffix=" ms",

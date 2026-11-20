@@ -45,7 +45,7 @@ WHITE, YELLOW, GREEN, RED = "white", "yellow", "green", "red"
 
 # Settings that ``apply_settings`` takes over while the app runs; the rest of
 # ``Settings`` (see ``config.RESTART_KEYS``) keeps its running value.
-LIVE_SETTINGS = ("max_record_seconds", "sound_effects", "fullscreen", "launchpad", "loop_sync", "latency_ms")
+LIVE_SETTINGS = ("max_record_seconds", "sound_effects", "fullscreen", "launchpad", "loop_sync", "latency_ms", "soft_seam")
 
 
 class Mode(Enum):
@@ -614,7 +614,7 @@ class Controller:
         configure = getattr(self.audio, "configure", None)
         if configure is not None:
             latency = None if updated.latency_ms is None else updated.latency_ms / 1000
-            configure(updated.max_record_seconds, latency)
+            configure(updated.max_record_seconds, latency, soft_seam=updated.soft_seam)
         self.settings = updated
         self._changed()
         return restart_keys_changed(updated, new)

@@ -217,16 +217,16 @@ def test_restart_values_are_not_applied_but_reported(controller):
 
 def test_backend_without_configure_is_fine_and_with_it_gets_the_values(controller):
     seen = []
-    controller.audio.configure = lambda seconds, latency: seen.append((seconds, latency))
+    controller.audio.configure = lambda seconds, latency, soft_seam: seen.append((seconds, latency, soft_seam))
     controller.apply_settings(replace(controller.settings, max_record_seconds=7.0, latency_ms=250.0))
-    controller.apply_settings(replace(controller.settings, latency_ms=None))
-    assert seen == [(7.0, 0.25), (7.0, None)]
+    controller.apply_settings(replace(controller.settings, latency_ms=None, soft_seam=False))
+    assert seen == [(7.0, 0.25, True), (7.0, None, False)]
 
 
 def test_refusing_backend_leaves_the_settings_untouched(controller):
     before = controller.settings
 
-    def refuse(_seconds, _latency):
+    def refuse(_seconds, _latency, soft_seam):
         raise RuntimeError("no")
 
     controller.audio.configure = refuse
@@ -248,3 +248,6 @@ def test_sounddevice_audio_configure_changes_limit_and_latency_for_the_next_reco
     audio.stop_recording()
     audio.configure(20.0, None)
     assert audio._latency_seconds is None
+    assert audio._soft_seam is False  # untouched when not given
+    audio.configure(20.0, None, soft_seam=True)
+    assert audio._soft_seam is True
