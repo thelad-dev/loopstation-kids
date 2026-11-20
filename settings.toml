@@ -2,7 +2,7 @@
 # Fehlt diese Datei, gelten genau die Werte unten.
 #
 # Änderungen in der Einstellungsseite (Eltern-Bereich) gelten sofort, außer bei
-# rows, cols, sample_rate und data_dir: die wirken erst nach einem Neustart.
+# rows, cols, sample_rate, asio und data_dir: die wirken erst nach einem Neustart.
 # Wer diese Datei von Hand ändert, startet die Loopstation neu.
 
 # Größe des Pad-Rasters: Zeilen und Spalten (je 1 bis 16). Neustart nötig.
@@ -12,7 +12,7 @@ cols = 4
 # Längste Aufnahme in Sekunden (1 bis 120). Danach stoppt sie von selbst. Wirkt sofort.
 max_record_seconds = 10
 
-# Abtastrate für Aufnahme und Wiedergabe in Hz. Neustart nötig.
+# Abtastrate für Aufnahme und Wiedergabe in Hz (8000 bis 192000). Neustart nötig.
 sample_rate = 44100
 
 # Kurzer Piepton beim Start und Ende einer Aufnahme. Wirkt sofort.
@@ -44,26 +44,29 @@ data_dir = "."
 # --- Loop-Naht ---
 # Die ersten und letzten Millisekunden jedes Loops werden weich ein- und ausgeblendet,
 # damit es beim Sprung vom Ende zum Anfang nicht knackt. Die Loop-Länge bleibt gleich.
-# false = harter Sprung wie bisher.
+# false = harter Sprung wie bisher. Wirkt sofort (für neue Aufnahmen und den Export).
 soft_seam = true
 
 # --- Pegel: Lautstärke, Obergrenze, Aufnahmepegel ---
 
 # Lautstärke der Loopstation von 0 (still) bis 1. Der Regler rechts oben im
 # Fenster stellt denselben Wert ein. Sie bleibt immer unter der Obergrenze.
+# Wirkt sofort.
 volume = 0.5
 
 # Obergrenze in dB(FS) von -30 bis 0: Die Ausgabe wird nie lauter als das,
 # auch nicht bei vielen Loops und Pieptönen zugleich. Das ist eine Grenze im
 # Rechner; den Schalldruck am Ohr bestimmen auch Systemlautstärke und Kopfhörer.
+# Wirkt sofort.
 max_level_db = -6
 
 # Mikrofonpegel in dB von -24 bis 24 (0 = unverändert). Kurze Spitzen werden
-# weich begrenzt, statt hart zu verzerren.
+# weich begrenzt, statt hart zu verzerren. Wirkt sofort.
 input_gain_db = 0
 
 # true = der Aufnahmepegel wird langsam ausgeglichen (nie lauter, solange das
 # Mikrofon übersteuert). Schützt nicht vor einem übersteuerten Mikrofon.
+# Wirkt sofort.
 auto_gain = false
 
 # true = Pegelanzeige bei der Aufnahme: drei Balken am Pad und die Skala im
@@ -122,6 +125,7 @@ metronome_tone = false
 # Pegel des Metronom-Tons in dB(FS) von -40 bis -6, vor Lautstärke und
 # Obergrenze. Wirkt sofort.
 metronome_level_db = -20
+
 # --- Freier Pad-Modus ---
 
 # true = ein Loop auf einem freien Pad (lange halten, das Pad wird rund) beginnt

@@ -259,7 +259,8 @@ SETTING_COMMENTS: dict[str, str] = {
     "rows": "Zeilen des Pad-Rasters (1 bis 16). Wirkt erst nach einem Neustart.",
     "cols": "Spalten des Pad-Rasters (1 bis 16). Wirkt erst nach einem Neustart.",
     "max_record_seconds": "Längste Aufnahme in Sekunden (1 bis 120). Wirkt sofort.",
-    "sample_rate": "Abtastrate für Aufnahme und Wiedergabe in Hz. Wirkt erst nach einem Neustart.",
+    "sample_rate": "Abtastrate für Aufnahme und Wiedergabe in Hz (8000 bis 192000). "
+                   "Wirkt erst nach einem Neustart.",
     "sound_effects": "Kurzer Piepton beim Start und Ende einer Aufnahme. Wirkt sofort.",
     "fullscreen": "true = Vollbild ohne Fensterrahmen, false = maximiertes Fenster. Wirkt sofort.",
     "launchpad": "Novation Launchpad automatisch suchen und benutzen. Wirkt sofort.",
