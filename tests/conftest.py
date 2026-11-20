@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import types
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -236,7 +237,14 @@ class FakeSoundDevice:
         output_latency: float = 0.0,
         has_input: bool = True,
         loopback: bool = False,
+        devices: list[dict[str, Any]] | None = None,
+        hostapis: list[dict[str, Any]] | None = None,
     ) -> None:
+        # Catalog data for query_devices/query_hostapis; the stream tests leave
+        # both empty.
+        self.devices = devices if devices is not None else []
+        self.hostapis = hostapis if hostapis is not None else []
+        self.default = types.SimpleNamespace(device=(-1, -1))
         self.block = block
         self.delay = delay
         self.input_latency = input_latency
@@ -264,6 +272,12 @@ class FakeSoundDevice:
     def check_input_settings(self, **_kwargs: Any) -> None:
         if not self.has_input:
             raise RuntimeError("no input device")
+
+    def query_devices(self) -> list[dict[str, Any]]:
+        return [{"index": i, **d} for i, d in enumerate(self.devices)]
+
+    def query_hostapis(self) -> list[dict[str, Any]]:
+        return list(self.hostapis)
 
     # -- the sound card
 
