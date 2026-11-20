@@ -238,13 +238,18 @@ def fsync_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(scope="session")
 def qapp():
-    from PySide6.QtGui import QFont
+    from PySide6.QtGui import QFont, QFontDatabase
     from PySide6.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
-    # The layout tests measure text widths, so every platform gets the same face: Arial on Windows,
-    # Liberation Sans (metric-compatible) on Linux where installed, else the platform fallback.
-    app.setFont(QFont("Arial", 9))
+    # The layout tests measure text widths, so every platform gets the same face: the Liberation Sans
+    # files shipped in tests/fonts (Arial metrics), not whatever the system happens to resolve.
+    families: list[str] = []
+    for name in ("LiberationSans-Regular.ttf", "LiberationSans-Bold.ttf"):
+        font_id = QFontDatabase.addApplicationFont(str(Path(__file__).parent / "fonts" / name))
+        assert font_id >= 0, f"test font {name} did not load"
+        families += QFontDatabase.applicationFontFamilies(font_id)
+    app.setFont(QFont(families[0], 9))
     yield app
 
 
