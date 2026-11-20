@@ -16,8 +16,8 @@ from conftest import FakeAudio, FakeClock, FakeSoundDevice, make_settings
 from PySide6.QtGui import QColor
 
 from loopstation.audio import metronome
-from loopstation.audio.samples import load_wav
 from loopstation.audio.dynamics import block_peak, db_to_gain
+from loopstation.audio.samples import load_wav
 from loopstation.audio.sounddevice_backend import SoundDeviceAudio
 from loopstation.config import ConfigError, Settings, parse_settings
 from loopstation.controller import Controller, Mode
