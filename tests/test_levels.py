@@ -315,7 +315,7 @@ def test_the_sign_goes_out_when_the_recording_stops(controller, clock):
 def test_level_settings_defaults_and_values():
     settings = Settings()
     assert (settings.volume, settings.max_level_db, settings.input_gain_db) == (0.5, -6.0, 0.0)
-    assert settings.auto_gain is False and settings.peak_meter is False
+    assert settings.auto_gain is False and settings.peak_meter is True
     parsed = parse_settings({"volume": 1, "max_level_db": -12, "input_gain_db": 4.5,
                              "auto_gain": True, "peak_meter": True})
     assert (parsed.volume, parsed.max_level_db, parsed.input_gain_db) == (1.0, -12.0, 4.5)

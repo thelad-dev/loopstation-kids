@@ -12,12 +12,12 @@ in ``config.SETTING_COMMENTS``).
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QPainter, QPaintEvent, QShowEvent
+from PySide6.QtCore import QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QHideEvent, QPainter, QPaintEvent, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
     QCheckBox,
@@ -44,6 +44,7 @@ from loopstation.config import (
     write_settings,
 )
 from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
+from loopstation.gui.volume_slider import VolumeSlider
 from loopstation.gui.widgets import (
     ACCENT_GRAY,
     ACCENT_GREEN,
@@ -53,6 +54,12 @@ from loopstation.gui.widgets import (
     TEXT_DIM,
     BigButton,
 )
+
+if TYPE_CHECKING:
+    from loopstation.controller import Controller
+
+# How often the volume slider, the level scale and the loud-recordings list follow the controller (ms).
+LEVEL_REFRESH_MS = 100
 
 # Advice for parents that belongs on the page whatever fields it has
 # (plan sections 3.1 and 9.3).
@@ -209,6 +216,10 @@ class SettingsDialog(QDialog):
 
     ``apply(settings)`` takes over the live values and returns the keys that
     need a restart. A refused value is shown in the dialog and nothing is written.
+
+    With a ``controller`` (or a parent window that has one) the page also has
+    the volume slider at the top right and the level section (``LevelPanel``);
+    those controls act at once, the rest of the page waits for "Speichern".
     """
 
     def __init__(
@@ -219,12 +230,14 @@ class SettingsDialog(QDialog):
         template: str | None = None,
         parent: QWidget | None = None,
         actions: Sequence[ParentAction] = (),
+        controller: Controller | None = None,
     ) -> None:
         super().__init__(parent)
         self.config_path = config_path
         self.running = running
         self._apply = apply
         self._template = template
+        self._applied = running  # what the controller runs now (live values)
         self.saved = False
         self.setWindowTitle("Elternbereich")
         self.setModal(True)
@@ -258,15 +271,35 @@ class SettingsDialog(QDialog):
         header.addWidget(_IconLabel("unlock", PARENT_ACCENT, 40))
         header.addLayout(title_box, 1)
 
-        self.editors: dict[str, _Editor] = {}
+        self.editors: dict[str, Any] = {}
         shown = self._file_settings()
         values = settings_values(shown)
+        self.controller = controller if controller is not None else getattr(parent, "controller", None)
+        self.panel = None
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self.refresh_levels)
+        self.volume_slider: VolumeSlider | None = None
+        if self.controller is not None:
+            # Imported here because level_panel imports ToggleSwitch from this module.
+            from loopstation.gui.level_panel import PANEL_KEYS, LevelPanel
+
+            self.volume_slider = VolumeSlider(captions=True)
+            self.volume_slider.setMinimumWidth(300)
+            self.volume_slider.setMaximumWidth(384)
+            self.volume_slider.volumeChanged.connect(self.controller.set_volume)
+            header.addWidget(self.volume_slider, 0)
+            panel_fields = {f.key: f for f in FIELDS if f.key in PANEL_KEYS}
+            self.panel = LevelPanel(self.controller, values, panel_fields, ToggleSwitch)
+            self.panel.edited.connect(self._level_edited)
+            self.editors.update(self.panel.editors)
         self._pending = [f.label for f in FIELDS if f.restart and values[f.key] != getattr(running, f.key)]
         switches, numbers = QVBoxLayout(), QFormLayout()
         switches.setSpacing(14)
         numbers.setHorizontalSpacing(24)
         numbers.setVerticalSpacing(12)
         for field in FIELDS:
+            if field.key in self.editors:
+                continue  # the level section above has it
             editor = _Editor(field, values[field.key])
             self.editors[field.key] = editor
             label = field.label + (f" ({RESTART_TEXT})" if field.restart else "")
@@ -285,6 +318,8 @@ class SettingsDialog(QDialog):
         inner_layout = QVBoxLayout(inner)
         inner_layout.setContentsMargins(0, 0, 8, 0)
         inner_layout.setSpacing(14)
+        if self.panel is not None:
+            inner_layout.addWidget(self.panel)
         inner_layout.addWidget(self._card("Loop-Verhalten und Aufnahme", switches))
         inner_layout.addWidget(self._card("Zahlenwerte", numbers))
         notes = QVBoxLayout()
@@ -367,10 +402,44 @@ class SettingsDialog(QDialog):
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt API
         super().showEvent(event)
+        if self.controller is not None:
+            self.refresh_levels()
+            self._timer.start(LEVEL_REFRESH_MS)
         # Fill the window it was opened from, like the page in the mockup.
         parent = self.parentWidget()
         if parent is not None and parent.isVisible():
             self.setGeometry(parent.geometry())
+
+    def hideEvent(self, event: QHideEvent) -> None:  # noqa: N802 - Qt API
+        self._timer.stop()
+        super().hideEvent(event)
+
+    def refresh_levels(self) -> None:
+        """Let the volume slider, the level scale and the loud-recordings list follow the controller."""
+        if self.controller is None or self.volume_slider is None or self.panel is None:
+            return
+        self.volume_slider.set_state(self.controller.volume, self.controller.volume_limit)
+        self.panel.refresh()
+
+    def _level_edited(self, key: str, value: Any, final: bool) -> None:
+        """A control of the level section changed: the controller takes it over at once.
+
+        ``settings.toml`` is written when ``final`` is true (a switch, the end
+        of a drag, a key press); the other fields of the page stay as they are
+        until "Speichern".
+        """
+        live = replace(self._applied, **{key: value})
+        if final:
+            try:
+                changes = {key: value, "volume": self.editors["volume"].value()}
+                write_settings(self.config_path, replace(self._file_settings(), **changes), self._template)
+            except (ConfigError, OSError) as exc:
+                self._say(str(exc), error=True)
+                return
+            self._say("Gespeichert und übernommen.")
+        self._applied = live
+        self._apply(live)
+        self.refresh_levels()
 
     def _file_settings(self) -> Settings:
         """What the file says now (it may hold restart values not running yet), else the running ones."""
@@ -402,6 +471,7 @@ class SettingsDialog(QDialog):
             self._say(str(exc), error=True)
             return False
         restart = self._apply(new)
+        self._applied = replace(new, **{key: getattr(self._applied, key) for key in RESTART_KEYS})
         self.saved = True
         labels = {f.key: f.label for f in FIELDS}
         if restart:

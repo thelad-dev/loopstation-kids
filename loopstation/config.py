@@ -40,7 +40,7 @@ class Settings:
     max_level_db: float = -6.0
     input_gain_db: float = 0.0
     auto_gain: bool = False
-    peak_meter: bool = False
+    peak_meter: bool = True
 
     @property
     def pad_count(self) -> int:
@@ -184,7 +184,8 @@ SETTING_COMMENTS: dict[str, str] = {
     "max_level_db": "Obergrenze der Ausgabe in dB(FS) von -30 bis 0. Wirkt sofort.",
     "input_gain_db": "Mikrofonpegel in dB von -24 bis 24 (0 = unverändert). Wirkt sofort.",
     "auto_gain": "true = der Aufnahmepegel wird langsam ausgeglichen. Wirkt sofort.",
-    "peak_meter": "true = Pegelanzeige der Aufnahme für Eltern. Wirkt sofort.",
+    "peak_meter": "true = Pegelanzeige bei der Aufnahme (Balken am Pad, Skala bei den Eltern). "
+                  "Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 

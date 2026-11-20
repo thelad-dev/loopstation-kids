@@ -28,7 +28,6 @@ from loopstation.gui.export_dialog import ExportDialog
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
 from loopstation.gui.parent_gate import ENTRY_SIZE, ParentEntryButton, ParentGate
-from loopstation.gui.peak_meter import PeakMeter
 from loopstation.gui.settings_page import ParentAction, SettingsDialog
 from loopstation.gui.volume_slider import VolumeSlider
 from loopstation.gui.widgets import (
@@ -190,14 +189,10 @@ class MainWindow(QMainWindow):
         self.status_label.setWordWrap(True)
         self.status_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
-        self.peak_meter = PeakMeter()
-        self.peak_meter.hide()
-
         actions = QHBoxLayout()
         actions.setSpacing(14)
         actions.addWidget(self.undo_button, 2)
         actions.addWidget(self.stop_button, 2)
-        actions.addWidget(self.peak_meter, 2)
         actions.addWidget(self.status_label, 2)
         actions.addWidget(self.delete_all_button, 2)
 
@@ -353,10 +348,6 @@ class MainWindow(QMainWindow):
         self.volume_slider.set_state(controller.volume, controller.volume_limit)
         clipping = controller.input_clipping()
         level = controller.input_level_stage()
-        metering = controller.peak_meter and controller.recording_pad is not None
-        self.peak_meter.setVisible(metering)
-        if metering:
-            self.peak_meter.set_state(controller.input_peak(), clipping)
         for pad in self.grid.pads:
             color = colors.get(pad.index, "white")
             sparkle = 0.0 if session is None else self._session_wave(pad.index, session)
