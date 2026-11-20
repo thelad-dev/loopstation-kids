@@ -141,9 +141,15 @@ def default_device(sd: Any, kind: Kind, platform: str) -> AudioDevice | None:
     return None
 
 
-def ref_for(device: AudioDevice, devices: Sequence[AudioDevice]) -> DeviceRef:
-    """Stable reference for ``device``; ``devices`` is the full list (``all_devices``)."""
-    same = [d for d in devices if d.name == device.name and d.hostapi == device.hostapi]
+def ref_for(device: AudioDevice, devices: Sequence[AudioDevice], kind: Kind) -> DeviceRef:
+    """Stable reference for ``device`` used as ``kind``; ``devices`` is the full list.
+
+    The occurrence counts only equally named devices of the same host API that
+    can serve ``kind``, the same set ``resolve_device`` indexes into.
+    """
+    same = [
+        d for d in devices if d.name == device.name and d.hostapi == device.hostapi and d.channels(kind) > 0
+    ]
     occurrence = next((i for i, d in enumerate(same) if d.index == device.index), 0)
     return DeviceRef(device.name, device.hostapi, occurrence)
 
@@ -158,9 +164,7 @@ def resolve_device(sd: Any, ref: DeviceRef | None, kind: Kind) -> Resolution:
     if ref is None:
         return Resolution(None, None)
     matches = [
-        d
-        for d in all_devices(sd)
-        if d.name == ref.name and d.hostapi == ref.hostapi and d.channels(kind) > 0
+        d for d in all_devices(sd) if d.name == ref.name and d.hostapi == ref.hostapi and d.channels(kind) > 0
     ]
     if not matches:
         what = "Aufnahmegerät" if kind == "input" else "Wiedergabegerät"

@@ -79,7 +79,7 @@ def test_default_device_follows_the_platform_hostapi() -> None:
 
 def test_saved_device_is_found_again_after_the_index_moved() -> None:
     sd = windows_sd()
-    ref = ref_for(all_devices(sd)[4], all_devices(sd))  # Headset on WASAPI
+    ref = ref_for(all_devices(sd)[4], all_devices(sd), "input")  # Headset on WASAPI
     assert ref == DeviceRef("Headset", "Windows WASAPI", 0)
     # A new device is plugged in first: every index shifts by one.
     sd.devices.insert(0, dev("Neu", 0, inputs=1, outputs=1))
@@ -115,9 +115,28 @@ def test_equally_named_devices_get_distinct_references() -> None:
         devices=[dev("USB Audio", 0, inputs=1), dev("USB Audio", 0, inputs=1)],
     )
     devices = all_devices(sd)
-    first, second = (ref_for(d, devices) for d in devices)
+    first, second = (ref_for(d, devices, "input") for d in devices)
     assert (first.occurrence, second.occurrence) == (0, 1)
     assert resolve_device(sd, second, "input").index == 1
     # One of the two is unplugged: the survivor is taken, not a fallback.
     sd.devices.pop()
     assert resolve_device(sd, second, "input").index == 0
+
+
+def test_occurrence_counts_per_direction() -> None:
+    sd = FakeSoundDevice(
+        hostapis=[{"name": "Windows WASAPI", "default_input_device": 1, "default_output_device": 0}],
+        devices=[
+            dev("Headset", 0, outputs=2),
+            dev("Headset", 0, inputs=1),
+            dev("Headset", 0, inputs=1),
+        ],
+    )
+    devices = all_devices(sd)
+    first, second = (ref_for(d, devices, "input") for d in devices[1:])
+    assert (first.occurrence, second.occurrence) == (0, 1)
+    assert resolve_device(sd, first, "input").index == 1
+    assert resolve_device(sd, second, "input").index == 2
+    output_ref = ref_for(devices[0], devices, "output")
+    assert output_ref.occurrence == 0
+    assert resolve_device(sd, output_ref, "output").index == 0
