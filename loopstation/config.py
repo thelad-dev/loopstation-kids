@@ -11,6 +11,10 @@ from typing import Any
 
 DEFAULT_CONFIG_NAME = "settings.toml"
 
+# Time signatures and the beats one bar holds (the session grid is one bar;
+# 6/8 counts two dotted-quarter beats).
+SIGNATURES: dict[str, int] = {"2/4": 2, "3/4": 3, "4/4": 4, "6/8": 2}
+
 
 class ConfigError(ValueError):
     """Invalid configuration; the message names the file and the key."""
@@ -41,6 +45,20 @@ class Settings:
     input_gain_db: float = 0.0
     auto_gain: bool = False
     peak_meter: bool = True
+    # --- Onset grid (W2-ONSET-GRID) ---
+    # Off = the length of the first recording is the bar, as before. On = the
+    # first recording starts at its first reliable onset and may take its bar
+    # from the onset distances. Off until it has been tried with children's material.
+    auto_grid: bool = False
+    # Time signature of the session grid ("4/4": one bar = 4 beats), see ``SIGNATURES``.
+    time_signature: str = "4/4"
+    # Tempo window for a grid from onset distances (BPM of one beat).
+    grid_bpm_min: float = 40.0
+    grid_bpm_max: float = 200.0
+
+    @property
+    def beats_per_bar(self) -> int:
+        return SIGNATURES[self.time_signature]
 
     @property
     def pad_count(self) -> int:
@@ -128,6 +146,21 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
     for key in ("auto_gain", "peak_meter"):
         if key in raw:
             values[key] = _check_bool(source, key, raw[key])
+    # Onset grid (W2-ONSET-GRID).
+    if "auto_grid" in raw:
+        values["auto_grid"] = _check_bool(source, "auto_grid", raw["auto_grid"])
+    if "time_signature" in raw:
+        if raw["time_signature"] not in SIGNATURES:
+            raise ConfigError(
+                f"{source}: Schlüssel 'time_signature' muss einer der Werte "
+                f"{', '.join(SIGNATURES)} sein, ist aber {raw['time_signature']!r}"
+            )
+        values["time_signature"] = raw["time_signature"]
+    for key in ("grid_bpm_min", "grid_bpm_max"):
+        if key in raw:
+            values[key] = _check_float(source, key, raw[key], 20, 300)
+    if values.get("grid_bpm_min", Settings.grid_bpm_min) > values.get("grid_bpm_max", Settings.grid_bpm_max):
+        raise ConfigError(f"{source}: 'grid_bpm_min' darf nicht größer sein als 'grid_bpm_max'")
     return Settings(**values)
 
 
@@ -186,6 +219,11 @@ SETTING_COMMENTS: dict[str, str] = {
     "auto_gain": "true = der Aufnahmepegel wird langsam ausgeglichen. Wirkt sofort.",
     "peak_meter": "true = Pegelanzeige bei der Aufnahme (Balken am Pad, Skala bei den Eltern). "
                   "Wirkt sofort.",
+    "auto_grid": "true = die erste Aufnahme beginnt beim ersten Schlag und kann den Takt aus dem "
+                 "Abstand der Schläge bekommen, false = die Aufnahmelänge ist der Takt. Wirkt sofort.",
+    "time_signature": "Taktart der Sitzung: 2/4, 3/4, 4/4 oder 6/8. Wirkt bei der nächsten ersten Aufnahme.",
+    "grid_bpm_min": "Langsamstes Tempo für einen Takt aus Schlägen in BPM (20 bis 300). Wirkt sofort.",
+    "grid_bpm_max": "Schnellstes Tempo für einen Takt aus Schlägen in BPM (20 bis 300). Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 

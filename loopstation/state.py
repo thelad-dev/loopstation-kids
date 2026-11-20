@@ -18,8 +18,10 @@ what it replaced onto a redo stack (same entry shape, ``seq`` is the seq of the
 undo event); a ``redo`` event moves it back. Any new content change clears the
 redo stack. Like the undo stack it is part of every snapshot.
 
-The loop grid ("master") is the length of the first sound of a session,
-``{"frames": int, "rate": int}``. A ``master_set`` event sets it; it is
+The loop grid ("master") is one bar, normally the length of the first sound of
+a session, ``{"frames": int, "rate": int}``; with the onset grid it may also
+carry ``source``, ``signature`` and ``pad`` (see ``parse_master``). A
+``master_set`` event sets it; it is
 cleared as soon as no pad holds a sample any more (a ``session_start`` event
 follows in the log). Undo entries remember the previous master under
 ``"master"`` whenever a content event changed it, so undoing "Alle löschen"
@@ -64,8 +66,9 @@ class AppState:
     # undo event, "pads": {pad_id: sample the undo replaced}}.
     redo_stack: list[dict[str, Any]] = field(default_factory=list)
     last_seq: int = 0
-    # Loop grid {"frames": int, "rate": int}, or None while recordings are free.
-    master: dict[str, int] | None = None
+    # Loop grid {"frames": int, "rate": int} plus, if the log said so, "source",
+    # "signature" and "pad" (see ``parse_master``), or None while recordings are free.
+    master: dict[str, Any] | None = None
 
     @classmethod
     def empty(cls, pad_count: int) -> AppState:
@@ -130,15 +133,37 @@ class AppState:
         return any(pad.sample is not None for pad in self.pads.values())
 
 
-def parse_master(raw: Any) -> dict[str, int] | None:
-    """A valid master ``{"frames", "rate"}`` from JSON data, else None."""
+def parse_master(raw: Any) -> dict[str, Any] | None:
+    """A valid master ``{"frames", "rate"}`` from JSON data, else None.
+
+    ``source`` (where the bar came from), ``signature`` (time signature) and
+    ``pad`` (the pad that set it) are kept when present and well formed and
+    left out otherwise, so older logs read as before; ``master_source`` gives
+    the source of such a master as ``"duration"``.
+    """
     if not isinstance(raw, dict):
         return None
     frames, rate = raw.get("frames"), raw.get("rate")
     for value in (frames, rate):
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             return None
-    return {"frames": frames, "rate": rate}
+    master: dict[str, Any] = {"frames": frames, "rate": rate}
+    for key in ("source", "signature"):
+        if isinstance(raw.get(key), str) and raw[key]:
+            master[key] = raw[key]
+    pad = raw.get("pad")
+    if isinstance(pad, int) and not isinstance(pad, bool) and pad >= 0:
+        master["pad"] = pad
+    return master
+
+
+def master_source(master: dict[str, Any]) -> str:
+    """Where the bar came from: ``onset``, ``duration``, ``parent_bpm`` or ``free_pad``.
+
+    A master written before the source existed has none and counts as ``duration``
+    (the length of the first recording was the bar).
+    """
+    return master.get("source", "duration")
 
 
 def _entry_to_dict(entry: dict[str, Any]) -> dict[str, Any]:

@@ -28,11 +28,28 @@ class FakeClock:
         self.now += seconds
 
 
+def clap_signal(frames: int, sample_rate: int, times: list[float]) -> np.ndarray:
+    """Silence of ``frames`` with a 30 ms decaying 1 kHz burst starting at each of ``times`` (seconds)."""
+    out = np.zeros(frames, dtype=np.float32)
+    burst_len = int(0.03 * sample_rate)
+    k = np.arange(burst_len)
+    decay = np.exp(-k / (burst_len / 5))
+    burst = (0.8 * decay * np.sin(2 * np.pi * 1000 * k / sample_rate)).astype(np.float32)
+    for at in times:
+        start = int(round(at * sample_rate))
+        if start < frames:
+            end = min(frames, start + burst_len)
+            out[start:end] += burst[: end - start]
+    return out
+
+
 class FakeAudio:
     """In-memory audio backend that records every call.
 
     A recording yields ``clock elapsed * sample_rate`` frames of a quiet sine,
-    so the recording length follows the fake clock.
+    so the recording length follows the fake clock. With ``clap_times`` set
+    (seconds after the start of the recording) it yields silence with a short
+    sharp burst at each of those times instead, like a child clapping.
     """
 
     def __init__(self, clock: FakeClock, sample_rate: int = 8000, available_input: bool = True) -> None:
@@ -59,6 +76,7 @@ class FakeAudio:
         self.levels: list[tuple[str, Any]] = []
         self.input_peak = 0.0  # what poll_input_level() reports
         self.clips = 0
+        self.clap_times: list[float] | None = None
 
     def start_recording(self) -> bool:
         if not self.available_input:
@@ -75,6 +93,8 @@ class FakeAudio:
         self._record_start = None
         if frames <= 0:
             return None
+        if self.clap_times is not None:
+            return clap_signal(frames, self.sample_rate, self.clap_times)
         t = np.arange(frames, dtype=np.float32) / self.sample_rate
         return (0.25 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
 

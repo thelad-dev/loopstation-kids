@@ -21,6 +21,7 @@ from PySide6.QtGui import QColor, QHideEvent, QPainter, QPaintEvent, QShowEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
     QCheckBox,
+    QComboBox,
     QDialog,
     QDoubleSpinBox,
     QFormLayout,
@@ -36,6 +37,7 @@ from PySide6.QtWidgets import (
 
 from loopstation.config import (
     RESTART_KEYS,
+    SIGNATURES,
     ConfigError,
     Settings,
     load_settings,
@@ -43,6 +45,7 @@ from loopstation.config import (
     settings_values,
     write_settings,
 )
+from loopstation.gui.grid_panel import GridPanel
 from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
 from loopstation.gui.volume_slider import VolumeSlider
 from loopstation.gui.widgets import (
@@ -88,7 +91,7 @@ class ParentAction:
 
 @dataclass(frozen=True)
 class Field:
-    """One row of the page. ``kind``: ``bool``, ``int``, ``float``, ``auto_float`` or ``text``."""
+    """One row of the page. ``kind``: ``bool``, ``int``, ``float``, ``auto_float``, ``choice`` or ``text``."""
 
     key: str
     label: str
@@ -97,6 +100,7 @@ class Field:
     high: float = 1000
     hint: str = ""
     suffix: str = ""
+    choices: tuple[str, ...] = ()
 
     @property
     def restart(self) -> bool:
@@ -170,6 +174,11 @@ class _Editor:
             self._box = ToggleSwitch()
             self._box.setChecked(bool(value))
             self.widget = self._box
+        elif kind == "choice":
+            self._combo = QComboBox()
+            self._combo.addItems(list(field.choices))
+            self._combo.setCurrentText(str(value))
+            self.widget = self._combo
         elif kind == "text":
             self._edit = QLineEdit(str(value))
             self.widget = self._edit
@@ -202,6 +211,8 @@ class _Editor:
         kind = self.field.kind
         if kind == "bool":
             return self._box.isChecked()
+        if kind == "choice":
+            return self._combo.currentText()
         if kind == "text":
             return self._edit.text()
         if kind == "int":
@@ -246,7 +257,8 @@ class SettingsDialog(QDialog):
             f"QScrollArea, #settings_inner {{ background: transparent; border: none; }} "
             f"QLabel, QCheckBox {{ color: {TEXT.name()}; font-size: 16px; }} "
             "#card { background: #1B1B1F; border: 1px solid #26262B; border-radius: 18px; } "
-            f"QSpinBox, QDoubleSpinBox, QLineEdit {{ color: {TEXT.name()}; background: {SURFACE.name()}; "
+            f"QSpinBox, QDoubleSpinBox, QLineEdit, QComboBox {{ color: {TEXT.name()}; "
+            f"background: {SURFACE.name()}; "
             f"font-size: 16px; border: 1px solid {PARENT_ACCENT}; border-radius: 10px; padding: 6px 10px; }} "
             "QSpinBox:disabled, QDoubleSpinBox:disabled { color: #5A5A60; border-color: #3A3A41; } "
             "QCheckBox::indicator { width: 22px; height: 22px; border-radius: 5px; "
@@ -276,6 +288,7 @@ class SettingsDialog(QDialog):
         values = settings_values(shown)
         self.controller = controller if controller is not None else getattr(parent, "controller", None)
         self.panel = None
+        self.grid_panel: GridPanel | None = None
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh_levels)
         self.volume_slider: VolumeSlider | None = None
@@ -288,6 +301,7 @@ class SettingsDialog(QDialog):
             self.volume_slider.setMaximumWidth(384)
             self.volume_slider.volumeChanged.connect(self.controller.set_volume)
             header.addWidget(self.volume_slider, 0)
+            self.grid_panel = GridPanel(self.controller)
             panel_fields = {f.key: f for f in FIELDS if f.key in PANEL_KEYS}
             self.panel = LevelPanel(self.controller, values, panel_fields, ToggleSwitch)
             self.panel.edited.connect(self._level_edited)
@@ -318,6 +332,8 @@ class SettingsDialog(QDialog):
         inner_layout = QVBoxLayout(inner)
         inner_layout.setContentsMargins(0, 0, 8, 0)
         inner_layout.setSpacing(14)
+        if self.grid_panel is not None:
+            inner_layout.addWidget(self.grid_panel)
         if self.panel is not None:
             inner_layout.addWidget(self.panel)
         inner_layout.addWidget(self._card("Loop-Verhalten und Aufnahme", switches))
@@ -420,6 +436,8 @@ class SettingsDialog(QDialog):
             return
         self.volume_slider.set_state(self.controller.volume, self.controller.volume_limit)
         self.panel.refresh()
+        if self.grid_panel is not None:
+            self.grid_panel.refresh()
 
     def _level_edited(self, key: str, value: Any, final: bool) -> None:
         """A control of the level section changed: the controller takes it over at once.
@@ -490,3 +508,19 @@ class SettingsDialog(QDialog):
         else:
             self._say("Gespeichert und übernommen.")
         return True
+
+
+# --- Onset grid (W2-ONSET-GRID) ---
+register_field(Field("auto_grid", "Takt aus Klatschen erkennen", "bool",
+                     hint="Onset/Auto-Grid: die erste Aufnahme beginnt beim ersten Schlag und kann ihren "
+                          "Takt aus dem Abstand der Schläge bekommen. Aus = Aufnahmelänge wird Takt."),
+               before="soft_seam")
+register_field(Field("time_signature", "Taktart", "choice", choices=tuple(SIGNATURES),
+                     hint="Ein Takt besteht aus so vielen Schlägen wie die Taktart (4/4 = 4). "
+                          "Gilt ab der nächsten ersten Aufnahme."),
+               before="latency_ms")
+register_field(Field("grid_bpm_min", "Langsamstes Tempo für den Takt", "float", 20, 300, suffix=" BPM"),
+               before="latency_ms")
+register_field(Field("grid_bpm_max", "Schnellstes Tempo für den Takt", "float", 20, 300, suffix=" BPM",
+                     hint="Außerhalb dieses Fensters entsteht kein Takt aus Schlägen."),
+               before="latency_ms")
