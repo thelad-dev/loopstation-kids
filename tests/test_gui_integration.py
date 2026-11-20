@@ -381,7 +381,7 @@ def test_the_app_starts_and_ends_with_exit_code_zero_and_no_widget_left_over(tmp
     """
     script = tmp_path / "run_app.py"
     script.write_text(APP_SCRIPT, encoding="utf-8")
-    env = {**__import__("os").environ, "QT_QPA_PLATFORM": "offscreen"}
+    env = {**__import__("os").environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": str(REPO)}
     done = subprocess.run([sys.executable, str(script), mode], cwd=REPO, env=env,
                           capture_output=True, text=True, timeout=120)
     assert done.returncode == 0, (done.returncode, done.stdout, done.stderr[-2000:])
