@@ -38,9 +38,11 @@ from loopstation.gui.widgets import (
     ACCENT_GRAY,
     ACCENT_GREEN,
     BACKGROUND,
+    DARK_SCROLLBAR_QSS,
     TEXT,
     TEXT_DIM,
     BigButton,
+    weak_slot,
 )
 
 NBSP = " "
@@ -164,11 +166,8 @@ class ExportDialog(QDialog):
         self.setStyleSheet(
             f"ExportDialog {{ background: {BACKGROUND.name()}; border: 5px solid {PARENT_ACCENT}; }} "
             "QScrollArea { background: transparent; border: none; } "
-            "QScrollBar:vertical { background: transparent; width: 10px; margin: 0; } "
-            "QScrollBar::handle:vertical { background: #3A3A41; border-radius: 5px; min-height: 24px; } "
-            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; } "
-            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; } "
-            f"QLabel, QRadioButton {{ color: {TEXT.name()}; font-size: 16px; }} "
+            + DARK_SCROLLBAR_QSS
+            + f"QLabel, QRadioButton {{ color: {TEXT.name()}; font-size: 16px; }} "
             "#card { background: #1B1B1F; border: 1px solid #2C2C31; border-radius: 18px; } "
             "#length_box { background: #141418; border-radius: 14px; } "
             "#info_card { background: rgba(127, 167, 255, 23); border: 1px solid rgba(127, 167, 255, 102); "
@@ -197,6 +196,7 @@ class ExportDialog(QDialog):
         title.setStyleSheet("font-size: 34px; font-weight: bold;")
         subtitle = QLabel("Lokal · ohne Konto · ohne Internet · die Dateien bleiben auf diesem Rechner")
         subtitle.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 15px;")
+        subtitle.setWordWrap(True)  # wraps in a narrow window instead of widening it
         title_box = QVBoxLayout()
         title_box.setSpacing(0)
         title_box.addWidget(title)
@@ -213,7 +213,7 @@ class ExportDialog(QDialog):
         columns.addLayout(self._right_column(), 17)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setContentsMargins(28, 24, 28, 24)
         layout.setSpacing(16)
         layout.addLayout(header)
         layout.addLayout(columns, 1)
@@ -244,6 +244,7 @@ class ExportDialog(QDialog):
     def _switch_row(self, switch: ToggleSwitch, title: str, hint: QLabel) -> QHBoxLayout:
         name = QLabel(title)
         name.setStyleSheet("font-size: 16.5px; font-weight: 600;")
+        name.setWordWrap(True)  # a long title wraps instead of widening the page (1024 px)
         texts = QVBoxLayout()
         texts.setSpacing(0)
         texts.addWidget(name)
@@ -277,7 +278,7 @@ class ExportDialog(QDialog):
         layout.addSpacing(8)
         layout.addWidget(self._heading("Wie viele Takte?"))
         chips = QHBoxLayout()
-        chips.setSpacing(12)
+        chips.setSpacing(8)
         self.bar_group = QButtonGroup(self)
         self.bar_group.setExclusive(True)
         self.bar_chips: dict[int, QPushButton] = {}
@@ -290,7 +291,7 @@ class ExportDialog(QDialog):
             self.bar_group.addButton(chip, bars)
             self.bar_chips[bars] = chip
             chips.addWidget(chip, 1 if bars else 0)
-        self.bar_chips[CUSTOM_BARS].setMinimumWidth(88)
+        self.bar_chips[CUSTOM_BARS].setMinimumWidth(60)
         self.bar_chips[8].setChecked(True)
         self.bar_group.idClicked.connect(self._bars_chosen)
         layout.addLayout(chips)
@@ -302,7 +303,7 @@ class ExportDialog(QDialog):
         self.custom_spin = QSpinBox()
         self.custom_spin.setRange(1, ex.MAX_BARS)
         self.custom_spin.setValue(12)
-        self.custom_spin.valueChanged.connect(lambda _v: self.refresh())
+        self.custom_spin.valueChanged.connect(weak_slot(self.refresh))
         custom.addWidget(self.custom_spin)
         custom.addStretch(1)
         self.custom_row.hide()
@@ -338,12 +339,12 @@ class ExportDialog(QDialog):
         group = QButtonGroup(self)
         group.addButton(self.scope_running)
         group.addButton(self.scope_all)
-        self.scope_running.toggled.connect(lambda _on: self.refresh())
+        self.scope_running.toggled.connect(weak_slot(self.refresh))
         layout.addLayout(pads)
 
         layout.addSpacing(6)
         self.one_shots = ToggleSwitch()
-        self.one_shots.toggled.connect(lambda _on: self.refresh())
+        self.one_shots.toggled.connect(weak_slot(self.refresh))
         layout.addLayout(self._switch_row(
             self.one_shots, "Einmal-Pads am Anfang einrechnen", self._dim("Standard: weglassen")))
         self.fade_out = ToggleSwitch()
@@ -351,7 +352,7 @@ class ExportDialog(QDialog):
         self.fade_hint = self._dim("")
         layout.addLayout(self._switch_row(self.fade_out, "Kurzer Ausklang am Ende", self.fade_hint))
         self.stand_in = ToggleSwitch()
-        self.stand_in.toggled.connect(lambda _on: self.refresh())
+        self.stand_in.toggled.connect(weak_slot(self.refresh))
         self.stand_in_widgets = QWidget()
         stand_in_row = self._switch_row(
             self.stand_in, "Notbehelf: N × längstes Sample",
@@ -436,7 +437,7 @@ class ExportDialog(QDialog):
         first = next((p for p, c in self.pad_chips.items() if c.isEnabled()), None)
         if first is not None:
             self.pad_chips[first].setChecked(True)
-        self.pad_group.idClicked.connect(lambda _pad: self.refresh())
+        self.pad_group.idClicked.connect(weak_slot(self.refresh))
         single_layout.addLayout(chips)
         self.loop_info = self._dim("", 13)
         single_layout.addWidget(self.loop_info)

@@ -160,6 +160,7 @@ def test_settings_page_shows_an_export_button_that_opens_the_page(qapp, tmp_path
                             None, None, [action])
     dialog.action_buttons["Export"].click()
     assert opened == [dialog]
+    opened.clear()  # the action holds this list and the list the dialog: no reference cycle
 
 
 def test_settings_page_without_actions_has_no_extra_buttons(qapp, tmp_path):

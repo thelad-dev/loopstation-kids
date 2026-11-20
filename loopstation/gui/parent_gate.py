@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from loopstation.gui.icons import draw_icon
-from loopstation.gui.widgets import TEXT, TEXT_DIM, big_font
+from loopstation.gui.widgets import TEXT, TEXT_DIM, big_font, weak_slot
 
 HOLD_MS = 2000  # how long the lock has to be held (mockup 08)
 ENTRY_SIZE = 20  # small and dim on purpose; it fits into the window margin
@@ -188,7 +188,7 @@ class ParentGate(QDialog):
         key.setStyleSheet(f"QPushButton {{ {style} border: none; border-radius: 16px; "
                           "font-size: 26px; font-weight: bold; }")
         if label.isdigit():
-            key.clicked.connect(lambda _checked=False, d=label: self._type(d))
+            key.clicked.connect(weak_slot(self._type, label))
         return key
 
     def _type(self, digit: str) -> None:

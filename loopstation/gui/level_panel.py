@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 from loopstation.clips import ClipEvent
 from loopstation.gui.parent_gate import PARENT_ACCENT
 from loopstation.gui.peak_meter import PeakMeter
-from loopstation.gui.widgets import ACCENT_ORANGE, ACCENT_RED, TEXT, TEXT_DIM
+from loopstation.gui.widgets import ACCENT_ORANGE, ACCENT_RED, TEXT, TEXT_DIM, weak_slot
 
 if TYPE_CHECKING:
     from loopstation.controller import Controller
@@ -314,7 +314,7 @@ class LevelPanel(QWidget):
 
         grid = QGridLayout(self)
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setHorizontalSpacing(16)
+        grid.setHorizontalSpacing(12)
         grid.setVerticalSpacing(16)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
@@ -323,19 +323,25 @@ class LevelPanel(QWidget):
         grid.addWidget(self._automatic_card(values), 1, 0)
         grid.addWidget(self._clips_card(), 1, 1)
 
-        self.ceiling.valueChanged.connect(lambda v: self.edited.emit("max_level_db", v, False))
-        self.ceiling.released.connect(lambda v: self.edited.emit("max_level_db", v, True))
-        self.trim.valueChanged.connect(lambda v: self.edited.emit("input_gain_db", v, False))
-        self.trim.released.connect(lambda v: self.edited.emit("input_gain_db", v, True))
+        for slider, key in ((self.ceiling, "max_level_db"), (self.trim, "input_gain_db")):
+            slider.valueChanged.connect(weak_slot(self._emit_edited, key, False, pass_signal_args=True))
+            slider.released.connect(weak_slot(self._emit_edited, key, True, pass_signal_args=True))
         for key, switch in self.switches.items():
-            switch.toggled.connect(lambda on, key=key: self.edited.emit(key, bool(on), True))
+            switch.toggled.connect(weak_slot(self._emit_switched, key, pass_signal_args=True))
 
         for key, slider in (("max_level_db", self.ceiling), ("input_gain_db", self.trim)):
             self.editors[key] = PanelEditor(fields[key], slider, lambda slider=slider: slider.value)
         for key, switch in self.switches.items():
             self.editors[key] = PanelEditor(fields[key], switch, switch.isChecked)
-        self.editors["volume"] = PanelEditor(fields["volume"], QWidget(), lambda: self.controller.volume)
+        controller = self.controller
+        self.editors["volume"] = PanelEditor(fields["volume"], QWidget(), lambda: controller.volume)
         self.refresh()
+
+    def _emit_edited(self, key: str, final: bool, value: Any) -> None:
+        self.edited.emit(key, value, final)
+
+    def _emit_switched(self, key: str, on: Any) -> None:
+        self.edited.emit(key, bool(on), True)
 
     # ------------------------------------------------------------ the cards
 

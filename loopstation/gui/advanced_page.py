@@ -35,7 +35,15 @@ from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
 from loopstation.gui.settings_page import ToggleSwitch
 from loopstation.gui.waveform import WaveformWidget
-from loopstation.gui.widgets import ACCENT_GRAY, BACKGROUND, TEXT, TEXT_DIM, BigButton
+from loopstation.gui.widgets import (
+    ACCENT_GRAY,
+    BACKGROUND,
+    DARK_SCROLLBAR_QSS,
+    TEXT,
+    TEXT_DIM,
+    BigButton,
+    weak_slot,
+)
 
 STRETCH_HINT = "Zwischen Markern strecken: nur bei knapper Abweichung (unter 10 %)"
 REFRESH_MS = 40  # the metronome strip follows the grid this often
@@ -132,10 +140,7 @@ class AdvancedDialog(QDialog):
             "min-height: 44px; } "
             # The - and + buttons beside the field do the stepping; the spin box keeps no arrows.
             "QSpinBox::up-button, QSpinBox::down-button { width: 0; border: none; } "
-            "QScrollBar:vertical { background: transparent; width: 10px; margin: 0; } "
-            "QScrollBar::handle:vertical { background: #3A3A41; border-radius: 5px; min-height: 24px; } "
-            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; } "
-            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }")
+            + DARK_SCROLLBAR_QSS)
 
         # Header: back to the child page, the open lock, the title.
         self.close_button = BigButton("back", "Zur Kinderseite", ACCENT_GRAY)
@@ -221,7 +226,7 @@ class AdvancedDialog(QDialog):
             chip.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             chip.setCursor(Qt.CursorShape.PointingHandCursor)
             chip.setFixedSize(60, 40)
-            chip.clicked.connect(lambda _checked=False, p=pad: self.choose_pad(p))
+            chip.clicked.connect(weak_slot(self.choose_pad, pad))
             self.pad_chips.append(chip)
             picker.addWidget(chip)
         picker.addStretch(1)
@@ -347,8 +352,9 @@ class AdvancedDialog(QDialog):
         self.bpm_spin.setRange(round(low), round(high))
         self.bpm_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.bpm_spin.setFixedWidth(140)
-        minus.clicked.connect(lambda: self.bpm_spin.stepDown())
-        plus.clicked.connect(lambda: self.bpm_spin.stepUp())
+        spin = self.bpm_spin
+        minus.clicked.connect(lambda: spin.stepDown())
+        plus.clicked.connect(lambda: spin.stepUp())
         row.addWidget(minus)
         row.addWidget(self.bpm_spin)
         row.addWidget(plus)

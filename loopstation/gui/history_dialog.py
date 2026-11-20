@@ -27,6 +27,7 @@ from loopstation.gui.widgets import (
     TEXT,
     BigButton,
     big_font,
+    weak_slot,
 )
 
 ROW_HEIGHT = 108  # 76 px buttons + 2 x 12 px padding + 2 x 4 px border
@@ -115,9 +116,9 @@ class HistoryDialog(QDialog):
         label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         listen = BigButton("play", "Anhören", ACCENT_GREEN)
-        listen.clicked.connect(lambda: self.controller.preview(sample))
+        listen.clicked.connect(weak_slot(self.controller.preview, sample))
         take = BigButton("check", "Nehmen", ACCENT_YELLOW)
-        take.clicked.connect(lambda: self._take(sample))
+        take.clicked.connect(weak_slot(self._take, sample))
         for button in (listen, take):
             button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self.listen_buttons[sample] = listen

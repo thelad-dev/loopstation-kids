@@ -44,6 +44,7 @@ from loopstation.gui.widgets import (
     TEXT_DIM,
     BigButton,
     big_font,
+    weak_slot,
 )
 from loopstation.midi.launchpad import LaunchpadController
 from loopstation.session import PreparedOpen, SetSession
@@ -52,6 +53,7 @@ TICK_MS = 30
 SESSION_WAVE_WIDTH = 0.3  # seconds a pad stays lit while the new-session wave passes
 MODE_BAR_HEIGHT = 104  # mode buttons and volume control share one row of this height
 MODE_FONT_PT = 13
+MODE_PAD_X = 8  # sides of a mode button: the five words and the volume control must fit 1024 px
 PAD_GAP = 8  # visible gap is larger: each pad keeps a margin for its glow
 # The action row (with "Wiederholen") stays inside a 1024 px wide window at
 # this size (checked by a test).
@@ -177,11 +179,17 @@ class MainWindow(QMainWindow):
         mode_bar.setSpacing(12)
         for mode, icon, word, accent in MODES:
             button = BigButton(icon, word, accent, checkable=True, stacked=True,
-                               min_height=MODE_BAR_HEIGHT, font_pt=MODE_FONT_PT)
-            button.clicked.connect(lambda _checked=False, m=mode: self._choose_mode(m))
+                               min_height=MODE_BAR_HEIGHT, font_pt=MODE_FONT_PT, pad_x=MODE_PAD_X)
+            button.clicked.connect(weak_slot(self._choose_mode, mode))
+            # Equal widths: the layout shares the row by stretch only, the words do not matter.
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
             self.mode_buttons[mode] = button
             mode_bar.addWidget(button, 2)  # equal widths
         # The volume control closes the bar on the right (a larger gap sets it apart).
+        # No word may be cut off: every mode button is at least as wide as the widest word needs.
+        floor = max(b.sizeHint().width() for b in self.mode_buttons.values())
+        for button in self.mode_buttons.values():
+            button.setMinimumWidth(floor)
         self.volume_slider = VolumeSlider()
         self.volume_slider.volumeChanged.connect(self.controller.set_volume)
         mode_bar.addSpacing(20)
@@ -195,10 +203,10 @@ class MainWindow(QMainWindow):
         for pad in self.grid.pads:
             # A tap acts on release as before (clicked); the press and release in front of it
             # let a long hold switch the free mode of the pad instead (see Controller.press_down).
-            pad.pressed.connect(lambda i=pad.index: self._pad_down(i))
-            pad.released.connect(lambda i=pad.index: self._pad_up(i))
-            pad.clicked.connect(lambda _checked=False, i=pad.index: self._pad_clicked(i))
-            pad.on_badge = lambda i=pad.index: self.undo_pad(i)
+            pad.pressed.connect(weak_slot(self._pad_down, pad.index))
+            pad.released.connect(weak_slot(self._pad_up, pad.index))
+            pad.clicked.connect(weak_slot(self._pad_clicked, pad.index))
+            pad.on_badge = weak_slot(self.undo_pad, pad.index)
 
         # Action buttons. "Alle löschen" sits apart on the right.
         self.undo_button = BigButton("undo", "Zurück", ACCENT_GRAY, font_pt=BAR_FONT_PT, pad_x=BAR_PAD_X,
@@ -250,8 +258,8 @@ class MainWindow(QMainWindow):
         self.escape_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         self.escape_shortcut.activated.connect(self.escape)
 
-        controller.add_listener(self.refresh)
-        controller.add_history_listener(self._history_requested)
+        controller.add_listener(weak_slot(self.refresh))
+        controller.add_history_listener(weak_slot(self._history_requested, pass_signal_args=True))
 
         self.timer = QTimer(self)
         self.timer.setInterval(TICK_MS)
@@ -285,6 +293,14 @@ class MainWindow(QMainWindow):
     def _choose_mode(self, mode: Mode) -> None:
         self.controller.set_mode(mode)
 
+    @staticmethod
+    def _exec(dialog: QDialog) -> int:
+        """Run a modal dialog and free it: a closed dialog is not kept as a hidden child of the window."""
+        try:
+            return dialog.exec()
+        finally:
+            dialog.deleteLater()
+
     def undo(self) -> None:
         self.controller.undo()
 
@@ -306,7 +322,7 @@ class MainWindow(QMainWindow):
         dialog = self.confirm_factory(self)
         self._dialog_open = True
         try:
-            accepted = dialog.exec() == QDialog.DialogCode.Accepted
+            accepted = self._exec(dialog) == QDialog.DialogCode.Accepted
         finally:
             self._dialog_open = False
         if accepted:
@@ -321,7 +337,7 @@ class MainWindow(QMainWindow):
         dialog = self.history_factory(self.controller, pad, self)
         self._dialog_open = True
         try:
-            dialog.exec()
+            self._exec(dialog)
         finally:
             self._dialog_open = False
         self.refresh()
@@ -332,7 +348,7 @@ class MainWindow(QMainWindow):
             return
         self._dialog_open = True
         try:
-            if self.gate_factory(self).exec() != QDialog.DialogCode.Accepted:
+            if self._exec(self.gate_factory(self)) != QDialog.DialogCode.Accepted:
                 return
             actions = [ParentAction("layers", "Erweitert", self.open_advanced),
                        ParentAction("download", "Export", self.open_export)]
@@ -343,7 +359,7 @@ class MainWindow(QMainWindow):
                 self.settings_template, self, actions,
             )
             self._settings_dialog = dialog
-            dialog.exec()
+            self._exec(dialog)
         finally:
             self._settings_dialog = None
             self._dialog_open = False
@@ -351,17 +367,18 @@ class MainWindow(QMainWindow):
 
     def open_advanced(self, parent: QWidget) -> None:
         """Waveform, the parents' tempo and the metronome, opened from the parents' area."""
-        self.advanced_factory(self.controller, parent).exec()
+        self._exec(self.advanced_factory(self.controller, parent))
 
     def open_export(self, parent: QWidget) -> None:
         """Export page, opened from the parents' area (the pads are already locked)."""
-        self.export_factory(self.controller, parent).exec()
+        self._exec(self.export_factory(self.controller, parent))
+
     def open_sets(self, parent: QWidget) -> None:
         """The sets page, opened from the parents' area. A set that was opened ends the parents' area."""
         if self.set_session is None:
             return
         dialog = self.sets_factory(self.set_session, self.on_open_set, parent)
-        dialog.exec()
+        self._exec(dialog)
         if getattr(dialog, "opened", None) is not None and isinstance(parent, QDialog):
             parent.accept()
 
@@ -463,7 +480,7 @@ class MainWindow(QMainWindow):
 
         for mode, button in self.mode_buttons.items():
             button.setChecked(mode == controller.mode)
-        self.frame.set_accent(None if controller.mode == Mode.PLAY else MODE_ACCENT[controller.mode])
+        self.frame.set_accent(MODE_ACCENT[controller.mode])  # every mode has its colour (mockups 01-07)
         self.undo_button.setEnabled(controller.can_undo() or controller.recording_pad is not None)
         self.redo_button.setEnabled(controller.can_redo())
 

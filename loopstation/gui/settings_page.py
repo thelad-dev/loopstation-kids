@@ -54,10 +54,12 @@ from loopstation.gui.widgets import (
     ACCENT_GRAY,
     ACCENT_GREEN,
     BACKGROUND,
+    DARK_SCROLLBAR_QSS,
     SURFACE,
     TEXT,
     TEXT_DIM,
     BigButton,
+    weak_slot,
 )
 
 if TYPE_CHECKING:
@@ -238,7 +240,7 @@ class _Editor:
                 self._auto = QCheckBox("automatisch")
                 self._auto.setChecked(value is None)
                 self._dspin.setEnabled(value is not None)
-                self._auto.toggled.connect(lambda on: self._dspin.setEnabled(not on))
+                self._auto.toggled.connect(lambda on, spin=self._dspin: spin.setEnabled(not on))
                 holder = QWidget()
                 row = QHBoxLayout(holder)
                 row.setContentsMargins(0, 0, 0, 0)
@@ -304,16 +306,18 @@ class SettingsDialog(QDialog):
             "QSpinBox:disabled, QDoubleSpinBox:disabled { color: #5A5A60; border-color: #3A3A41; } "
             "QCheckBox::indicator { width: 22px; height: 22px; border-radius: 5px; "
             f"background: {SURFACE.name()}; border: 1px solid #5A5A60; }} "
-            f"QCheckBox::indicator:checked {{ background: {ACCENT_GREEN.name()}; }}")
+            f"QCheckBox::indicator:checked {{ background: {ACCENT_GREEN.name()}; }} "
+            + DARK_SCROLLBAR_QSS)
 
         # Header: back to the child page, title with the open lock, what the page does.
-        self.close_button = BigButton("back", "Zur Kinderseite", ACCENT_GRAY)
+        self.close_button = BigButton("back", "Zur Kinderseite", ACCENT_GRAY, font_pt=17)
         self.close_button.setToolTip("Eltern-Modus beenden")
         self.close_button.clicked.connect(self.reject)
         title = QLabel("Elternbereich")
         title.setStyleSheet("font-size: 34px; font-weight: bold;")
         subtitle = QLabel("Änderungen gelten sofort · gespeichert in settings.toml")
         subtitle.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 15px;")
+        subtitle.setWordWrap(True)  # wraps in a narrow window instead of widening it
         title_box = QVBoxLayout()
         title_box.setSpacing(0)
         title_box.addWidget(title)
@@ -338,7 +342,7 @@ class SettingsDialog(QDialog):
             from loopstation.gui.level_panel import PANEL_KEYS, LevelPanel
 
             self.volume_slider = VolumeSlider(captions=True)
-            self.volume_slider.setMinimumWidth(300)
+            self.volume_slider.setMinimumWidth(260)
             self.volume_slider.setMaximumWidth(384)
             self.volume_slider.volumeChanged.connect(self.controller.set_volume)
             header.addWidget(self.volume_slider, 0)
@@ -373,7 +377,7 @@ class SettingsDialog(QDialog):
         inner = QWidget()
         inner.setObjectName("settings_inner")
         inner_layout = QVBoxLayout(inner)
-        inner_layout.setContentsMargins(0, 0, 8, 0)
+        inner_layout.setContentsMargins(0, 0, 4, 0)
         inner_layout.setSpacing(14)
         if self.grid_panel is not None:
             inner_layout.addWidget(self.grid_panel)
@@ -400,7 +404,8 @@ class SettingsDialog(QDialog):
             "Lokal · ohne Konto · ohne Internet · Neustart nötig nur für: " + ", ".join(RESTART_KEYS))
         footer.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 13px;")
         footer.setWordWrap(True)
-        self.save_button = BigButton("check", "Speichern", QColor(PARENT_ACCENT), checkable=True)
+        self.save_button = BigButton(
+            "check", "Speichern", QColor(PARENT_ACCENT), checkable=True, font_pt=17, pad_x=16)
         self.save_button.setChecked(True)  # filled: the one main action
         self.save_button.clicked.connect(self._save_clicked)
         bottom = QHBoxLayout()
@@ -411,14 +416,14 @@ class SettingsDialog(QDialog):
         bottom.addLayout(texts, 1)
         self.action_buttons: dict[str, BigButton] = {}
         for action in actions:
-            button = BigButton(action.icon, action.label, ACCENT_GRAY)
-            button.clicked.connect(lambda _checked=False, a=action: a.open(self))
+            button = BigButton(action.icon, action.label, ACCENT_GRAY, font_pt=17, pad_x=16)
+            button.clicked.connect(weak_slot(self._open_action, action))
             self.action_buttons[action.label] = button
             bottom.addWidget(button)
         bottom.addWidget(self.save_button)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 24, 32, 24)
+        layout.setContentsMargins(20, 24, 20, 24)
         layout.setSpacing(16)
         layout.addLayout(header)
         layout.addWidget(scroll, 1)
@@ -440,9 +445,9 @@ class SettingsDialog(QDialog):
             self.editors[key] = _ChoiceEditor(field, str(values[key]))  # type: ignore[assignment]
         self._asio = _Editor(Field("asio", "ASIO zulassen (nur Windows)", "bool"), values["asio"])
         self.editors["asio"] = self._asio
-        self._hostapi_box().currentIndexChanged.connect(lambda _i: self._fill_devices(reset_devices=True))
+        self._hostapi_box().currentIndexChanged.connect(weak_slot(self._hostapi_changed))
         for key in ("input_device", "output_device"):
-            self._choice(key).box.currentIndexChanged.connect(lambda _i: self._update_device_hints())
+            self._choice(key).box.currentIndexChanged.connect(weak_slot(self._update_device_hints))
 
         self.device_hint = self._hint("")
         self.device_hint.setStyleSheet("color: #FF9F0A; font-size: 13px;")
@@ -470,6 +475,12 @@ class SettingsDialog(QDialog):
 
     def _hostapi_box(self) -> QComboBox:
         return self._choice("audio_hostapi").box
+
+    def _open_action(self, action: ParentAction) -> None:
+        action.open(self)
+
+    def _hostapi_changed(self) -> None:
+        self._fill_devices(reset_devices=True)
 
     def _fill_devices(self, reset_devices: bool = False) -> None:
         """Fill the audio systems and, for the chosen one, the microphone and speaker lists.

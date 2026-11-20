@@ -40,6 +40,7 @@ from loopstation.gui.widgets import (
     TEXT,
     TEXT_DIM,
     BigButton,
+    weak_slot,
 )
 from loopstation.session import PreparedOpen, SetInfo, SetSession, list_sets
 from loopstation.sets import SetError
@@ -258,8 +259,8 @@ class SetsDialog(QDialog):
         # Tabs.
         self.save_tab = TabButton("save", "Set speichern")
         self.open_tab = TabButton("folder", "Set öffnen …")
-        self.save_tab.clicked.connect(lambda: self.show_tab("save"))
-        self.open_tab.clicked.connect(lambda: self.show_tab("open"))
+        self.save_tab.clicked.connect(weak_slot(self.show_tab, "save"))
+        self.open_tab.clicked.connect(weak_slot(self.show_tab, "open"))
         tabs = QHBoxLayout()
         tabs.setSpacing(16)
         tabs.addWidget(self.save_tab)
@@ -318,6 +319,7 @@ class SetsDialog(QDialog):
             shown = QLabel(value)
             shown.setStyleSheet("font-size: 15px; font-weight: bold;")
             shown.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            shown.setWordWrap(True)  # a long value wraps instead of widening the page (1024 px)
             line.addWidget(name, 1)
             line.addWidget(shown)
             box.addLayout(line)
@@ -585,7 +587,7 @@ class SetsDialog(QDialog):
         self.infos = list_sets(folder, self.session.sd)
         for info in self.infos:
             row = _SetRow(info)
-            row.clicked.connect(lambda _checked=False, r=row: self._select(r))
+            row.clicked.connect(weak_slot(self._select, row))
             self.list_box.addWidget(row)
             self.rows.append(row)
         self.empty_label.setVisible(not self.rows)
