@@ -127,9 +127,23 @@ def test_rule_1_two_onsets_inside_the_window_make_a_beat():
 
 def test_rule_1_window_edges():
     assert _grid([1.0, 1.30]).source == "onset"  # 0.30 s = 200 BPM, still inside
-    assert _grid([1.0, 2.50]).source == "onset"  # 1.50 s = 40 BPM, still inside
+    assert _grid([1.0, 2.50], total_s=6.0).source == "onset"  # 1.50 s = 40 BPM, still inside
     assert _grid([1.0, 1.29], total_s=0.2).source == "none"  # 0.29 s is too small
     assert _grid([1.0, 2.51], total_s=0.2).source == "none"  # 1.51 s is too large
+
+
+def test_onset_bar_longer_than_the_recording_falls_back():
+    result = _grid([1.0, 2.50], total_s=5.0)  # 4 x 1.5 s = 6 s bar, only 5 s of material
+    assert result.source == "duration"
+    assert result.bar_frames == 5 * RATE
+    assert result.reason == "length_as_bar"
+    assert _grid([1.0, 2.50], total_s=6.0).bar_frames == 6 * RATE  # exactly fits
+
+
+def test_onset_bar_longer_than_the_recording_and_implausible_length_is_no_grid():
+    result = _grid([0.0, 0.35], total_s=1.0)  # 1.4 s bar, 1 s material is 240 BPM as one bar
+    assert result.source == "none"
+    assert result.reason == "onsets_without_beat_and_length_implausible"
 
 
 def test_rule_2_too_small_distance_is_no_grid_from_the_pair():

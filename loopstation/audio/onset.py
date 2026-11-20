@@ -19,7 +19,10 @@ Fallback rules (plan section 2.2), implemented by :func:`derive_grid`:
 1. Two onsets, distance inside the beat window (default 0.30-1.50 s, i.e.
    200-40 BPM): the distance is one beat, the bar is ``beats_per_bar`` beats
    (4/4 by default), the source is ``"onset"`` and the recording starts at the
-   first onset (rotate with :func:`rotate_to_onset`).
+   first onset (rotate with :func:`rotate_to_onset`). The bar must also fit
+   into the recording (``bar <= length``) and into ``min_frames`` ..
+   ``max_frames``; otherwise rules 3 and 5 apply (the recording length as one
+   bar if sensible, else no grid), never a grid longer than the material.
 2. Two onsets, distance too small (< window): a double hit or bounce, no grid
    from this pair. Further onsets are searched (rule 4), otherwise rule 5.
 3. Two onsets, distance too large (e.g. 3 s): never a silent 3 s bar. The
@@ -245,7 +248,7 @@ def derive_grid(
     beat = _median_beat(sorted(onsets), shortest, longest)
     if beat is not None:
         bar = beat * beats_per_bar
-        if minimum <= bar <= maximum:
+        if minimum <= bar <= min(maximum, total_frames):
             return GridResult("onset", bar, beat, start, "beat_from_onsets")
 
     # Rules 3 and 5: the recording length is the bar, if it makes sense.
