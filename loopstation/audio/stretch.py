@@ -63,6 +63,8 @@ class WsolaEngine:
         hop = frame // 2
         ratio = target / len(data)
         window = np.hanning(frame + 1)[:frame].astype(np.float32)  # periodic: halves sum to 1
+        first_window = window.copy()
+        first_window[:hop] = 1.0  # nothing overlaps the start, so no fade-in
         # pad so every analysis window (plus search margin) stays inside the signal
         lead = np.zeros(search, np.float32)
         tail = np.zeros(frame + 2 * search, np.float32)
@@ -85,7 +87,7 @@ class WsolaEngine:
                     scores = np.correlate(segment, template, mode="valid")
                     start = lo + int(np.argmax(scores))
             chunk = padded[start + search : start + search + frame]
-            out[k * hop : k * hop + frame] += chunk * window
+            out[k * hop : k * hop + frame] += chunk * (first_window if k == 0 else window)
             previous_end = start + hop
         return out
 

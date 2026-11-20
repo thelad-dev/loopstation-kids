@@ -133,3 +133,13 @@ def test_wsola_rejects_bad_arguments():
         WsolaEngine(frame_size=7)
     with pytest.raises(ValueError):
         WsolaEngine().stretch(sine(100), 0)
+
+
+@pytest.mark.parametrize("deviation", [0.05, -0.05])
+def test_transient_on_the_first_sample_keeps_its_attack(deviation):
+    data = np.zeros(round(GRID * (1 + deviation)), dtype=np.float32)
+    data[:64] = 0.9
+    result = stretch_to_grid(data, GRID)
+    assert result is not None
+    assert result[0] == pytest.approx(0.9, abs=1e-4)
+    assert float(np.max(np.abs(result[:64]))) == pytest.approx(0.9, abs=1e-4)
