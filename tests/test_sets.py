@@ -309,3 +309,35 @@ def test_unsafe_sample_name_in_the_log_blocks_writing(session, tmp_path):
     with pytest.raises(SetError, match="ungültigen Sample-Namen"):
         session.write_set(tmp_path / "s.loopset")
     assert not (tmp_path / "s.loopset").exists()
+
+
+_BAD_SNAPSHOT_STATES = [
+    {"pads": {"x": {}}},
+    {"pads": 5},
+    {"undo_stack": [{}]},
+]
+
+
+@pytest.mark.parametrize("bad_state", _BAD_SNAPSHOT_STATES)
+def test_malformed_snapshot_in_a_set_is_corrupt_not_a_raw_error(session, tmp_path, bad_state):
+    import json
+
+    session.record(0, "pad_0_1.wav")
+    session.write_set(tmp_path / "folder")
+    log_path = tmp_path / "folder" / "data" / "events.jsonl"
+    first = json.loads(log_path.read_text(encoding="utf-8").splitlines()[0])
+    first["data"] = {"state": bad_state}
+    log_path.write_text(json.dumps(first) + "\n", encoding="utf-8")
+    with pytest.raises(SetError):
+        sets.open_set(tmp_path / "folder", tmp_path / "w")
+
+
+@pytest.mark.parametrize("bad_state", _BAD_SNAPSHOT_STATES)
+def test_malformed_snapshot_in_the_live_log_is_a_set_error(session, tmp_path, bad_state):
+    session.record(0, "pad_0_1.wav")
+    last_seq = ev.Event.from_json(session.store.log_path.read_text(encoding="utf-8").splitlines()[-1]).seq
+    bad = ev.Event(seq=last_seq + 1, ts="2026-01-01T00:00:00.000Z", type=ev.SNAPSHOT, data={"state": bad_state})
+    with open(session.store.log_path, "a", encoding="utf-8") as handle:
+        handle.write(bad.to_json() + "\n")
+    with pytest.raises(SetError):
+        session.write_set(tmp_path / "s.loopset")
