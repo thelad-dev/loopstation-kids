@@ -1,40 +1,44 @@
 # Einstellungen der Loopstation.
-# Nach einer Änderung die Loopstation neu starten.
 # Fehlt diese Datei, gelten genau die Werte unten.
+#
+# Änderungen in der Einstellungsseite (Eltern-Bereich) gelten sofort, außer bei
+# rows, cols, sample_rate und data_dir: die wirken erst nach einem Neustart.
+# Wer diese Datei von Hand ändert, startet die Loopstation neu.
 
-# Größe des Pad-Rasters: Zeilen und Spalten (je 1 bis 16).
+# Größe des Pad-Rasters: Zeilen und Spalten (je 1 bis 16). Neustart nötig.
 rows = 3
 cols = 4
 
-# Längste Aufnahme in Sekunden (1 bis 120). Danach stoppt sie von selbst.
+# Längste Aufnahme in Sekunden (1 bis 120). Danach stoppt sie von selbst. Wirkt sofort.
 max_record_seconds = 10
 
-# Abtastrate für Aufnahme und Wiedergabe in Hz.
+# Abtastrate für Aufnahme und Wiedergabe in Hz. Neustart nötig.
 sample_rate = 44100
 
-# Kurzer Piepton beim Start und Ende einer Aufnahme.
+# Kurzer Piepton beim Start und Ende einer Aufnahme. Wirkt sofort.
 sound_effects = true
 
-# true = Vollbild ohne Fensterrahmen, false = maximiertes Fenster.
+# true = Vollbild ohne Fensterrahmen, false = maximiertes Fenster. Wirkt sofort.
 fullscreen = false
 
-# Novation Launchpad automatisch suchen und benutzen.
+# Novation Launchpad automatisch suchen und benutzen. Wirkt sofort.
 launchpad = true
 
 # Taktgenauer Schnitt: Die erste Aufnahme bestimmt die Loop-Länge. Jede weitere
 # Aufnahme wird auf genau diese Länge (oder ein Vielfaches davon) geschnitten,
 # und Loops starten und stoppen nur am Loop-Anfang, damit alles im Takt bleibt.
-# false = jede Aufnahme behält ihre eigene Länge, Loops starten sofort.
+# false = jede Aufnahme behält ihre eigene Länge, Loops starten sofort. Wirkt sofort.
 loop_sync = true
 
 # Verzögerung zwischen Lautsprecher und Mikrofon in Millisekunden (0 bis 1000),
 # damit neue Loops genau auf den gehörten liegen. "auto" nimmt den Wert, den
 # der Audiotreiber meldet. Klingen neue Loops etwas zu spät, die Zahl erhöhen;
-# klingen sie zu früh, verkleinern.
+# klingen sie zu früh, verkleinern. Wirkt sofort.
 latency_ms = "auto"
 
 # Ordner für die Daten (relativ zum Startordner):
 # Aufnahmen in <data_dir>/samples/, Ereignis-Protokoll in <data_dir>/data/.
+# Neustart nötig.
 data_dir = "."
 
 # --- Loop-Naht ---
