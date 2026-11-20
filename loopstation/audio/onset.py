@@ -231,6 +231,10 @@ def derive_grid(
     ``max(0.30 s, 2 * crossfade + 50 ms)`` from the caller; ``max_frames`` is
     ``max_record_seconds * rate`` (default: unlimited). ``bpm_min`` and
     ``bpm_max`` give the beat window (40-200 BPM is 0.30-1.50 s).
+
+    A bar derived from onsets never exceeds ``total_frames``: if it would be
+    longer than the recording, the onset grid is rejected and rules 3 and 5
+    apply (the recording length as one bar if plausible, otherwise no grid).
     """
     if beats_per_bar < 1:
         raise ValueError("beats_per_bar must be at least 1")
