@@ -15,6 +15,10 @@ engine (Rubber Band) can replace the fallback without touching callers.
 an honest simple stretch, not Rubber-Band quality: voices can sound slightly
 metallic or phasey, which is exactly why the application limit is narrow.
 Meant to run once when a recording stops, not inside the audio callback.
+
+``stretch_between_markers`` is the parents' tool (Erweitert): it cuts a loop at
+their markers and stretches each piece so every marker lands on a beat line,
+with the total length unchanged.
 """
 
 from __future__ import annotations
@@ -137,3 +141,74 @@ def stretch_to_grid(
     if len(result) != target:
         raise ValueError(f"engine returned {len(result)} frames, expected {target}")
     return result
+
+
+class MarkerStretchError(ValueError):
+    """Stretching between markers is not possible; ``reason`` says why.
+
+    ``too_far`` (a segment is off its beat by more than the limit), ``same_beat``
+    (two markers snap to one beat line), ``edge`` (a marker snaps to the loop's
+    start or end) or ``no_markers``.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def marker_targets(markers: list[int], beat_frames: float, frames: int) -> list[int]:
+    """Where each marker goes: the nearest beat line (a multiple of ``beat_frames``).
+
+    Markers outside ``0 < marker < frames`` are not markers and are skipped. The
+    targets must be strictly increasing and strictly inside the loop, otherwise
+    ``MarkerStretchError``.
+    """
+    if beat_frames <= 0:
+        raise ValueError("beat_frames must be positive")
+    inside = sorted({m for m in markers if 0 < m < frames})
+    if not inside:
+        raise MarkerStretchError("no_markers")
+    targets = [round(round(m / beat_frames) * beat_frames) for m in inside]
+    if targets[0] <= 0 or targets[-1] >= frames:
+        raise MarkerStretchError("edge")
+    if any(b <= a for a, b in zip(targets, targets[1:], strict=False)):
+        raise MarkerStretchError("same_beat")
+    return targets
+
+
+def stretch_between_markers(
+    data: np.ndarray,
+    markers: list[int],
+    beat_frames: float,
+    *,
+    max_deviation: float = DEFAULT_MAX_DEVIATION,
+    engine: StretchEngine | None = None,
+) -> tuple[np.ndarray, list[int]]:
+    """Move each marker to its beat line by stretching the stretches between them.
+
+    ``data`` is cut at the markers; every piece is stretched to the distance
+    between the beat lines its ends move to, so the first and last frame stay
+    where they are and the result has exactly ``len(data)`` frames. Returns the
+    result and the marker positions in it (the beat lines). Every piece must be
+    off by at most ``max_deviation`` of its new length, else nothing is
+    stretched (``MarkerStretchError("too_far")``): a marker far from a beat is
+    more likely misplaced than meant.
+    """
+    total = len(data)
+    targets = marker_targets(markers, beat_frames, total)
+    inside = sorted({m for m in markers if 0 < m < total})
+    source = [0, *inside, total]
+    target = [0, *targets, total]
+    pieces = []
+    for (s0, s1), (t0, t1) in zip(
+        zip(source, source[1:], strict=False), zip(target, target[1:], strict=False), strict=True
+    ):
+        want, have = t1 - t0, s1 - s0
+        if have != want and abs(have - want) / want > max_deviation:
+            raise MarkerStretchError("too_far")
+        piece = np.asarray(data[s0:s1], dtype=np.float32)
+        pieces.append(piece if have == want else (engine or WsolaEngine()).stretch(piece, want))
+    result = np.concatenate(pieces).astype(np.float32, copy=False)
+    if len(result) != total:
+        raise ValueError(f"stretched to {len(result)} frames, expected {total}")
+    return result, targets

@@ -33,6 +33,10 @@ follows in the log). Undo entries remember the previous master under
 ``"master"`` whenever a content event changed it, so undoing "Alle löschen"
 brings the grid back together with the samples. Logs and snapshots written
 before the grid existed simply have no master.
+
+The parents' markers are kept per sample file (``markers``), set by
+``marker_set`` events. They are not on the undo stack: the child's undo, redo
+and the history swap samples, and each sample brings its own markers back.
 """
 
 from __future__ import annotations
@@ -77,6 +81,9 @@ class AppState:
     # Loop grid {"frames": int, "rate": int} plus, if the log said so, "source",
     # "signature" and "pad" (see ``parse_master``), or None while recordings are free.
     master: dict[str, Any] | None = None
+    # Markers per sample file name: {"rate": int, "frames": [sorted frames]}.
+    # Entries are treated as immutable, so copies of the dict may share them.
+    markers: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @classmethod
     def empty(cls, pad_count: int) -> AppState:
@@ -95,6 +102,7 @@ class AppState:
             redo_stack=list(self.redo_stack),
             last_seq=self.last_seq,
             master=self.master,
+            markers=dict(self.markers),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -105,6 +113,8 @@ class AppState:
             "redo_stack": [_entry_to_dict(entry) for entry in self.redo_stack],
             "last_seq": self.last_seq,
             "master": None if self.master is None else dict(self.master),
+            "markers": {name: {"rate": m["rate"], "frames": list(m["frames"])}
+                        for name, m in sorted(self.markers.items())},
         }
 
     @classmethod
@@ -128,6 +138,7 @@ class AppState:
             redo_stack=redo_stack,
             last_seq=int(raw.get("last_seq", 0)),
             master=parse_master(raw.get("master")),
+            markers=parse_markers(raw.get("markers")),
         )
 
     def has_content(self) -> bool:
@@ -164,6 +175,36 @@ def parse_master(raw: Any) -> dict[str, Any] | None:
     if isinstance(pad, int) and not isinstance(pad, bool) and pad >= 0:
         master["pad"] = pad
     return master
+
+
+MAX_MARKERS = 16  # one letter each (A to P); a loop is a bar or a few, not a score
+
+
+def parse_markers(raw: Any) -> dict[str, dict[str, Any]]:
+    """Marker lists from a snapshot; anything unusable is left out.
+
+    ``raw`` maps sample names to ``{"rate", "frames"}``. Frames are kept
+    sorted, without duplicates, positive, and at most ``MAX_MARKERS``.
+    """
+    markers: dict[str, dict[str, Any]] = {}
+    if not isinstance(raw, dict):
+        return markers
+    for name, entry in raw.items():
+        parsed = marker_entry(entry)
+        if isinstance(name, str) and parsed is not None and parsed["frames"]:
+            markers[name] = parsed
+    return markers
+
+
+def marker_entry(entry: Any) -> dict[str, Any] | None:
+    """``{"rate", "frames"}`` cleaned up, or None when ``entry`` is not a marker list."""
+    if not isinstance(entry, dict):
+        return None
+    rate, frames = entry.get("rate"), entry.get("frames")
+    if not isinstance(rate, int) or isinstance(rate, bool) or rate <= 0 or not isinstance(frames, list):
+        return None
+    clean = sorted({f for f in frames if isinstance(f, int) and not isinstance(f, bool) and f > 0})
+    return {"rate": rate, "frames": clean[:MAX_MARKERS]}
 
 
 def master_source(master: dict[str, Any]) -> str:
@@ -429,6 +470,22 @@ def apply(state: AppState, event: ev.Event) -> AppState:
 
     elif event.type == ev.SESSION_START:
         new.master = None
+
+    elif event.type == ev.MARKER_SET:
+        sample = event.data.get("sample")
+        entry = marker_entry({"rate": event.data.get("rate"), "frames": event.data.get("frames")})
+        known = isinstance(sample, str) and any(
+            sample == p.sample or sample in p.history for p in new.pads.values())
+        if not known or entry is None:
+            log.warning("marker_set seq=%s: invalid data or unknown sample %r; ignored",
+                        event.seq, sample)
+        else:
+            markers = dict(new.markers)
+            if entry["frames"]:
+                markers[sample] = entry
+            else:
+                markers.pop(sample, None)
+            new.markers = markers
 
     # record_start and play are logged for the record only; they do not
     # change the state apart from last_seq.

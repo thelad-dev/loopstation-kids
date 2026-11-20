@@ -25,11 +25,16 @@ from loopstation.audio.dynamics import db_to_gain, gain_to_db
 from loopstation.audio.effects import start_beep, stop_beep
 from loopstation.audio.onset import GridResult, derive_grid, detect_onsets, rotate_to_onset
 from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, save_wav
-from loopstation.audio.stretch import stretch_target, stretch_to_grid
+from loopstation.audio.stretch import (
+    MarkerStretchError,
+    stretch_between_markers,
+    stretch_target,
+    stretch_to_grid,
+)
 from loopstation.audio.sync import SEAM_FADE_MAX_SECONDS, fit_to_grid, grace_frames, max_grid_frames
 from loopstation.clips import ClipEvent, ClipLog
 from loopstation.config import SIGNATURES, Settings, restart_keys_changed
-from loopstation.state import PadState, find_entry, master_source
+from loopstation.state import MAX_MARKERS, PadState, find_entry, master_source
 from loopstation.store import EventStore
 
 log = logging.getLogger(__name__)
@@ -54,6 +59,24 @@ MIN_MAX_LEVEL_DB, MAX_MAX_LEVEL_DB = -30.0, 0.0
 METRONOME_LOOKAHEAD_SECONDS = 0.1
 # Source name of a grid the parents set (``master_set.source``).
 PARENT_BPM = "parent_bpm"
+# ``record_stop.source`` of a sample made by stretching between markers.
+MARKER_STRETCH = "markers"
+
+# What the parents are told when stretching between markers does not happen
+# (keyed by ``MarkerStretchError.reason`` plus the cases before it).
+MARKER_STRETCH_REFUSALS = {
+    "no_pad": "Auf diesem Pad ist noch kein Loop.",
+    "free": "Ein freies Pad hat seine eigene Länge, ohne Schlaglinien: Hier gibt es nichts zu strecken.",
+    "no_grid": "Ohne Takt gibt es keine Schlaglinien zum Strecken.",
+    "no_markers": "Setze zuerst mindestens einen Marker.",
+    "recording": "Es läuft gerade eine Aufnahme.",
+    "unreadable": "Die Aufnahme fehlt oder ist nicht lesbar.",
+    "edge": "Ein Marker liegt am Anfang oder Ende des Loops und lässt sich nicht verschieben.",
+    "same_beat": "Zwei Marker gehören zum selben Schlag. Lösche einen davon.",
+    "too_far": "Ein Marker liegt zu weit neben seinem Schlag (mehr als 10 %). Es wurde nichts verändert.",
+    "already": "Die Marker liegen schon auf den Schlägen: Da gibt es nichts zu strecken.",
+    "save": "Der gestreckte Loop konnte nicht gespeichert werden.",
+}
 
 WHITE, YELLOW, GREEN, RED = "white", "yellow", "green", "red"
 
@@ -79,6 +102,7 @@ LIVE_SETTINGS = (
     "metronome_tone",
     "metronome_level_db",
     "free_pad_on_grid",
+    "export_cue_points",
 )
 
 # Audio devices: the streams are opened again when one of these changes.
@@ -1216,6 +1240,102 @@ class Controller:
     def device_notice(self) -> str:
         """Hint about devices (a saved one is missing, the default is used instead), or ""."""
         return str(getattr(self.audio, "device_notice", ""))
+
+    # -------------------------------------------------------------- markers
+
+    def markers(self, pad: int) -> list[int]:
+        """Marker positions (frames at the engine's sample rate, sorted) of the sound on ``pad``."""
+        sample = self.pad(pad).sample
+        entry = None if sample is None else self.store.state.markers.get(sample)
+        if entry is None:
+            return []
+        rate = self.audio.sample_rate
+        if entry["rate"] == rate:
+            return list(entry["frames"])
+        return sorted({max(1, round(f * rate / entry["rate"])) for f in entry["frames"]})
+
+    def set_markers(self, pad: int, frames: list[int]) -> bool:
+        """Make ``frames`` the markers of the sound on ``pad``; False when nothing was logged.
+
+        Markers belong to the parents: they are one ``marker_set`` event, not a step
+        the child's undo would take back. They stay with the sample, so undo,
+        redo and the history bring the right ones back with it.
+        """
+        sample = self.pad(pad).sample
+        if sample is None:
+            return False
+        clean = sorted({int(f) for f in frames if int(f) > 0})[:MAX_MARKERS]
+        if clean == self.markers(pad):
+            return False
+        self.store.append(
+            ev.MARKER_SET, pad, {"sample": sample, "rate": self.audio.sample_rate, "frames": clean})
+        self._changed()
+        return True
+
+    def add_marker(self, pad: int, frame: int) -> bool:
+        """Put a marker at ``frame``; False at the limit, on an empty pad or when it is there already."""
+        current = self.markers(pad)
+        if frame <= 0 or frame in current or len(current) >= MAX_MARKERS:
+            return False
+        return self.set_markers(pad, [*current, frame])
+
+    def remove_marker(self, pad: int, frame: int) -> bool:
+        """Take the marker at ``frame`` away; False if there is none."""
+        current = self.markers(pad)
+        if frame not in current:
+            return False
+        return self.set_markers(pad, [f for f in current if f != frame])
+
+    def stretch_to_markers(self, pad: int) -> str | None:
+        """Stretch the loop on ``pad`` so its markers sit on the beat lines; None, or why not.
+
+        The pieces between the markers are stretched, the loop keeps exactly its
+        length (a multiple of the grid). The result is a new sample logged like a
+        recording (``record_stop`` with ``source: "markers"``), so Zurück and the
+        history take it back; its markers are the beat lines. Nothing is
+        stretched when a piece would change by more than 10 %.
+        """
+        sample = self.pad(pad).sample
+        if sample is None:
+            return MARKER_STRETCH_REFUSALS["no_pad"]
+        if self._recording is not None:
+            return MARKER_STRETCH_REFUSALS["recording"]
+        if self.pad(pad).free:
+            return MARKER_STRETCH_REFUSALS["free"]
+        info, grid = self.grid_info(), self._grid()
+        if info is None or grid is None:
+            return MARKER_STRETCH_REFUSALS["no_grid"]
+        marks = self.markers(pad)
+        if not marks:
+            return MARKER_STRETCH_REFUSALS["no_markers"]
+        data = self._loop_data(sample)
+        if data is None:
+            return MARKER_STRETCH_REFUSALS["unreadable"]
+        try:
+            result, targets = stretch_between_markers(data, marks, grid / info.beats)
+        except MarkerStretchError as exc:
+            return MARKER_STRETCH_REFUSALS[exc.reason]
+        if np.array_equal(result, data):
+            return MARKER_STRETCH_REFUSALS["already"]
+        rate = self.audio.sample_rate
+        stamp = int(self._clock() * 1000)
+        while (self.samples_dir / sample_filename(pad, stamp)).exists():
+            stamp += 1
+        name = sample_filename(pad, stamp)
+        try:
+            save_wav(self.samples_dir / name, result, rate)
+        except OSError as exc:
+            log.error("saving %s failed: %s", name, exc)
+            return MARKER_STRETCH_REFUSALS["save"]
+        self._cache[name] = result
+        self._stop_pad(pad)
+        self.store.append(ev.RECORD_STOP, pad, {
+            "sample": name, "duration": round(len(result) / rate, 3), "frames": len(result),
+            "source": MARKER_STRETCH, "from": sample,
+        })
+        self.store.append(ev.MARKER_SET, pad, {"sample": name, "rate": rate, "frames": targets})
+        self._changed()
+        return None
 
     # ------------------------------------------------------------ lifecycle
 

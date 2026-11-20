@@ -1,8 +1,10 @@
-"""Erweitert page of the parents' area (mockups 11 and 13, plan 3.2, without markers).
+"""Erweitert page of the parents' area (mockups 11 and 13, plan 3.2).
 
-One loop as a waveform on the beat lines of the session grid, the parents'
-tempo and time signature (they win over what recordings would set, plan 2.2
-rule 8) and a visual metronome at the real grid with an optional quiet tick.
+One loop as a waveform on the beat lines of the session grid, with markers the
+parents set (a click on the wave, "Marker setzen") and a stretch between them
+that moves each marker to its beat; the parents' tempo and time signature (they
+win over what recordings would set, plan 2.2 rule 8) and a visual metronome at
+the real grid with an optional quiet tick.
 The page owns no state: it reads and sets the controller. The child's page
 gets nothing from it except the pulse it already has (plan 3.3).
 """
@@ -12,7 +14,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QHideEvent, QPainter, QPaintEvent, QPen, QShowEvent
+from PySide6.QtGui import QColor, QHideEvent, QIcon, QPainter, QPaintEvent, QPen, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QDialog,
@@ -29,11 +31,13 @@ from PySide6.QtWidgets import (
 from loopstation.config import SIGNATURES
 from loopstation.controller import Controller
 from loopstation.gui.grid_panel import NO_GRID_HINT, GridPanel, format_seconds
+from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
 from loopstation.gui.settings_page import ToggleSwitch
 from loopstation.gui.waveform import WaveformWidget
 from loopstation.gui.widgets import ACCENT_GRAY, BACKGROUND, TEXT, TEXT_DIM, BigButton
 
+STRETCH_HINT = "Zwischen Markern strecken: nur bei knapper Abweichung (unter 10 %)"
 REFRESH_MS = 40  # the metronome strip follows the grid this often
 CHIP_FILL = "#2F3550"
 DEFAULT_BPM = 96
@@ -226,9 +230,102 @@ class AdvancedDialog(QDialog):
         layout.addWidget(self.wave_title)
         self.waveform = WaveformWidget()
         layout.addWidget(self.waveform)
+        self.waveform.selection_changed.connect(self._update_marker_buttons)
+        layout.addLayout(self._marker_row())
+        self.marker_status = self._dim(STRETCH_HINT, 13.5)
+        layout.addWidget(self.marker_status)
         layout.addWidget(self._dim(
             "Bewusst keine Zeitachse, keine Spuren, keine Automation: die Pads bleiben die Ansicht."))
         return card
+
+    def _marker_row(self) -> QHBoxLayout:
+        """Marker setzen / löschen, Anhören and the stretch between the markers (mockup 13)."""
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        self.marker_add = QPushButton("Marker setzen")
+        self.marker_add.setToolTip("Erst auf die Wellenform klicken, dann hier setzen")
+        self.marker_add.clicked.connect(self.place_marker)
+        self.marker_delete = QPushButton("Marker löschen")
+        self.marker_delete.setToolTip("Erst einen Marker anklicken")
+        self.marker_delete.clicked.connect(self.delete_marker)
+        self.listen_button = QPushButton(" Anhören")
+        pixmap = QPixmap(30, 30)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        draw_icon(painter, "play", QRectF(0, 0, 30, 30), QColor("#F2F2F2"))
+        painter.end()
+        self.listen_button.setIcon(QIcon(pixmap))
+        self.listen_button.clicked.connect(self.listen)
+        self.stretch_button = QPushButton("Zwischen Markern strecken")
+        self.stretch_button.setToolTip("Nur bei knapper Abweichung (unter 10 %); Zurück nimmt es zurück")
+        self.stretch_button.clicked.connect(self.stretch_markers)
+        for button in (self.marker_add, self.marker_delete, self.listen_button, self.stretch_button):
+            button.setObjectName("secondary")
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+        row.addWidget(self.marker_add)
+        row.addWidget(self.marker_delete)
+        row.addWidget(self.listen_button)
+        row.addStretch(1)
+        row.addWidget(self.stretch_button)
+        return row
+
+    # --------------------------------------------------------------- markers
+
+    def _hint_marker(self) -> None:
+        self.marker_status.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 13.5px;")
+        self.marker_status.setText(STRETCH_HINT)
+
+    def _say_marker(self, text: str, error: bool = False) -> None:
+        color = "#FF9F0A" if error else "#32D74B"
+        self.marker_status.setStyleSheet(f"color: {color}; font-size: 13.5px; font-weight: bold;")
+        self.marker_status.setText(text)
+
+    def place_marker(self) -> bool:
+        """"Marker setzen": a marker where the cursor stands."""
+        frame = self.waveform.cursor_frame
+        if frame is None or not self.controller.add_marker(self.pad, frame):
+            return False
+        self.waveform.clear_selection()
+        self._hint_marker()
+        self.refresh()
+        return True
+
+    def delete_marker(self) -> bool:
+        """"Marker löschen": the selected marker goes."""
+        index = self.waveform.selected_marker
+        if index is None or not self.controller.remove_marker(self.pad, self.waveform.markers[index]):
+            return False
+        self.waveform.clear_selection()
+        self._hint_marker()
+        self.refresh()
+        return True
+
+    def listen(self) -> None:
+        """"Anhören": the loop once, as it is on the pad."""
+        sample = self.controller.pad(self.pad).sample
+        if sample is not None:
+            self.controller.preview(sample)
+
+    def stretch_markers(self) -> bool:
+        """"Zwischen Markern strecken": the markers move to their beats; the page says why if not."""
+        refusal = self.controller.stretch_to_markers(self.pad)
+        if refusal is not None:
+            self._say_marker(refusal, error=True)
+            return False
+        self.waveform.clear_selection()
+        self._say_marker("Gestreckt. Der Loop davor liegt im Verlauf, Zurück bringt ihn wieder.")
+        self.refresh()
+        return True
+
+    def _update_marker_buttons(self) -> None:
+        controller = self.controller
+        has_sound = controller.pad(self.pad).sample is not None
+        self.marker_add.setEnabled(self.waveform.cursor_frame is not None)
+        self.marker_delete.setEnabled(self.waveform.selected_marker is not None)
+        self.listen_button.setEnabled(has_sound)
+        self.stretch_button.setEnabled(
+            has_sound and controller.grid_info() is not None and bool(self.waveform.markers))
 
     def _tempo_card(self) -> QFrame:
         controller = self.controller
@@ -329,6 +426,8 @@ class AdvancedDialog(QDialog):
     def choose_pad(self, pad: int) -> None:
         """Show the loop on ``pad``."""
         self.pad = pad
+        self.waveform.clear_selection()
+        self._hint_marker()
         self.refresh()
 
     def _load_tempo_inputs(self) -> None:
@@ -397,6 +496,7 @@ class AdvancedDialog(QDialog):
                 f"QPushButton {{ color: {CHIP_TEXT}; background: {CHIP_COLORS[colors[pad]]}; "
                 f"border: {border}; border-radius: 10px; font-size: 16px; font-weight: 800; }}")
         self._show_loop()
+        self._update_marker_buttons()
         info = controller.grid_info()
         position = controller.beat_position()
         period = controller.metronome_period()
@@ -424,20 +524,24 @@ class AdvancedDialog(QDialog):
         sample = controller.pad(self.pad).sample
         grid = controller.grid_frames()
         info = controller.grid_info()
-        key = (self.pad, sample, grid, None if info is None else info.beats)
+        marks = controller.markers(self.pad)
+        key = (self.pad, sample, grid, None if info is None else info.beats, tuple(marks))
         if key == self._shown_key:
             return
         self._shown_key = key
         if sample is None:
             self.waveform.set_loop(None, grid, 4)
+            self.waveform.set_markers([])
             self.wave_title.setText(loop_title(self.pad, None, None, grid, controller.sample_rate))
             return
         played = controller.loop_audio(sample)
         recorded = controller.sample_audio(sample)
         if played is None or recorded is None:
             self.waveform.set_loop(None, grid, 4)
+            self.waveform.set_markers([])
             self.wave_title.setText(loop_title(self.pad, None, None, grid, controller.sample_rate))
             return
         self.waveform.set_loop(played, grid, 4 if info is None else info.beats)
+        self.waveform.set_markers([m for m in marks if m < len(played)])
         self.wave_title.setText(
             loop_title(self.pad, len(recorded), len(played), grid, controller.sample_rate))

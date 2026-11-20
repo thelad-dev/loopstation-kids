@@ -682,3 +682,10 @@ register_field(Field("free_pad_on_grid", "Freie Pads am Takt-Punkt starten", "bo
                      hint="Ein freies Pad behält seine eigene Länge. An: es beginnt am nächsten Loop-Anfang, "
                           "aus: sofort."),
                before="soft_seam")
+
+
+# --- Markers (W4-MARKER) ---
+register_field(Field("export_cue_points", "Marker als Cue-Punkte mitschreiben", "bool",
+                     hint="Beim Sichern eines einzelnen Loops: Marker in die WAV-Datei schreiben, sonst "
+                          "als Begleitdatei daneben. Das Sichern scheitert daran nie."),
+               before="latency_ms")
