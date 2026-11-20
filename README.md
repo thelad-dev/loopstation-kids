@@ -87,7 +87,7 @@ Was sich für Bestandsnutzer ändert:
 - **Leiser als vorher:** neu sind ein Lautstärke-Regler (`volume`, Standard 0.5) und eine Obergrenze (`max_level_db`, Standard -6 dB(FS)) mit Limiter. Version 1.0.0 gab die Summe ungebremst bis zur digitalen Vollaussteuerung aus. Wer es lauter braucht, stellt beides im Elternbereich ein.
 - **Takt aus Klatschen** (`auto_grid`) ist standardmäßig aus: die erste Aufnahme bestimmt den Takt wie bisher über ihre Länge.
 - **Standardmäßig an** sind die weiche Loop-Naht (`soft_seam`), das Strecken knapp neben dem Takt (`stretch_to_grid`) und die Pegelanzeige (`peak_meter`).
-- **Neuer Elternbereich** hinter dem Schloss unten rechts (zwei Sekunden halten, Rechenaufgabe): Pegel, Geräte und Audio-System, Takt, Einstellungen, Erweitert (Wellenform, Marker, Eltern-Takt, Metronom), Sets sichern und öffnen, Export als WAV.
+- **Neuer Elternbereich** hinter der Kachel „Eltern“ unten rechts (zwei Sekunden halten, Rechenaufgabe), mit sieben Bereichen: Lautstärke & Pegel, Geräte & Audio, Takt & Loop (mit Eltern-Takt und Metronom), Verlauf & Undo, Erweitert (Wellenform, Marker), Sets sichern und öffnen, Export als WAV.
 - **Auf der Kinderseite neu:** „Wiederholen“, das Zurück-Abzeichen am Pad, der freie Modus per langem Halten und das rote „zu laut“-Zeichen. Am Launchpad wirkt ein kurzer Tipp jetzt beim Loslassen.
 
 ### Zurück zur vorigen Version
@@ -181,36 +181,36 @@ In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergrö�
 
 ## Elternbereich
 
-Erwachsene erreichen den Elternbereich über das kleine Schloss unten rechts (zwei Sekunden gedrückt halten, dann eine Rechenaufgabe lösen). Die Kinderseite bleibt bewusst schlicht: Pads, Modi, Zurück und Wiederholen, Lautstärke, ein rotes Zeichen bei zu lauter Aufnahme und der Puls beim Warten. Alles mit Zahlen und Fachbegriffen liegt im Elternbereich:
+Erwachsene erreichen den Elternbereich über die Kachel „Eltern“ unten rechts (zwei Sekunden gedrückt halten, dann eine Rechenaufgabe lösen). Die Kinderseite bleibt bewusst schlicht: Pads, Modi, Zurück und Wiederholen, Alles still, Alle löschen, Lautstärke, ein rotes Zeichen bei zu lauter Aufnahme und der Puls (ein Punkt je Schlag des Takts, der aktuelle leuchtet weich auf). Alles mit Zahlen und Fachbegriffen liegt im Elternbereich. Links stehen sieben Bereiche, oben links geht es „Zur Kinderseite“, oben rechts sitzt derselbe Lautstärke-Regler wie auf der Kinderseite:
 
-- **Lautstärke und Pegel:** Lautstärke, Obergrenze, Mikrofonpegel, automatischer Aufnahmepegel, Pegelanzeige und die zuletzt zu lauten Aufnahmen.
-- **Takt:** Tempo, Taktart und Quelle des aktuellen Takts.
-- **Geräte und Audio-System:** siehe [Plattformen und Audio](#plattformen-und-audio).
-- **Einstellungen:** alle Werte der `settings.toml` (siehe [Einstellungen](#einstellungen)).
-- **Erweitert**, **Export**, **Sets:** eigene Abschnitte weiter unten.
+- **Lautstärke & Pegel:** Obergrenze, Peak-Limiter, Mikrofonpegel, automatischer Aufnahmepegel, weiche Naht, Pieptöne und die zuletzt zu lauten Aufnahmen.
+- **Geräte & Audio:** Mikrofon und Ausgabe getrennt (mit Testton), Audio-System, Verzögerung (automatisch oder von Hand) und unter „Allgemein“ Vollbild, Launchpad, Rastergröße, Abtastrate, Datenordner. Siehe [Plattformen und Audio](#plattformen-und-audio).
+- **Takt & Loop:** aktueller Takt (Tempo, Taktart, Länge, Quelle), Takt korrigieren (Eltern-BPM), Loop-Verhalten und Metronom.
+- **Verlauf & Undo:** die Änderungen der Sitzung (neueste oben, Uhrzeit aus dem Protokoll), Zurück und Wiederholen, „nur dieses Pad“ an der jeweils letzten Änderung eines Pads und „Alle Pads löschen …“ mit Rückfrage.
+- **Erweitert**, **Sets**, **Export:** eigene Abschnitte weiter unten.
 
 Der Verlauf eines Pads (alle früheren Aufnahmen zum Anhören und Zurückholen) ist auch für Kinder da: Modus „Verlauf“, dann Pad antippen.
 
-Die Einstellungsseite schreibt die `settings.toml` mit allen Kommentaren und übernimmt jede Änderung sofort, außer Rastergröße, Abtastrate, ASIO und Datenordner (die wirken nach einem Neustart; die Seite sagt das am Feld). Oben rechts sitzt der Lautstärke-Regler, darunter der Abschnitt für Pegel (Obergrenze, Mikrofonpegel, Schalter, Pegelanzeige und die zuletzt zu lauten Aufnahmen); diese Regler wirken sofort und werden sofort in die `settings.toml` geschrieben, ohne „Speichern“. Die Pegelanzeige (`peak_meter`) ist standardmäßig an.
+Der Elternbereich schreibt die `settings.toml` mit allen Kommentaren (siehe [Einstellungen](#einstellungen)). Lautstärke- und Pegel-Regler wirken sofort und werden sofort gespeichert; die übrigen Werte übernimmt „Speichern“ (unten in der Navigation), und zwar ohne Neustart, außer Rastergröße, Abtastrate, ASIO und Datenordner (die Seite markiert sie). Die Pegelanzeige (`peak_meter`) ist standardmäßig an.
 
 ## Erweitert
 
-Nur im Elternbereich (Knopf „Erweitert“ unten auf der Einstellungsseite). Die Kinderseite bekommt davon nichts außer dem Puls, den sie schon hat.
+Im Elternbereich unter „Erweitert“ und „Takt & Loop“. Die Kinderseite bekommt davon nichts außer dem Puls.
 
-- **Wellenform und Marker:** ein Pad wählen und den Loop mit den Schlag-Linien des Takts ansehen. Es gibt keine Zeitachse und keine Spuren. Auf die Wellenform klicken und „Marker setzen“ legt einen Marker (bis zu 16, mit Buchstaben A bis P); „Marker löschen“ nimmt den gewählten wieder weg, „Anhören“ spielt den Loop einmal. „Zwischen Markern strecken“ schiebt jeden Marker auf seinen Schlag, aber nur bei knapper Abweichung (unter 10 %); der Loop davor liegt im Verlauf, Zurück bringt ihn wieder. Marker gehören zur Aufnahme (Sample-Datei), nicht zum Pad, und stehen im Ereignis-Protokoll als `marker_set`; sie liegen nicht auf dem Zurück-Stapel des Kindes.
-- **Takt korrigieren (Eltern-BPM):** Tempo (innerhalb von `grid_bpm_min` bis `grid_bpm_max`) und Taktart vorgeben. Das hat Vorrang vor dem gemessenen Takt: Aufnahmen stiften danach kein neues Raster mehr (ein Onset richtet die erste Aufnahme höchstens aus). Im Ereignis-Protokoll steht es als `master_set` mit `source = parent_bpm`. Läuft schon Ton, werden die Loops ohne Änderung der Dateien neu an das Raster angepasst und laufende Loops beginnen auf den neuen Takten von vorn. „Gemessenen Takt“ gibt das Raster wieder an die Aufnahmen zurück. Ohne Ton in der Sitzung gilt der Wert ab der nächsten ersten Aufnahme. Die erste Aufnahme auf dem Eltern-Takt wird an das Raster angepasst (aufgefüllt oder gekürzt), aber nicht gestreckt; `stretch_to_grid` gilt erst für die folgenden Aufnahmen.
-- **Metronom:** eine Reihe von Schlägen am echten Takt (erster Schlag eckig, aktueller gefüllt). Ohne laufende Loops zählt sie nach der Uhr weiter. Optional ein leiser Ton auf jedem Schlag (`metronome_tone`, standardmäßig aus; `metronome_level_db`, standardmäßig -20 dB): er läuft durch Lautstärke und Obergrenze und wird vorgezogen mit Stille davor an die Audio-Ausgabe gegeben, damit er unabhängig vom Bildschirmtakt auf dem Schlag liegt. Mit Lautsprecher hört das Mikrofon ihn bei einer Aufnahme mit.
+- **Wellenform und Marker:** ein Pad wählen und den Loop mit den Schlag-Linien des Takts ansehen. Es gibt keine Zeitachse und keine Spuren. Auf die Wellenform klicken und „Marker setzen“ legt einen Marker (bis zu 16, mit Buchstaben A bis P); „Marker löschen“ nimmt den gewählten wieder weg, „Anhören“ spielt den Loop einmal, „Diesen Loop exportieren“ sichert ihn als WAV (wie der Einzel-Export). „Zwischen Markern strecken“ schiebt jeden Marker auf seinen Schlag, aber nur bei knapper Abweichung (unter 10 %); der Loop davor liegt im Verlauf, Zurück bringt ihn wieder. Marker gehören zur Aufnahme (Sample-Datei), nicht zum Pad, und stehen im Ereignis-Protokoll als `marker_set`; sie liegen nicht auf dem Zurück-Stapel des Kindes.
+- **Takt korrigieren (Eltern-BPM, unter „Takt & Loop“):** Tempo (innerhalb von `grid_bpm_min` bis `grid_bpm_max`) und Taktart vorgeben. Das hat Vorrang vor dem gemessenen Takt: Aufnahmen stiften danach kein neues Raster mehr (ein Onset richtet die erste Aufnahme höchstens aus). Im Ereignis-Protokoll steht es als `master_set` mit `source = parent_bpm`. Läuft schon Ton, werden die Loops ohne Änderung der Dateien neu an das Raster angepasst und laufende Loops beginnen auf den neuen Takten von vorn. „Gemessenen Takt“ gibt das Raster wieder an die Aufnahmen zurück. Ohne Ton in der Sitzung gilt der Wert ab der nächsten ersten Aufnahme. Die erste Aufnahme auf dem Eltern-Takt wird an das Raster angepasst (aufgefüllt oder gekürzt), aber nicht gestreckt; `stretch_to_grid` gilt erst für die folgenden Aufnahmen.
+- **Metronom (unter „Takt & Loop“):** eine Reihe von Schlägen am echten Takt (erster Schlag eckig, aktueller gefüllt). Ohne laufende Loops zählt sie nach der Uhr weiter. Optional ein leiser Ton auf jedem Schlag (`metronome_tone`, standardmäßig aus; `metronome_level_db`, standardmäßig -20 dB): er läuft durch Lautstärke und Obergrenze und wird vorgezogen mit Stille davor an die Audio-Ausgabe gegeben, damit er unabhängig vom Bildschirmtakt auf dem Schlag liegt. Mit Lautsprecher hört das Mikrofon ihn bei einer Aufnahme mit.
 
 ## Export
 
-Nur im Elternbereich (Knopf „Export“ unten auf der Einstellungsseite), lokal, ohne Upload. Das Format ist WAV, 24 Bit, mono, in der Abtastrate der Sitzung; die Dateien landen in `Dokumente/Loopstation/Export`.
+Nur im Elternbereich unter „Export“, lokal, ohne Upload. Das Format ist WAV, 24 Bit, mono, in der Abtastrate der Sitzung; die Dateien landen in `Dokumente/Loopstation/Export`.
 
 - **Summe:** alles, was gerade loopt (oder alle belegten Pads als Loop), über N Takte (4, 8, 16, 32 oder eine eigene Zahl). Die Länge ist genau N × Taktlänge in ganzen Frames, jeder Loop startet vorn und wiederholt sich wie live. Es gilt dieselbe Pegelkette wie live: Lautstärke, dann der Limiter mit der Eltern-Obergrenze auf die Summe. Optional ein kurzer Ausklang (15 ms) und Einmal-Pads am Anfang. Ohne Takt in der Sitzung (`loop_sync` aus) wird nicht geraten: die Seite erklärt das, und nur auf ausdrückliche Wahl gilt „N × längstes Sample“ als Notbehelf, vermerkt im Kommentar der Datei.
 - **Einzelner Loop:** das aufgenommene Sample unverändert, ohne Lautstärke und Limiter. Die Marker des Loops werden als Cue-Punkte in die WAV-Datei geschrieben (`export_cue_points`, standardmäßig an, auch im Export-Dialog schaltbar); klappt das nicht, liegt eine Begleitdatei `.markers.json` daneben. Das Sichern scheitert daran nie.
 
 ## Sets sichern und öffnen
 
-Erwachsene frieren die laufende Sitzung als Set ein und öffnen gespeicherte Sets wieder: Elternbereich, oben „Sets“. Ein Set ist eine Kopie der Sitzung (Ereignis-Protokoll samt Zurück-Schritten, alle Aufnahmen als WAV, Kopie der `settings.toml`) als `.loopset`-Datei (ZIP) oder als Ordner, standardmäßig unter `Dokumente/Loopstation/Sets`. Das Kind spielt nach dem Sichern einfach weiter.
+Erwachsene frieren die laufende Sitzung als Set ein und öffnen gespeicherte Sets wieder: Elternbereich, Bereich „Sets“. Ein Set ist eine Kopie der Sitzung (Ereignis-Protokoll samt Zurück-Schritten, alle Aufnahmen als WAV, Kopie der `settings.toml`) als `.loopset`-Datei (ZIP) oder als Ordner, standardmäßig unter `Dokumente/Loopstation/Sets`. Das Kind spielt nach dem Sichern einfach weiter.
 
 - Gesichert wird erst in eine temporäre Datei, dann umbenannt: ein Abbruch überschreibt kein altes Set halb. Läuft eine Aufnahme, wird das Sichern verweigert.
 - Beim Öffnen wird das Set vollständig geprüft, bevor etwas ersetzt wird: zu neue Formatversion, falsche Padzahl oder Abtastrate, beschädigte Dateien. Ist die aktuelle Sitzung nicht gesichert, fragt die Seite zuerst („Erst sichern, dann öffnen“, „Ohne sichern“). Die Zurück-Schritte des Sets bleiben, „Wiederholen“ startet leer.
