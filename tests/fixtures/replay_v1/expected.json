@@ -1,0 +1,152 @@
+{
+  "clip_frames": {
+    "pad_0_1793878000000.wav": 4000,
+    "pad_10_1793878038299.wav": 2400,
+    "pad_1_1793878001500.wav": 4000,
+    "pad_1_1793878006000.wav": 4000,
+    "pad_2_1793878003000.wav": 8000,
+    "pad_3_1793878004600.wav": 4000,
+    "pad_5_1793878007450.wav": 2400,
+    "pad_6_1793878008750.wav": 4800,
+    "pad_6_1793878011399.wav": 2400,
+    "pad_7_1793878010100.wav": 2400,
+    "pad_8_1793878035699.wav": 2400,
+    "pad_9_1793878036999.wav": 2400
+  },
+  "last_seq": 2362,
+  "master": {
+    "frames": 2400,
+    "rate": 8000
+  },
+  "pads": {
+    "0": {
+      "history": [
+        "pad_0_1793878000000.wav"
+      ],
+      "looping": false,
+      "sample": null
+    },
+    "1": {
+      "history": [
+        "pad_1_1793878001500.wav",
+        "pad_1_1793878006000.wav"
+      ],
+      "looping": false,
+      "sample": null
+    },
+    "10": {
+      "history": [
+        "pad_10_1793878038299.wav"
+      ],
+      "looping": false,
+      "sample": "pad_10_1793878038299.wav"
+    },
+    "2": {
+      "history": [
+        "pad_2_1793878003000.wav"
+      ],
+      "looping": false,
+      "sample": null
+    },
+    "3": {
+      "history": [
+        "pad_3_1793878004600.wav"
+      ],
+      "looping": false,
+      "sample": null
+    },
+    "5": {
+      "history": [
+        "pad_5_1793878007450.wav"
+      ],
+      "looping": true,
+      "sample": "pad_5_1793878007450.wav"
+    },
+    "6": {
+      "history": [
+        "pad_6_1793878008750.wav",
+        "pad_6_1793878011399.wav"
+      ],
+      "looping": false,
+      "sample": "pad_6_1793878008750.wav"
+    },
+    "7": {
+      "history": [
+        "pad_7_1793878010100.wav"
+      ],
+      "looping": false,
+      "sample": "pad_7_1793878010100.wav"
+    },
+    "8": {
+      "history": [
+        "pad_8_1793878035699.wav"
+      ],
+      "looping": false,
+      "sample": null
+    },
+    "9": {
+      "history": [
+        "pad_9_1793878036999.wav"
+      ],
+      "looping": false,
+      "sample": null
+    }
+  },
+  "recorded_pads": [
+    5,
+    6,
+    7,
+    10
+  ],
+  "undo_depth": 9,
+  "undo_stack": [
+    {
+      "pads": {
+        "0": null
+      }
+    },
+    {
+      "pads": {
+        "1": null
+      }
+    },
+    {
+      "pads": {
+        "2": null
+      }
+    },
+    {
+      "pads": {
+        "3": null
+      }
+    },
+    {
+      "pads": {
+        "0": "pad_0_1793878000000.wav",
+        "1": "pad_1_1793878001500.wav",
+        "2": "pad_2_1793878003000.wav",
+        "3": "pad_3_1793878004600.wav"
+      }
+    },
+    {
+      "pads": {
+        "5": null
+      }
+    },
+    {
+      "pads": {
+        "6": null
+      }
+    },
+    {
+      "pads": {
+        "7": null
+      }
+    },
+    {
+      "pads": {
+        "10": null
+      }
+    }
+  ]
+}
