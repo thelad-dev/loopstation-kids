@@ -175,4 +175,20 @@ def draw_icon(painter: QPainter, name: str, rect: QRectF, color: QColor) -> None
         painter.drawLine(QPointF(r.left() + s * 0.22, c.y()), QPointF(r.left() + s * 0.46, c.y() - s * 0.24))
         painter.drawLine(QPointF(r.left() + s * 0.22, c.y()), QPointF(r.left() + s * 0.46, c.y() + s * 0.24))
 
+    elif name == "save":
+        # Floppy disk: body, label slot at the top, shutter at the bottom.
+        painter.setPen(_pen(color, s * 0.09))
+        body = QRectF(r.left() + s * 0.1, r.top() + s * 0.1, s * 0.8, s * 0.8)
+        painter.drawRoundedRect(body, s * 0.1, s * 0.1)
+        painter.drawRect(QRectF(r.left() + s * 0.3, r.top() + s * 0.1, s * 0.4, s * 0.25))
+        painter.drawRect(QRectF(r.left() + s * 0.27, r.top() + s * 0.55, s * 0.46, s * 0.35))
+
+    elif name == "folder":
+        painter.setPen(_pen(color, s * 0.09))
+        tab = QPainterPath(QPointF(r.left() + s * 0.08, r.top() + s * 0.82))
+        for x, y in ((0.08, 0.22), (0.38, 0.22), (0.48, 0.34), (0.9, 0.34), (0.9, 0.82)):
+            tab.lineTo(QPointF(r.left() + s * x, r.top() + s * y))
+        tab.closeSubpath()
+        painter.drawPath(tab)
+
     painter.restore()
