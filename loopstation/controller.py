@@ -119,6 +119,7 @@ FREE_HOLD_SECONDS = 0.8
 LIVE_SETTINGS = (
     "max_record_seconds",
     "sound_effects",
+    "record_start_tone",
     "fullscreen",
     "launchpad",
     "loop_sync",
@@ -891,7 +892,13 @@ class Controller:
         # A free pad is neither cut nor waits for a loop start: it records at once.
         free = self.pad(pad).free
         synced = self._apply_grid() is not None and not free
-        started = self.audio.start_recording(align=False) if free else self.audio.start_recording()
+        # The start beep goes in with the start: the engine opens the take only
+        # after it has faded out, so the beep never lands on the recording.
+        cue = {"cue": start_beep(self.audio.sample_rate)} if self._start_tone_on() else {}
+        if free:
+            started = self.audio.start_recording(align=False, **cue)
+        else:
+            started = self.audio.start_recording(**cue)
         if not started:
             self._set_notice("Mikrofon lässt sich nicht öffnen")
             return
@@ -903,10 +910,11 @@ class Controller:
         self._input_peak = 0.0
         self._rec_peak = 0.0
         self._rec_clipped = False
-        if self.settings.sound_effects:
-            self.audio.play_effect(start_beep(self.audio.sample_rate))
         self.store.append(ev.RECORD_START, pad, {"stamp": stamp})
         self._recording = _Recording(pad, stamp, self._clock(), synced, free, aligned)
+
+    def _start_tone_on(self) -> bool:
+        return self.settings.sound_effects and self.settings.record_start_tone
 
     def _stop_recording(self) -> bool:
         """Stop the running recording; return True if a sample was kept."""
@@ -1190,6 +1198,8 @@ class Controller:
         if not self.settings.metronome_tone:
             self._tick_at = None
             return
+        if self._recording is not None:
+            return  # the speaker would put the tick on the take
         period, position = self.metronome_period(), self.beat_position()
         info = self.grid_info()
         if period is None or position is None or info is None:

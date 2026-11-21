@@ -21,11 +21,16 @@ class AudioBackend(Protocol):
     sample_rate: int
     available_input: bool
 
-    def start_recording(self, align: bool = True) -> bool:
+    def start_recording(self, align: bool = True, cue: np.ndarray | None = None) -> bool:
         """Start capturing from the microphone; False if that is not possible.
 
         With a grid and loops running a recording begins on the next loop start;
         ``align=False`` (a free pad) starts it at once instead.
+
+        ``cue`` (the start beep) is played at once, and the recording begins
+        only after it and every other sound effect already queued has ended, so
+        nothing the speaker plays is on the take: at the next loop start after
+        that, or at once after that.
         """
         ...
 

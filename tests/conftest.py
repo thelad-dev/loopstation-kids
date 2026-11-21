@@ -84,9 +84,11 @@ class FakeAudio:
         self.clips = 0
         self.clap_times: list[float] | None = None
 
-    def start_recording(self, align: bool = True) -> bool:
+    def start_recording(self, align: bool = True, cue: np.ndarray | None = None) -> bool:
         if not self.available_input:
             return False
+        if cue is not None:
+            self.effects.append(cue)
         self.calls.append(("start_recording",))
         self.record_align = align
         self._record_aligned = align and self.grid is not None and self.boundary_in is not None

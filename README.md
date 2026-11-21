@@ -39,10 +39,10 @@ Selbst bauen (unter Windows, mit Python 3.11 und [Inno Setup 6](https://jrsoftwa
 pip install -c packaging/windows/constraints.txt -r requirements.txt -r packaging/windows/requirements-build.txt
 python packaging/windows/make_icon.py build/loopstation.ico
 pyinstaller --noconfirm packaging/windows/loopstation.spec
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.1.2 packaging\windows\loopstation.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.1.3 packaging\windows\loopstation.iss
 ```
 
-Das Ergebnis liegt in `dist\Loopstation-Setup-1.1.2.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
+Das Ergebnis liegt in `dist\Loopstation-Setup-1.1.3.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
 
 ## Linux-Installation
 
@@ -92,6 +92,7 @@ Was sich für Bestandsnutzer ändert:
 - **„Alle löschen“ ist von der Kinderseite in den Elternbereich gewandert** (Verlauf & Undo, „Alle Pads löschen …“, mit Rückfrage; „Zurück“ holt alles wieder). Kinder können so nicht mehr versehentlich alles leeren.
 - **Loops kürzen (neu in 1.1.1):** Erweitert schneidet einen Loop an Anfang und Ende zu (Griffe in der Wellenform, Vorhören, Übernehmen oder Verwerfen); das Original bleibt im Verlauf, Zurück bringt es wieder, und ein Stand ohne diese Version kennt das Kürzen nicht.
 - **Marker bleiben, wo Sie sie setzen (1.1.2):** „Zwischen Markern strecken“ meckert nicht mehr, wenn ein Marker auf einem Schlag sitzt, der neben der geschätzten Taktlinie liegt; die 10-%-Grenze gilt nur noch bei einem von Erwachsenen eingestellten Takt. Die Schlag-Erkennung erfindet bei Rascheln, Rauschen und Nachhall keine Schläge mehr, und neue Marker rasten auf Wunsch auf die nächste echte Transiente ein (`snap_markers`, Schalter in Erweitert, standardmäßig aus).
+- **Kein Piepen mehr auf der Aufnahme (1.1.3):** Der Start-Ton klingt vollständig aus, bevor die Aufnahme beginnt (sie startet dadurch einen Moment nach dem Druck), und der leise Metronom-Ton schweigt, solange aufgenommen wird; der Start-Ton lässt sich im Elternbereich (Lautstärke & Pegel, „Aufnahmestart-Ton“, `record_start_tone`) abschalten.
 - **Auf der Kinderseite neu:** „Wiederholen“, das Zurück-Abzeichen am Pad, der freie Modus per langem Halten und das rote „zu laut“-Zeichen. Am Launchpad wirkt ein kurzer Tipp jetzt beim Loslassen.
 
 ### Zurück zur vorigen Version
@@ -181,7 +182,7 @@ Die Launchpad-Anbindung ist bisher nur mit nachgebauten MIDI-Ports getestet, noc
 
 ## Einstellungen
 
-In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne, Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Lautstärke (`volume`) mit Obergrenze (`max_level_db`), Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`), Pegelanzeige der Aufnahme für Eltern (`peak_meter`), Takt aus der ersten Aufnahme (`auto_grid`, `time_signature`, `grid_bpm_min`, `grid_bpm_max`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), freie Pads am Takt-Punkt starten (`free_pad_on_grid`), Marker als Cue-Punkte im Export (`export_cue_points`), Marker auf Transienten einrasten (`snap_markers`), Strecken knapp neben dem Takt (`stretch_to_grid`), Aufnahme- und Wiedergabegerät (`input_device`, `output_device`) und Audio-System (`audio_hostapi`, Standard WASAPI unter Windows, ALSA unter Linux) sowie ASIO (`asio`), leiser Metronom-Ton (`metronome_tone`, `metronome_level_db`), Stretch-Engine (`stretch_engine`, siehe [Stretch-Engine](#stretch-engine-rubber-band)), Datenordner. Fehlt die Datei, gelten die Standardwerte.
+In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergröße (`rows`, `cols`), maximale Aufnahmelänge, Abtastrate, Pieptöne (`sound_effects`, `record_start_tone`), Vollbild, Launchpad an/aus, taktgenauer Schnitt an/aus (`loop_sync`), Lautstärke (`volume`) mit Obergrenze (`max_level_db`), Mikrofonpegel (`input_gain_db`), automatischer Aufnahmepegel (`auto_gain`), Pegelanzeige der Aufnahme für Eltern (`peak_meter`), Takt aus der ersten Aufnahme (`auto_grid`, `time_signature`, `grid_bpm_min`, `grid_bpm_max`), Verzögerung zwischen Lautsprecher und Mikrofon (`latency_ms`), weiche Loop-Naht an/aus (`soft_seam`), freie Pads am Takt-Punkt starten (`free_pad_on_grid`), Marker als Cue-Punkte im Export (`export_cue_points`), Marker auf Transienten einrasten (`snap_markers`), Strecken knapp neben dem Takt (`stretch_to_grid`), Aufnahme- und Wiedergabegerät (`input_device`, `output_device`) und Audio-System (`audio_hostapi`, Standard WASAPI unter Windows, ALSA unter Linux) sowie ASIO (`asio`), leiser Metronom-Ton (`metronome_tone`, `metronome_level_db`), Stretch-Engine (`stretch_engine`, siehe [Stretch-Engine](#stretch-engine-rubber-band)), Datenordner. Fehlt die Datei, gelten die Standardwerte.
 
 ## Elternbereich
 

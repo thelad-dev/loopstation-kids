@@ -19,7 +19,7 @@ Was die App **bereits** kann:
 - Loop-Sync: Die **gesamte Länge** der ersten Aufnahme einer Sitzung wird als `master_set` gespeichert. Weitere Aufnahmen werden mit `fit_to_grid` auf ein Vielfaches geschnitten oder mit Stille aufgefüllt (Grace 150 ms, höchstens 1/8 der Loop-Länge). Start/Stopp am Grid, Aufnahme wartet auf den nächsten Loop-Anfang. `loop_sync = false` schaltet das ab.
 - Audio: getrennte PortAudio-Input- und Output-Streams, Mono float32, hartes `np.clip` auf den Mix, `latency_ms = "auto"` addiert gemeldete Ein- und Ausgangslatenz. Keine Gerätewahl, kein Regler, keine Peak-Anzeige. Die Loop-Naht springt in `_mix_voice` hart von Ende auf Position 0.
 - Einstellungen nur als kommentiertes `settings.toml`; Änderung verlangt laut Dateikommentar einen Neustart. Es gibt noch keine Kind/Eltern-Trennung in der GUI.
-- Komplett lokal, ohne Konto und ohne Internet. Start-/Stopp-Pieps sind über `sound_effects` abschaltbar, aber nicht in der Oberfläche.
+- Komplett lokal, ohne Konto und ohne Internet. Start-/Stopp-Pieps sind über `sound_effects` abschaltbar, der Start-Ton zusätzlich über `record_start_tone` (Elternbereich, Lautstärke & Pegel).
 - Unterstützte Paketierung heute: Windows-Installer (PyInstaller + Inno Setup) und Linux-Installskript. Kein offizielles macOS-Bundle.
 
 Der Plan erweitert dieses Fundament; er ersetzt es nicht durch eine DAW.
