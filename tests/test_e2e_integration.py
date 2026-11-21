@@ -362,9 +362,10 @@ def test_the_bar_survives_undoing_everything_and_bringing_it_back(rig):
     assert not rig.store.state.has_content()
     c.undo()
     assert rig.store.state.master == master and c.pad(1).sample is not None
-    # a take without claps in an empty session sets no bar: the session stays free
+    # a double hit 0.1 s apart in a take that is no plausible bar sets none: the session stays free
+    # (the sawtooth used here before only "worked" because the detector invented onsets at its steps)
     c.delete_all()
-    rig.take(2, 1.0, sawtooth(3 * SR, 1777, 0.3))
+    rig.take(2, 1.0, clap_signal(3 * SR, SR, [0.3, 0.4]))
     assert c.grid_frames() is None and rig.store.state.master is None
     # claps 0.4 s apart set a new bar of 1.6 s
     c.delete_all()

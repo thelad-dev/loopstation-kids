@@ -445,7 +445,7 @@ def stretch_to_grid(
 class MarkerStretchError(ValueError):
     """Stretching between markers is not possible; ``reason`` says why.
 
-    ``too_far`` (a segment is off its beat by more than the limit), ``same_beat``
+    ``too_far`` (a segment is off its beat by more than a limit the caller set), ``same_beat``
     (two markers snap to one beat line), ``edge`` (a marker snaps to the loop's
     start or end) or ``no_markers``.
     """
@@ -480,7 +480,7 @@ def stretch_between_markers(
     markers: list[int],
     beat_frames: float,
     *,
-    max_deviation: float = DEFAULT_MAX_DEVIATION,
+    max_deviation: float | None = DEFAULT_MAX_DEVIATION,
     engine: StretchEngine | None = None,
     targets: list[int] | None = None,
 ) -> tuple[np.ndarray, list[int]]:
@@ -489,10 +489,12 @@ def stretch_between_markers(
     ``data`` is cut at the markers; every piece is stretched to the distance
     between the beat lines its ends move to, so the first and last frame stay
     where they are and the result has exactly ``len(data)`` frames. Returns the
-    result and the marker positions in it (the beat lines). Every piece must be
-    off by at most ``max_deviation`` of its new length, else nothing is
-    stretched (``MarkerStretchError("too_far")``): a marker far from a beat is
-    more likely misplaced than meant.
+    result and the marker positions in it (the beat lines). With a
+    ``max_deviation`` every piece must be off by at most that share of its new
+    length, else nothing is stretched (``MarkerStretchError("too_far")``).
+    ``None`` sets no limit: the markers are the parents' decision and the beat
+    lines may be only an estimate, so the caller does not second-guess a marker
+    by its distance to them (the nearest beat line is at most half a beat away).
 
     ``targets`` (one per marker inside the loop, strictly increasing) replaces
     the nearest beat lines: used when the markers were set on a stretched copy
@@ -513,7 +515,7 @@ def stretch_between_markers(
     ))
     for (s0, s1), (t0, t1) in spans:  # all checked before anything is stretched
         want, have = t1 - t0, s1 - s0
-        if have != want and abs(have - want) / want > max_deviation:
+        if max_deviation is not None and have != want and abs(have - want) / want > max_deviation:
             raise MarkerStretchError("too_far")
     pieces = []
     for (s0, s1), (t0, t1) in spans:

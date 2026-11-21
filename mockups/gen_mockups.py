@@ -623,7 +623,7 @@ for k in range(12):
     bx = CX0 + 96 + k * 70
     d.add(rect(bx, 148, 60, 40, 10, PAD[cc], "#FFFFFF" if k == 5 else None, 3), text(bx + 30, 175, str(k+1), 16, DARK, 800, "middle"))
 d.add(card(CX0, 204, 940, 330, "Pad 6 · Aufnahme 2,50 s · 1 Takt · im Raster"))
-wx0, wy0, ww, wh = CX0 + 22, 264, 896, 180
+wx0, wy0, ww, wh = CX0 + 22, 264, 896, 150
 d.add(rect(wx0, wy0, ww, wh, 10, "#141418"))
 for b in range(5):
     xx = wx0 + ww * b / 4
@@ -635,9 +635,10 @@ for mx, ml in ((0.02, "A"), (0.51, "B")):
     xx = wx0 + ww * mx
     d.add(f'<line x1="{xx:.1f}" y1="{wy0-6}" x2="{xx:.1f}" y2="{wy0+wh}" stroke="{ORANGE}" stroke-width="3"/>',
           f'<path d="M{xx-9:.1f} {wy0-18} h18 v10 l-9 8 l-9 -8 Z" fill="{ORANGE}"/>', text(xx + 12, wy0 - 6, f"Marker {ml}", 12, ORANGE, 700))
-d.add(button(CX0 + 22, 460, 170, 48, "Marker setzen", "secondary"), button(CX0 + 202, 460, 170, 48, "Marker löschen", "secondary"),
-      button(CX0 + 382, 460, 150, 48, "Anhören", "secondary", "play", 15))
-d.add(toggle(CX0 + 560, 466, True, "Zwischen Markern strecken", "nur bei knapper Abweichung (< 8–10 %)"))
+d.add(button(CX0 + 22, 428, 170, 48, "Marker setzen", "secondary"), button(CX0 + 202, 428, 170, 48, "Marker löschen", "secondary"),
+      button(CX0 + 382, 428, 150, 48, "Anhören", "secondary", "play", 15))
+d.add(button(CX0 + 640, 428, 278, 48, "Zwischen Markern strecken", "secondary"))
+d.add(toggle(CX0 + 22, 486, True, "Marker auf Transiente einrasten", "rastet auf den nächsten Schlag in der Nähe ein; ohne Schlag bleibt der Marker, wo er ist"))
 d.add(card(CX0, 550, 940, 226, "Diesen Loop exportieren", "Lokal auf diesem Rechner · kein Upload, kein Teilen"))
 d.add(text(CX0 + 22, 640, "Format", 15, TEXT, 700))
 d.add(radio(CX0 + 22, 656, True, "WAV", "unverändert, Standard"), radio(CX0 + 200, 656, False, "MP3", "braucht ffmpeg – nicht gefunden", dis=True))

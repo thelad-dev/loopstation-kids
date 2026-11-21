@@ -93,6 +93,9 @@ class Settings:
     # An exported single loop carries its markers as WAV cue points (or as a
     # ``.markers.json`` next to it when the cue chunks cannot be written).
     export_cue_points: bool = True
+    # A marker the parents put on the waveform snaps to the nearest real transient
+    # (a hit, a clap) close to the click. Off: it stays exactly where it was put.
+    snap_markers: bool = True
 
     @property
     def beats_per_bar(self) -> int:
@@ -235,6 +238,8 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
     # Markers (W4-MARKER).
     if "export_cue_points" in raw:
         values["export_cue_points"] = _check_bool(source, "export_cue_points", raw["export_cue_points"])
+    if "snap_markers" in raw:
+        values["snap_markers"] = _check_bool(source, "snap_markers", raw["snap_markers"])
     return Settings(**values)
 
 
@@ -320,6 +325,8 @@ SETTING_COMMENTS: dict[str, str] = {
                         "Loops und behält seine eigene Länge, false = er beginnt sofort. Wirkt sofort.",
     "export_cue_points": "true = ein einzeln gesicherter Loop bekommt seine Marker als Cue-Punkte in die "
                          "WAV-Datei (oder als .markers.json daneben). Wirkt sofort.",
+    "snap_markers": "true = ein gesetzter Marker rastet auf die nächste echte Transiente (einen Schlag) in "
+                    "der Nähe ein, false = er bleibt genau dort, wo er gesetzt wurde. Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 
