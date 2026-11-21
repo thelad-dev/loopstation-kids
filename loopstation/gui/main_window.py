@@ -7,6 +7,9 @@ It has two states: the child page (``frame``) and the parents' pad view
 (``parent_view``, Loopstation 2 variant A). The way from the children to the
 parents is the held lock plus a sum that lies over the window (``GateOverlay``);
 the way back is one tap on "Kinder" or F1. The music goes on throughout.
+
+The tools of the parents' view open as side panels next to the pads, in this window; nothing of
+them is modal, so the pads and the Launchpad keep working while one is open.
 """
 
 from __future__ import annotations
@@ -46,12 +49,12 @@ from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
 from loopstation.gui.parent_gate import GateOverlay
-from loopstation.gui.parent_nav import ParentPage
 from loopstation.gui.parent_tile import ParentTile
-from loopstation.gui.parent_view import ParentView, WaveCache
+from loopstation.gui.parent_view import ParentView, WaveCache, loop_line
 from loopstation.gui.pulse_strip import PulseStrip, glow_levels
 from loopstation.gui.sets_page import SetsPage
-from loopstation.gui.settings_page import SettingsDialog
+from loopstation.gui.settings_panels import SETTINGS_PANELS, SettingsPanels
+from loopstation.gui.side_panel import SAVED_LINE, flatten_cards
 from loopstation.gui.volume_slider import VolumeSlider
 from loopstation.gui.widgets import (
     ACCENT_BLUE,
@@ -110,6 +113,18 @@ ARROWS = {
     Qt.Key.Key_Right: (0, 1),
     Qt.Key.Key_Up: (-1, 0),
     Qt.Key.Key_Down: (1, 0),
+}
+ENTER_KEYS = (Qt.Key.Key_Return, Qt.Key.Key_Enter)  # the panel "Loop" of the chosen pad
+# Head of each side panel: (icon, title, line under the title); "loop" gets its line per pad.
+TOOL_HEADS = {
+    "changes": ("history", "Verlauf", "Zurück und Wieder, die Änderungen aller Pads"),
+    "sets": ("save", "Sets", "Die Sitzung sichern oder ein Set öffnen"),
+    "export": ("download", "Export", "Die Summe oder einzelne Loops als WAV"),
+    "levels": ("sliders", "Pegel", SAVED_LINE),
+    "devices": ("headphones", "Geräte", SAVED_LINE),
+    "tempo": ("pulse", "Takt", SAVED_LINE),
+    "system": ("gear", "System", SAVED_LINE),
+    "loop": ("layers", "Loop", ""),
 }
 PAD_KEYS = {
     Qt.Key.Key_Space: Mode.PLAY,
@@ -202,11 +217,11 @@ class MainWindow(QMainWindow):
         # Sets (parents' area only): the session they work on and what to do with a set to open.
         self.set_session = set_session
         self.on_open_set = on_open_set
-        # A real modal dialog is open (history, the settings of the parents): pads and Launchpad wait.
+        # A real modal dialog is open (the children's history): pads and Launchpad wait.
         self._dialog_open = False
-        self._settings_dialog: QDialog | None = None
-        # The parents' view: built when it is entered, gone again on the child page.
+        # The parents' view: built when it is entered, gone again on the child page (with its panels).
         self.parent_view: ParentView | None = None
+        self.settings_panels: SettingsPanels | None = None
         self.gate_overlay: GateOverlay | None = None
         # Lock time and idle time run on a monotonic clock (a change of the wall clock must not open
         # the lock or keep the parents' view open); tests hand in their own clock.
@@ -217,13 +232,11 @@ class MainWindow(QMainWindow):
         self._idle_minutes = controller.settings.parent_idle_minutes
         self._waves = WaveCache()  # mini waves of the tiles, kept across visits
         self._parent_selected = 0
-        self._idle_out = False  # the idle time closed the settings dialog: on to the child page
         # Pads held on the screen (child pads and the start fields of the tiles); let go on a change of view.
         self._screen_down: set[int] = set()
         # Factories so tests can replace the modal dialogs.
         self.history_factory: Callable[[Controller, int, QWidget], QDialog] = HistoryDialog
-        self.settings_factory: Callable[..., QDialog] = SettingsDialog
-        # The areas of the parents' area (widgets, built on their first visit).
+        # The pages of the side panels of the parents' view (widgets, built on their first visit).
         self.export_factory: Callable[[Controller, QWidget | None], QWidget] = ExportPage
         self.sets_factory: Callable[..., QWidget] = SetsPage
         self.advanced_factory: Callable[[Controller, QWidget | None], QWidget] = AdvancedPage
@@ -413,6 +426,9 @@ class MainWindow(QMainWindow):
         if self.gate_overlay is not None:
             self._close_gate()  # Esc cancels the sum
             return
+        if self.parent_view is not None and self.parent_view.panel_key is not None:
+            self.close_tool()  # Esc closes the side panel (the top layer)
+            return
         self.controller.escape()
 
     def stop_all(self) -> None:
@@ -485,7 +501,8 @@ class MainWindow(QMainWindow):
             controller.set_mode(Mode.PLAY)
         view = ParentView(controller, self._waves, self.set_session is not None, self._parent_selected)
         view.kids_requested.connect(weak_slot(self.leave_parent_mode))
-        view.tool_requested.connect(weak_slot(self.open_settings, pass_signal_args=True))
+        view.tool_requested.connect(weak_slot(self.open_tool, pass_signal_args=True))
+        view.pads_touched.connect(weak_slot(self._keys_to_the_view))
         view.pad_down.connect(weak_slot(self._tile_down, pass_signal_args=True))
         view.pad_up.connect(weak_slot(self._tile_up, pass_signal_args=True))
         view.undo_requested.connect(weak_slot(self.undo))
@@ -507,7 +524,10 @@ class MainWindow(QMainWindow):
             return
         self._release_screen_holds()
         self._parent_selected = view.selected
+        if self.settings_panels is not None:
+            self.settings_panels.flush()  # a number in its pause or a text still being typed is saved
         self.parent_view = None
+        self.settings_panels = None  # a child of the view: it goes with it
         app = QApplication.instance()
         if app is not None:
             app.removeEventFilter(self)
@@ -527,12 +547,17 @@ class MainWindow(QMainWindow):
         """Keys of the parents' view: arrows choose, Leertaste plays, L loop, R record, Entf delete."""
         view = self.parent_view
         key = event.key()
+        focus = QApplication.focusWidget()
         if (view is None or self._dialog_open or self.gate_overlay is not None
                 or event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier)
-                or (key not in ARROWS and key not in PAD_KEYS)):
+                or (focus is not None and view.side_panel.isAncestorOf(focus))  # typing in a panel
+                or (key not in ARROWS and key not in PAD_KEYS and key not in ENTER_KEYS)):
             super().keyPressEvent(event)
             return
-        if key in ARROWS:
+        if key in ENTER_KEYS:
+            if not event.isAutoRepeat():
+                self.open_tool("loop")
+        elif key in ARROWS:
             view.move_selection(*ARROWS[Qt.Key(key)])
         elif not event.isAutoRepeat():
             self.press_as(view.selected, PAD_KEYS[Qt.Key(key)])
@@ -543,54 +568,94 @@ class MainWindow(QMainWindow):
         if event.type() == QEvent.Type.ActivationChange and not self.isActiveWindow():
             self._release_screen_holds()  # no release will reach a pad of a window that lost the focus
 
-    def open_settings(self, key: str | None = None) -> None:
-        """The parents' settings (the dialog of before) on the area ``key``; pads wait while it is open."""
-        if self._dialog_open:
+    # ---------------------------------------------------------- side panels
+
+    def open_tool(self, key: str) -> None:
+        """Open the side panel of the tool ``key`` beside the pads; that tool again or "Pads" closes it."""
+        view = self.parent_view
+        if view is None:
             return
-        self._release_screen_holds()
-        self._dialog_open = True
-        self._idle_out = False
-        to_kids: list[bool] = []
-        try:
-            dialog = self.settings_factory(
-                self.config_path, self.controller.settings, self.apply_settings,
-                self.settings_template, self, self.parent_pages(),
-            )
-            if key is not None and key in getattr(dialog, "page_keys", ()):
-                dialog.show_page(key)
-            # Its button "Zur Kinderseite" leads there; Esc only closes the dialog (back to this view).
-            back = getattr(dialog, "close_button", None)
-            if back is not None:
-                back.clicked.connect(lambda: to_kids.append(True))
-            self._settings_dialog = dialog
-            self._exec(dialog)
-        finally:
-            self._settings_dialog = None
-            self._dialog_open = False
-            self._last_input = self.clock()
-            self.refresh()
-        if to_kids or self._idle_out:
-            self.leave_parent_mode()
+        if key == "pads" or key == view.panel_key:
+            self.close_tool()
+            return
+        if key not in TOOL_HEADS or (key == "sets" and self.set_session is None):
+            return
+        widget = view.side_panel.page(key)
+        if widget is None:
+            widget = self._build_tool(key)
+            flatten_cards(widget)  # sections of the panel, as on the settings panels (mockup L2-05)
+        icon, title, line = TOOL_HEADS[key]
+        if key == "loop":
+            line = loop_line(view.selected)
+            choose = getattr(widget, "choose_pad", None)
+            if choose is not None and getattr(widget, "pad", None) != view.selected:
+                choose(view.selected)
+        view.open_panel(key, icon, title, line, widget)
+        self.setFocus(Qt.FocusReason.OtherFocusReason)  # the keys stay with the view until a field is tapped
+        panels = self.settings_panels
+        if key in SETTINGS_PANELS and panels is not None and panels.level == "error":
+            view.side_panel.say(panels.message, panels.level)  # a refused value is still shown
+        self._last_input = self.clock()
 
-    def parent_pages(self) -> list[ParentPage]:
-        """The areas of the parents' area behind the three settings pages: history, Erweitert, sets, export.
+    def _keys_to_the_view(self) -> None:
+        """A tile was pressed: the keys belong to the pads again, not to a field of the panel.
 
-        A set that was opened ends the parents' area (the sets page says so through ``done``).
+        Taking the focus ends the editing of a field (it saves what it shows, as on leaving any field).
+        """
+        view = self.parent_view
+        focus = QApplication.focusWidget()
+        if view is not None and focus is not None and view.side_panel.isAncestorOf(focus):
+            self.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def close_tool(self) -> None:
+        """Close the side panel; the pads take the whole width again."""
+        if self.parent_view is not None:
+            self.parent_view.close_panel()
+            self.setFocus(Qt.FocusReason.OtherFocusReason)  # the keys of the view work again
+
+    def _build_tool(self, key: str) -> QWidget:
+        """The page of the tool ``key``, built on its first visit (kept while the parents' view is shown).
+
+        The builders hold the controller and the panels, not the window: the page tree must not keep the
+        window alive through a cycle (see ``weak_slot``).
         """
         controller = self.controller
-        # The builders hold the factories and the controller, not the window: the page tree must not keep
-        # the window alive through a cycle (see ``weak_slot``).
-        changes, advanced = self.changes_factory, self.advanced_factory
-        sets, export = self.sets_factory, self.export_factory
-        pages = [
-            ParentPage("changes", "history", "Verlauf & Undo", lambda: changes(controller, None)),
-            ParentPage("advanced", "layers", "Erweitert", lambda: advanced(controller, None)),
-        ]
-        if self.set_session is not None:
-            session, on_open = self.set_session, self.on_open_set
-            pages.append(ParentPage("sets", "save", "Sets", lambda: sets(session, on_open, None)))
-        pages.append(ParentPage("export", "download", "Export", lambda: export(controller, None)))
-        return pages
+        if key in SETTINGS_PANELS:
+            return self._settings_panels().page(key)
+        if key == "changes":
+            return self.changes_factory(controller, None)
+        if key == "export":
+            return self.export_factory(controller, None)
+        if key == "sets":
+            page = self.sets_factory(self.set_session, self.on_open_set, None)
+            done = getattr(page, "done", None)
+            if done is not None:
+                done.connect(weak_slot(self._sets_done, pass_signal_args=True))
+            return page
+        page = self.advanced_factory(controller, None)  # "loop"
+        hide_picker = getattr(page, "set_picker_visible", None)
+        if hide_picker is not None:
+            hide_picker(False)  # the pad is the one chosen in the view
+        return page
+
+    def _settings_panels(self) -> SettingsPanels:
+        panels = self.settings_panels
+        if panels is None:
+            panels = SettingsPanels(self.config_path, self.controller.settings, self.apply_settings,
+                                    self.settings_template, self.controller, self.audio_devices,
+                                    self.parent_view)
+            panels.said.connect(weak_slot(self._panels_said, pass_signal_args=True))
+            self.settings_panels = panels
+        return panels
+
+    def _panels_said(self, text: str, level: str) -> None:
+        view = self.parent_view
+        if view is not None and view.panel_key in SETTINGS_PANELS:
+            view.side_panel.say(text, level)
+
+    def _sets_done(self, _opened: bool) -> None:
+        """The sets page is done (a set was opened, or "Abbrechen"): close it, stay in the parents' view."""
+        self.close_tool()
 
     @property
     def audio_devices(self) -> Any:
@@ -640,19 +705,15 @@ class MainWindow(QMainWindow):
     def _check_idle(self) -> None:
         """No screen or keyboard input for ``parent_idle_minutes``: back to the child page.
 
-        This also closes a settings dialog left open (input in it counts as input), and it ends
-        the lock time: whoever comes next has to answer the sum again.
+        An open side panel goes with the view (input in it counts as input), and the lock time
+        ends: whoever comes next has to answer the sum again.
         """
         if self.parent_view is None or self._idle_minutes <= 0:
             return
         if self.clock() - self._last_input < 60 * self._idle_minutes:
             return
         self._unlocked_until = 0.0
-        if self._settings_dialog is not None:
-            self._idle_out = True
-            self._settings_dialog.reject()  # ``open_settings`` goes on to the child page
-        else:
-            self.leave_parent_mode()
+        self.leave_parent_mode()
 
     def _release_launchpad_holds(self) -> None:
         """No note off will come for keys that were down when the Launchpad went away."""

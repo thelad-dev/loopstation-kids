@@ -12,13 +12,22 @@ from collections.abc import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from loopstation.controller import Controller, TrimCheck
 from loopstation.gui.grid_panel import format_seconds
 from loopstation.gui.parent_gate import PARENT_ACCENT
 from loopstation.gui.parent_nav import dim_label
-from loopstation.gui.settings_page import ToggleSwitch
+from loopstation.gui.settings_panels import ToggleSwitch
 from loopstation.gui.waveform import WaveformWidget
 from loopstation.gui.widgets import ACCENT_GRAY, BACKGROUND, TEXT, TEXT_DIM, BigButton, big_font, weak_slot
 
@@ -121,6 +130,7 @@ class TrimCard(QFrame):
         layout.addWidget(heading)
         layout.addWidget(dim_label(HINT, 13.5))
         self.readout = QLabel("")
+        self.readout.setWordWrap(True)
         self.readout.setStyleSheet("font-size: 17px; font-weight: 700;")
         layout.addWidget(self.readout)
         self.note = dim_label("", 13.5)
@@ -130,6 +140,7 @@ class TrimCard(QFrame):
         self.snap_switch.setChecked(True)  # on: the trimmed loop stays on the bars
         self.snap_switch.toggled.connect(weak_slot(self.refresh))
         name = QLabel("Auf Taktraster rasten")
+        name.setWordWrap(True)
         name.setStyleSheet("font-size: 16.5px; font-weight: 600;")
         texts = QVBoxLayout()
         texts.setSpacing(0)
@@ -151,11 +162,12 @@ class TrimCard(QFrame):
         self.apply_button.clicked.connect(weak_slot(self._apply_clicked))
         buttons = QHBoxLayout()
         buttons.setSpacing(10)
-        buttons.addWidget(self.listen_button)
-        buttons.addWidget(self.discard_button)
-        buttons.addStretch(1)
-        buttons.addWidget(self.apply_button)
+        for button in (self.listen_button, self.discard_button):
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        buttons.addWidget(self.listen_button, 1)
+        buttons.addWidget(self.discard_button, 1)
         layout.addLayout(buttons)
+        layout.addWidget(self.apply_button)  # below the two: the card sits in a narrow side panel
         self.message = QLabel("")
         self.message.setWordWrap(True)
         self.message.setVisible(False)  # only there while it says something

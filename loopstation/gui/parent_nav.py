@@ -1,20 +1,17 @@
-"""Building blocks of the parents' area: the left navigation, cards and a width-aware card grid.
+"""Building blocks the parents' pages share: icons, cards and a width-aware card grid.
 
-The parents' area (mockups 09-16) is one window with a navigation on the left
-and one page per area on the right. This module has the parts the pages share:
+The pages of the parents' view open as side panels next to the pads (``side_panel``). This module has
+the parts they share:
 
-- ``ParentPage``: one entry of the navigation (the pages themselves are built on first use),
-- ``ParentNav``: the left column (back button, the seven areas, save button, footer),
-- ``CardGrid``: cards in two columns on a wide window, in one column on a narrow one (1024 px),
+- ``paint_icon``/``qicon``/``IconLabel``: the icons of the mockups,
+- ``CardGrid``: cards in two columns on a wide page, in one column on a narrow one (a side panel),
+- ``CurrentPageStack``: pages one over the other, only the shown one counts for the size,
 - ``card``/``dim_label``/``scrolled``: the small helpers every page uses.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -22,13 +19,11 @@ from PySide6.QtGui import (
     QIcon,
     QPainter,
     QPaintEvent,
-    QPen,
     QPixmap,
     QResizeEvent,
 )
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QAbstractButton,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -42,17 +37,11 @@ from PySide6.QtWidgets import (
 
 from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
-from loopstation.gui.widgets import DARK_SCROLLBAR_QSS, TEXT, TEXT_DIM, weak_slot
+from loopstation.gui.widgets import DARK_SCROLLBAR_QSS, TEXT, TEXT_DIM
 
-NAV_WIDTH = 260
-NAV_WIDTH_NARROW = 240  # below ``NARROW_WINDOW`` px of window width
-NARROW_WINDOW = 1150
-NAV_BUTTON_HEIGHT = 60
-NAV_GAP = 10
 ACTIVE_FILL = "#2F3550"
 CARD_FILL = "#1B1B1F"
 CARD_BORDER = "#2C2C31"
-FOOTER_COLOR = "#6E6E75"
 WIDE_PAGE = 860  # content width from which cards go side by side
 
 # Icons the shared icon set (``icons.draw_icon``) does not have: the paths of the mockups (24 px grid).
@@ -129,154 +118,6 @@ def qicon(name: str, color: QColor | str, size: int = 28) -> QIcon:
     return QIcon(pixmap)
 
 
-@dataclass(frozen=True)
-class ParentPage:
-    """One area of the parents' area. ``build()`` makes the page widget on its first visit."""
-
-    key: str
-    icon: str
-    label: str
-    build: Callable[[], QWidget]
-
-
-class BackButton(QAbstractButton):
-    """"Zur Kinderseite / Eltern-Modus beenden": the way out, top left (mockups 09-16)."""
-
-    def __init__(self, text: str = "Zur Kinderseite", note: str = "Eltern-Modus beenden",
-                 parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setText(text)
-        self._note = note
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.setFixedHeight(104)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setAccessibleName(text)
-
-    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API
-        return QSize(NAV_WIDTH, 104)
-
-    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
-        return QSize(NAV_WIDTH_NARROW, 104)
-
-    def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#3A3A41") if self.isDown() else QColor("#26262B"))
-        painter.drawRoundedRect(QRectF(self.rect()), 20, 20)
-        paint_icon(painter, "back", QRectF(20, 36, 32, 32), TEXT)
-        painter.setFont(fitted_font(self.text(), self.width() - 64 - 12, 18, QFont.Weight.Bold, 14))
-        painter.setPen(TEXT)
-        painter.drawText(QRectF(64, 30, self.width() - 70, 26),
-                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.text())
-        note = QFont()
-        note.setPixelSize(13)
-        painter.setFont(note)
-        painter.setPen(TEXT_DIM)
-        painter.drawText(QRectF(64, 58, self.width() - 70, 20),
-                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._note)
-        painter.end()
-
-
-class NavButton(QAbstractButton):
-    """One area in the navigation: icon and name; the open area is tinted and framed."""
-
-    def __init__(self, icon: str, text: str, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.icon_name = icon
-        self.setText(text)
-        self.setCheckable(True)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.setFixedHeight(NAV_BUTTON_HEIGHT)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API
-        return QSize(NAV_WIDTH, NAV_BUTTON_HEIGHT)
-
-    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
-        return QSize(NAV_WIDTH_NARROW, NAV_BUTTON_HEIGHT)
-
-    def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        active = self.isChecked()
-        rect = QRectF(self.rect())
-        if active:
-            painter.setPen(QPen(QColor(PARENT_ACCENT), 2))
-            painter.setBrush(QColor(ACTIVE_FILL))
-            painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 14, 14)
-        else:
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor("#2A2A30") if self.isDown() else QColor(CARD_FILL))
-            painter.drawRoundedRect(rect, 14, 14)
-        paint_icon(painter, self.icon_name, QRectF(18, 18, 24, 24), PARENT_ACCENT if active else TEXT_DIM)
-        room = self.width() - 56 - 8
-        font = fitted_font(self.text(), room, 17, QFont.Weight.Bold if active else QFont.Weight.Medium, 14)
-        painter.setFont(font)
-        painter.setPen(TEXT if active else QColor("#C7C7CC"))
-        text = QFontMetrics(font).elidedText(self.text(), Qt.TextElideMode.ElideRight, int(room))
-        painter.drawText(QRectF(56, 0, room, rect.height()),
-                         Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, text)
-        painter.end()
-
-
-class ParentNav(QWidget):
-    """The left column: back button, the areas, then (below) a free slot, the save line and the footer."""
-
-    selected = Signal(str)  # key of the area that was chosen
-
-    def __init__(self, back: QWidget, footer: str, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.buttons: dict[str, NavButton] = {}
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(0)
-        self._layout.addWidget(back)
-        self._layout.addSpacing(20)
-        self._buttons_end = self._layout.count()
-        self._layout.addStretch(1)
-        self.footer = QLabel(footer)
-        self.footer.setWordWrap(True)
-        self.footer.setContentsMargins(12, 0, 8, 6)
-        self.footer.setStyleSheet(f"color: {FOOTER_COLOR}; font-size: 13px;")
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        self.set_narrow(False)
-
-    def add_button(self, key: str, icon: str, label: str) -> NavButton:
-        button = NavButton(icon, label)
-        button.clicked.connect(weak_slot(self._chosen, key))
-        if self.buttons:
-            self._layout.insertSpacing(self._buttons_end, NAV_GAP)
-            self._buttons_end += 1
-        self._layout.insertWidget(self._buttons_end, button)
-        self._buttons_end += 1
-        self.buttons[key] = button
-        return button
-
-    def add_bottom(self, widget: QWidget | QLayout) -> None:
-        """Below the areas, above the footer (the save line); called before ``finish``."""
-        if isinstance(widget, QLayout):
-            self._layout.addLayout(widget)
-        else:
-            self._layout.addWidget(widget)
-
-    def finish(self) -> None:
-        self._layout.addWidget(self.footer)
-
-    def set_current(self, key: str) -> None:
-        for name, button in self.buttons.items():
-            button.setChecked(name == key)
-
-    def set_narrow(self, narrow: bool) -> None:
-        self.setFixedWidth(NAV_WIDTH_NARROW if narrow else NAV_WIDTH)
-
-    def _chosen(self, key: str) -> None:
-        self.set_current(key)
-        self.selected.emit(key)
-
-
 class IconLabel(QWidget):
     """A small icon (any name ``paint_icon`` knows) in a fixed square."""
 
@@ -284,6 +125,11 @@ class IconLabel(QWidget):
         super().__init__(parent)
         self._icon, self._color = icon, QColor(color)
         self.setFixedSize(size, size)
+
+    def set_icon(self, icon: str) -> None:
+        if icon != self._icon:
+            self._icon = icon
+            self.update()
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)

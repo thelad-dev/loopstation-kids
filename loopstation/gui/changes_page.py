@@ -114,7 +114,10 @@ class ActionButton(QAbstractButton):
         return QSize(int(width), 64 if self.font().pixelSize() >= 16 else 32)
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
-        return self.sizeHint()
+        hint = self.sizeHint()
+        if self.sizePolicy().horizontalPolicy() == QSizePolicy.Policy.Ignored:
+            return QSize(0, hint.height())  # the layout gives the width (a shared row)
+        return hint
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)
@@ -130,12 +133,17 @@ class ActionButton(QAbstractButton):
         painter.setPen(QPen(self._border, 1.5) if enabled else QPen(QColor(BUTTON_BORDER), 1.0))
         painter.setBrush(fill)
         painter.drawRoundedRect(rect, radius, radius)
-        metrics = QFontMetrics(self.font())
-        icon = self._icon_size()
+        font = QFont(self.font())
+        metrics = QFontMetrics(font)
+        while (font.pixelSize() > 10
+               and metrics.height() + 12 + metrics.horizontalAdvance(self.text()) + 20 > rect.width()):
+            font.setPixelSize(font.pixelSize() - 1)  # a narrow button: a smaller word, never a cut one
+            metrics = QFontMetrics(font)
+        icon = metrics.height() * self._icon_scale
         text_width = metrics.horizontalAdvance(self.text())
         left = rect.center().x() - (icon + 12 + text_width) / 2
         draw_icon(painter, self.icon_name, QRectF(left, rect.center().y() - icon / 2, icon, icon), color)
-        painter.setFont(self.font())
+        painter.setFont(font)
         painter.setPen(color)
         painter.drawText(QRectF(left + icon + 12, rect.top(), text_width + 2, rect.height()),
                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.text())
@@ -179,23 +187,21 @@ class ChangesPage(QWidget):
         info = QFrame()
         info.setObjectName("changes_info")
         info_layout = QVBoxLayout(info)
-        info_layout.setContentsMargins(22, 10, 22, 10)
+        info_layout.setContentsMargins(14, 8, 14, 8)
         info_layout.setSpacing(2)
         info_layout.addWidget(self.back_label)
         info_layout.addWidget(self.forward_label)
-        info.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        info.setMinimumHeight(64)
-        same = max(self.back_button.sizeHint().width(), self.forward_button.sizeHint().width())
+        # The page lives in a side panel next to the pads: the two buttons share a row, the box goes below.
+        buttons = QHBoxLayout()
+        buttons.setSpacing(12)
         for button in (self.back_button, self.forward_button):
-            button.setMinimumWidth(same)
-            # as tall as the info box
-            button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-
-        top = QHBoxLayout()
-        top.setSpacing(12)
-        top.addWidget(self.back_button)
-        top.addWidget(self.forward_button)
-        top.addWidget(info, 1)
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            button.setFixedHeight(52)
+            buttons.addWidget(button, 1)
+        top = QVBoxLayout()
+        top.setSpacing(10)
+        top.addLayout(buttons)
+        top.addWidget(info)
 
         self._rows_layout = QVBoxLayout()
         self._rows_layout.setContentsMargins(0, 0, 0, 0)
@@ -213,32 +219,38 @@ class ChangesPage(QWidget):
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll.setWidget(inner)
-        self.scroll.setMinimumHeight(200)
+        self.scroll.setMinimumHeight(64)
 
         card = QFrame()
         card.setObjectName("changes_card")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(22, 18, 22, 14)
+        card_layout.setContentsMargins(12, 14, 12, 12)
         card_layout.setSpacing(10)
-        card_layout.addWidget(_label(CARD_TITLE, 19, TEXT.name(), "700"))
+        title = _label(CARD_TITLE, 19, TEXT.name(), "700")
+        title.setWordWrap(True)
+        card_layout.addWidget(title)
         card_layout.addWidget(self.scroll, 1)
-        card_layout.addWidget(_label(FOOTNOTE, 13, TEXT_DIM.name()))
+        footnote = _label(FOOTNOTE, 13, TEXT_DIM.name())
+        footnote.setWordWrap(True)
+        card_layout.addWidget(footnote)
 
         self.delete_button = ActionButton("trash", "Alle Pads löschen …", DELETE_FILL, DELETE_BORDER,
                                           DELETE_TEXT, font_px=16, icon_scale=1.15)
+        self.delete_button.setFixedHeight(46)
         self.delete_button.clicked.connect(weak_slot(self.confirm_delete_all))
         hints = QVBoxLayout()
         hints.setSpacing(2)
-        for text in DELETE_HINTS:
-            hints.addWidget(_label(text, 13.5, TEXT_DIM.name()))
-        bottom = QHBoxLayout()
-        bottom.setSpacing(20)
-        bottom.addWidget(self.delete_button)
-        bottom.addLayout(hints, 1)
+        hint = _label(" ".join(DELETE_HINTS), 13.5, TEXT_DIM.name())
+        hint.setWordWrap(True)
+        hints.addWidget(hint)
+        bottom = QVBoxLayout()
+        bottom.setSpacing(8)
+        bottom.addWidget(self.delete_button, 0, Qt.AlignmentFlag.AlignLeft)
+        bottom.addLayout(hints)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(16)
+        layout.setSpacing(12)
         layout.addLayout(top)
         layout.addWidget(card, 1)
         layout.addLayout(bottom)
@@ -323,30 +335,32 @@ class ChangesPage(QWidget):
         # always 2 px wide, so the text of the next row does not move
         border = f"2px solid {PARENT_ACCENT if is_next else 'transparent'}"
         row.setStyleSheet(f"#change_row {{ background: {fill}; border: {border}; border-radius: 10px; }}")
-        row.setFixedHeight(48)
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(22, 0, 14, 0)
-        layout.setSpacing(24)
-
-        stamp = _label(entry.when.strftime("%H:%M") if entry.when else "", 14, TEXT_DIM.name(), "600")
-        stamp.setFixedWidth(44)
+        # Two lines (the page lives in a narrow side panel): the change, then its time and its button.
+        column = QVBoxLayout(row)
+        column.setContentsMargins(12, 6, 8, 6)
+        column.setSpacing(2)
         text_color = TEXT_DIM.name() if entry.undone else TEXT.name()
         text = _label(describe_change(entry), 15.5, text_color, "700" if is_next else "500")
-        text.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        text.setWordWrap(True)  # a long change wraps instead of being cut off
+        column.addWidget(text)
+        layout = QHBoxLayout()
+        layout.setSpacing(10)
+        column.addLayout(layout)
+        stamp = _label(entry.when.strftime("%H:%M") if entry.when else "", 14, TEXT_DIM.name(), "600")
         layout.addWidget(stamp)
-        layout.addWidget(text, 1)
+        layout.addStretch(1)
 
         button = None
         if entry.undone:
             chip = _label("wiederholbar", 12, "#AEAEB2", "700")
             chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            chip.setFixedSize(130, 28)
+            chip.setFixedSize(108, 28)
             chip.setStyleSheet(chip.styleSheet() + " background: #3A3A41; border-radius: 14px;")
             layout.addWidget(chip)
         elif len(entry.pads) == 1:
             button = ActionButton(
-                "undo", "nur dieses Pad", "#3A3A41", "#3A3A41", font_px=12.5, icon_scale=1.1)
-            button.setFixedSize(136, 32)
+                "undo", "nur dieses Pad", "#3A3A41", "#3A3A41", font_px=12, icon_scale=1.1)
+            button.setFixedSize(122, 32)
             if button_pad is not None and self.controller.can_undo(button_pad):
                 button.clicked.connect(weak_slot(self._undo_pad, button_pad))
             else:

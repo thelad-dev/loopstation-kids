@@ -537,18 +537,17 @@ def test_the_metronome_strip_marks_the_current_beat(tempo):
 
 
 def test_the_metronome_tone_switch_of_the_area_acts_at_once(tempo, tmp_path):
-    from loopstation.gui.settings_page import SettingsDialog
+    from loopstation.config import load_settings
+    from loopstation.gui.settings_panels import SettingsPanels
 
     _card, _grid, controller, _audio = tempo
-    dialog = SettingsDialog(
-        tmp_path / "settings.toml", controller.settings, lambda new: [], controller=controller)
-    try:
-        dialog.editors["metronome_tone"]._box.setChecked(True)
-        assert controller.settings.metronome_tone is True
-        dialog.editors["metronome_tone"]._box.setChecked(False)
-        assert controller.settings.metronome_tone is False
-    finally:
-        dialog.close()
+    path = tmp_path / "settings.toml"
+    panels = SettingsPanels(path, controller.settings, controller.apply_settings, controller=controller)
+    panels.page("tempo")
+    panels.editors["metronome_tone"]._box.setChecked(True)
+    assert controller.settings.metronome_tone is True and load_settings(path).metronome_tone is True
+    panels.editors["metronome_tone"]._box.setChecked(False)
+    assert controller.settings.metronome_tone is False and load_settings(path).metronome_tone is False
 
 
 def test_the_strip_renders_with_and_without_a_grid(qapp):
@@ -560,9 +559,9 @@ def test_the_strip_renders_with_and_without_a_grid(qapp):
     assert not strip.grab().toImage().isNull()
 
 
-def test_the_parents_area_offers_erweitert_and_the_child_page_has_nothing_of_it(qapp, tmp_path, clock):
+def test_the_parents_view_offers_the_loop_panel_and_the_child_page_has_nothing_of_it(qapp, tmp_path, clock):
     from conftest import FakeAudio as Audio
-    from PySide6.QtWidgets import QAbstractButton, QDialog
+    from PySide6.QtWidgets import QAbstractButton
 
     from loopstation.gui.main_window import MainWindow
 
@@ -570,28 +569,18 @@ def test_the_parents_area_offers_erweitert_and_the_child_page_has_nothing_of_it(
     store = EventStore(settings.log_dir, settings.pad_count, clock=clock)
     controller = Controller(store, Audio(clock), settings, clock=clock)
     window = MainWindow(controller, None, [], config_path=tmp_path / "settings.toml")
-
-    class Auto(QDialog):
-        def __init__(self, result):
-            super().__init__()
-            self._result = result
-
-        def exec(self):
-            return self._result
-
     try:
         child = [b.text() for b in window.frame.findChildren(QAbstractButton)]
         assert not any(word in text for text in child for word in ("Erweitert", "Metronom", "BPM"))
-        shown, opened = [], []
-        window.settings_factory = lambda *a: shown.append(a) or Auto(QDialog.DialogCode.Rejected)
+        opened = []
         window.advanced_factory = lambda c, p: opened.append((c, p)) or QWidget()
         window.enter_parent_mode()  # the sum was answered
-        window.open_settings()
-        pages = {page.key: page for page in shown[0][5]}
-        assert pages["advanced"].label == "Erweitert" and pages["advanced"].icon == "layers"
-        pages["advanced"].build()
-        assert opened == [(controller, None)]
+        window.parent_view.detail.clicked.emit()  # a tap on the detail line
+        assert opened == [(controller, None)] and window.parent_view.panel_key == "loop"
+        assert window.parent_view.side_panel.title.text() == "Loop"
     finally:
+        window.leave_parent_mode()
         window.timer.stop()
         window.close()
         store.close()
+

@@ -22,7 +22,6 @@ from loopstation.controller import FREE_HOLD_SECONDS, Controller, Mode
 from loopstation.gui.main_window import MainWindow
 from loopstation.gui.parent_gate import GateOverlay
 from loopstation.gui.parent_view import ParentView, bar_lines
-from loopstation.gui.settings_page import SettingsDialog
 from loopstation.session import SetSession
 from loopstation.store import EventStore
 
@@ -60,17 +59,6 @@ class FakePad:
 
     def close(self):
         pass
-
-
-class AutoDialog(QDialog):
-    def __init__(self, on_exec=None):
-        super().__init__()
-        self._on_exec = on_exec
-
-    def exec(self):
-        if self._on_exec:
-            self._on_exec()
-        return QDialog.DialogCode.Rejected
 
 
 class World:
@@ -455,21 +443,16 @@ def test_the_parents_view_goes_back_after_the_idle_time(world):
     assert not window.parent_mode
 
 
-def test_the_idle_time_closes_a_settings_dialog_left_open(world):
+def test_the_idle_time_closes_a_side_panel_left_open(world):
     window, clock = world.window, world.clock
-    open_parents(window)
-    closed = []
-
-    def left_open():
-        clock.advance(10 * 60 + 1)
-        window._tick()
-        closed.append(dialog.result())
-
-    dialog = AutoDialog(left_open)
-    window.settings_factory = lambda *a: dialog
-    window.parent_view.toolbar.buttons["levels"].click()
-    assert closed == [QDialog.DialogCode.Rejected]  # the dialog was closed
-    assert not window.parent_mode and not window._dialog_open
+    view = open_parents(window)
+    view.toolbar.buttons["levels"].click()
+    clock.advance(9 * 60)
+    window._tick()
+    assert window.parent_mode and view.panel_key == "levels"
+    clock.advance(61)
+    window._tick()
+    assert not window.parent_mode and window.settings_panels is None  # the panel went with the view
 
 
 def test_zero_idle_minutes_means_never(world):
@@ -631,41 +614,49 @@ def test_a_held_pad_is_let_go_when_the_view_changes(world):
 
 @pytest.mark.parametrize("tool,page", [("changes", "changes"), ("sets", "sets"), ("export", "export"),
                                        ("levels", "levels"), ("devices", "devices"),
-                                       ("advanced", "advanced"), ("chip", "tempo")])
-def test_every_tool_opens_the_settings_on_its_area(world, tool, page):
+                                       ("system", "system"), ("chip", "tempo")])
+def test_every_tool_opens_its_side_panel(world, tool, page):
     window = world.window
-    seen = []
-
-    class Parents(SettingsDialog):
-        def exec(self):
-            seen.append(self.current_key())
-            return QDialog.DialogCode.Rejected
-
-    window.settings_factory = Parents
     view = open_parents(window)
     button = view.bar_chip if tool == "chip" else view.toolbar.buttons[tool]
     button.click()
-    assert seen == [page]
-    assert window.parent_mode and not window._dialog_open
+    assert view.panel_key == page and view.side_panel.isVisible()
+    assert window.parent_mode and not window._dialog_open  # nothing modal
+    button.click()  # the same tool again closes it
+    assert view.panel_key is None
 
 
-@pytest.mark.parametrize("way,parents", [("button", False), ("escape", True)])
-def test_leaving_the_settings(world, way, parents):
-    """"Zur Kinderseite" in the settings leads to the children, Esc only back to the parents' view."""
-    window = world.window
-
-    class Parents(SettingsDialog):
-        def exec(self):
-            if way == "button":
-                self.close_button.click()
-            else:
-                QTest.keyClick(self, Qt.Key.Key_Escape)
-            return self.result()
-
-    window.settings_factory = Parents
+def test_pads_and_launchpad_play_while_a_panel_is_open(world):
+    window, controller, audio = world.window, world.controller, world.audio
+    world.record(0, 2.0)
     view = open_parents(window)
-    view.toolbar.buttons["devices"].click()
-    assert window.parent_mode is parents
+    view.toolbar.buttons["levels"].click()
+    tile = view.tiles[0]
+    tap(tile, tile.start_field().center())  # the start field of a tile beside the panel
+    assert calls(audio, "play")[-1] == ("play", 0, False)
+    audio.finish(0)
+    world.launchpad.events = [(3, True), (3, False)]  # a child on the Launchpad
+    window._tick()
+    assert controller.recording_pad == 3
+    assert view.panel_key == "levels"
+
+
+def test_opening_a_set_from_the_panel_closes_it_and_stays_in_the_parents_view(world, tmp_path):
+    window, controller = world.window, world.controller
+    world.record(0, 1.0)
+    handed = []
+    window.on_open_set = handed.append
+    world.session.save(tmp_path / "sets" / "Probe.loopset")
+    view = open_parents(window)
+    view.toolbar.buttons["sets"].click()
+    sets = view.side_panel.current_page()
+    sets.open_tab.click()
+    sets.rows[0].click()
+    button = sets.open_button if sets.open_button.isVisible() else sets.open_anyway_button
+    button.click()
+    assert len(handed) == 1 and handed[0] is sets.opened
+    assert view.panel_key is None and window.parent_mode
+    assert controller.pad(0).sample is not None  # the app swaps the session between two event loops
 
 
 def test_the_sets_tool_is_there_only_with_a_session(qapp, tmp_path, clock):
@@ -869,3 +860,67 @@ def test_each_part_of_the_parents_view_looks_like_the_mockup(world):
     detail.set_content(content[0], content[1], "", "", "")
     assert fails("detail_text")
 
+
+
+# ------------------------------------------------------ the look of a side panel (L2-05)
+
+MOCKUP_PANEL = REPO / "mockups" / "L2-05_eltern_werkzeug_seitenleiste_pegel.png"
+# The whole window with the panel "Pegel" open against mockup L2-05, at 64 x 40 as above. Measured with the
+# test font: about 14.6. What is left on purpose: the pad names and pad 10 of the mockup, its filled level
+# scale (no take was loud in the test) and the longer hints under the switches. The counter-checks lie far
+# above: the same window with the panel closed about 76, the pad view of L2-02 about 78.
+PANEL_LOOK_THRESHOLD = 18.0
+# Parts: (x, y, w, h), the size they are compared at, and the threshold. Measured: the narrower pads 17.1,
+# the foot of the panel beside the detail line 30.0, the tool bar with "Pegel" lit 4.6, the slider of the
+# ceiling as a horizontal profile 12.5. Counter-checks: another tool lit 10.3, the slider row of "Geräte"
+# 16.7, of "Export" 23.4 and of "System" 26.7; with the panel closed (pads and detail line as wide as the
+# window) the pads and the foot fail (the foot about 88).
+PANEL_PARTS = {
+    "pads": ((108, 112, 640, 588), (80, 73), 21.0),
+    "beside": ((760, 640, 496, 140), (62, 17), 45.0),
+    "toolbar": ((20, 20, 76, 760), (9, 95), 7.0),
+    "ceiling": ((796, 230, 440, 60), (55, 1), 14.5),
+}
+
+
+def _panel_part_difference(shot: QImage, mockup: QImage, name: str) -> float:
+    box, (width, height), _threshold = PANEL_PARTS[name]
+    return float(np.mean(np.abs(_part(shot, box, width, height) - _part(mockup, box, width, height))))
+
+
+def test_the_level_panel_looks_like_the_mockup(world):
+    world.like_the_mockup()
+    window = world.window
+    view = open_parents(window)
+    view.select(4)
+    world.controller.set_max_level_db(-6.0)  # the ceiling of the mockup
+    view.toolbar.buttons["levels"].click()
+    window._tick()
+    QTest.qWait(20)
+    mockup = QImage(str(MOCKUP_PANEL)).copy(0, 0, 1280, 800)  # below y = 800 is the caption
+    assert not mockup.isNull()
+    shot = window.grab().toImage()
+    assert (shot.width(), shot.height()) == (1280, 800)
+    difference = _difference(shot, mockup)
+    assert difference < PANEL_LOOK_THRESHOLD, difference
+    for name, (_box, _size, threshold) in PANEL_PARTS.items():
+        assert _panel_part_difference(shot, mockup, name) < threshold, (name, _panel_part_difference(
+            shot, mockup, name))
+
+    def grab() -> QImage:
+        window._tick()
+        QTest.qWait(20)
+        return window.grab().toImage()
+
+    # Counter-checks: another panel fails the tool bar and the slider row; no panel fails the whole look.
+    for other in ("devices", "export", "system"):
+        view.toolbar.buttons[other].click()
+        other_shot = grab()
+        assert _panel_part_difference(other_shot, mockup, "toolbar") >= PANEL_PARTS["toolbar"][2], other
+        assert _panel_part_difference(other_shot, mockup, "ceiling") >= PANEL_PARTS["ceiling"][2], other
+    view.close_panel()
+    closed = grab()
+    assert _difference(closed, mockup) > 3 * PANEL_LOOK_THRESHOLD
+    for name in ("pads", "beside"):
+        assert _panel_part_difference(closed, mockup, name) >= PANEL_PARTS[name][2], name
+    assert _difference(QImage(str(MOCKUP)).copy(0, 0, 1280, 800), mockup) > 3 * PANEL_LOOK_THRESHOLD

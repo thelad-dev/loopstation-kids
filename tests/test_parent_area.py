@@ -1,4 +1,4 @@
-"""Parents' area: the gate, the entry in the window, the settings page (offscreen, no hardware)."""
+"""Parents' area: the gate, the entry in the window, the settings panels (offscreen, no hardware)."""
 
 from __future__ import annotations
 
@@ -10,30 +10,23 @@ import pytest
 from conftest import FakeAudio, make_settings
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import QLabel
 
 from loopstation.config import Settings, load_settings
 from loopstation.controller import Controller
-from loopstation.gui import settings_page
+from loopstation.gui import settings_panels
 from loopstation.gui.parent_gate import ENTRY_SIZE, HOLD_MS, GateCard, GateQuestion, new_question
 from loopstation.gui.parent_tile import TILE_HEIGHT, TILE_WIDTH
-from loopstation.gui.settings_page import NOTES, Field, SettingsDialog, ToggleSwitch, register_field
+from loopstation.gui.settings_panels import (
+    NOTES,
+    NUMBER_PAUSE_MS,
+    SETTINGS_PANELS,
+    Field,
+    SettingsPanels,
+    ToggleSwitch,
+    register_field,
+)
 from loopstation.store import EventStore
-
-
-class AutoDialog(QDialog):
-    """Stands in for a modal dialog: ``exec`` returns at once with a fixed result."""
-
-    def __init__(self, result, on_exec=None):
-        super().__init__()
-        self._result = result
-        self._on_exec = on_exec
-
-    def exec(self):
-        if self._on_exec:
-            self._on_exec()
-        return self._result
-
 
 # ------------------------------------------------------------------ gate
 
@@ -150,44 +143,35 @@ def right_answer(win):
 
 def test_wrong_gate_answer_never_shows_the_settings(parts):
     win, _controller, _path = parts
-    shown = []
-    win.settings_factory = lambda *a: shown.append(a) or AutoDialog(QDialog.DialogCode.Accepted)
     win.open_parent_area()
     wrong = str(win.gate_overlay.card.question.answer + 1)
     answer_gate(win, wrong)
     assert win.gate_overlay is None and not win.parent_mode  # back on the child page
-    assert shown == []
+    assert win.settings_panels is None
     assert win._dialog_open is False
 
 
 def test_right_gate_answer_shows_the_settings(parts):
     win, controller, path = parts
-    shown = []
-    win.settings_factory = lambda *a: shown.append(a) or AutoDialog(QDialog.DialogCode.Rejected)
     win.open_parent_area()
     answer_gate(win, right_answer(win))
     assert win.parent_mode
-    win.parent_view.toolbar.buttons["levels"].click()  # the settings of before, behind "Pegel"
-    assert len(shown) == 1
-    assert shown[0][0] == path and shown[0][1] is controller.settings
+    win.parent_view.toolbar.buttons["levels"].click()  # the settings, behind "Pegel", beside the pads
+    panels = win.settings_panels
+    assert win.parent_view.panel_key == "levels" and win.parent_view.side_panel.isVisible()
+    assert panels.config_path == path and panels.running is controller.settings
+    assert not win._dialog_open  # nothing modal
 
 
-def test_pads_are_locked_while_the_parents_area_is_open(parts):
+def test_pads_wait_under_the_sum_and_play_beside_an_open_panel(parts):
     win, controller, _path = parts
-    seen = []
-
-    def during():
-        win.press(0)
-        seen.append(controller.recording_pad)
-
     win.open_parent_area()
-    during()  # under the sum
+    win.press(0)  # under the sum: nothing reaches the pads
+    assert controller.recording_pad is None
     answer_gate(win, str(win.gate_overlay.card.question.answer + 1))  # the wrong answer opens nothing
-    win.settings_factory = lambda *_a: AutoDialog(QDialog.DialogCode.Rejected, during)
     win.enter_parent_mode()
     win.parent_view.toolbar.buttons["levels"].click()
-    assert seen == [None, None]
-    win.press(0)  # the dialog is closed: the pads play again
+    win.press(0)  # the panel is open: the pads play on
     assert controller.recording_pad == 0
 
 
@@ -233,7 +217,7 @@ def test_window_apply_settings_toggles_the_launchpad_and_reports_restart(parts):
     assert created == [True, False]
 
 
-# ------------------------------------------------------------- the page
+# ------------------------------------------------------------- the panels
 
 
 @pytest.fixture
@@ -248,14 +232,18 @@ def page(qapp, tmp_path):
 
     path = tmp_path / "settings.toml"
     shipped = (Path(__file__).resolve().parent.parent / "settings.toml").read_text(encoding="utf-8")
-    dialog = SettingsDialog(path, running, apply, template=shipped)
-    yield dialog, path, applied, running
-    dialog.close()
+    panels = SettingsPanels(path, running, apply, template=shipped)
+    panels.build_all()
+    yield panels, path, applied, running
+
+
+def all_labels(panels: SettingsPanels) -> list[QLabel]:
+    return [label for key in SETTINGS_PANELS for label in panels.page(key).findChildren(QLabel)]
 
 
 def test_page_shows_the_hints_for_parents(page):
-    dialog, *_ = page
-    texts = " ".join(label.text() for label in dialog.findChildren(type(dialog.message)))
+    panels, *_ = page
+    texts = " ".join(label.text() for label in all_labels(panels))
     for note in NOTES:
         assert note in texts
     assert "Echo" in texts and "Bluetooth" in texts and "kabelgebundene" in texts
@@ -265,81 +253,132 @@ def test_page_shows_the_hints_for_parents(page):
 def test_page_has_a_row_for_every_current_setting(page):
     from dataclasses import fields
 
-    dialog, *_ = page
-    assert set(dialog.editors) == {f.name for f in fields(Settings)}
+    panels, *_ = page
+    assert set(panels.editors) == {f.name for f in fields(Settings)}
 
 
-def test_restart_rows_are_marked_in_the_label(page):
-    from PySide6.QtWidgets import QFormLayout
+def test_restart_fields_say_so_at_the_field(page):
+    panels, *_ = page
+    assert set(panels.restart_notes) == {"rows", "cols", "sample_rate", "data_dir", "asio"}
+    for note in panels.restart_notes.values():
+        assert note.text() == "wirkt erst nach einem Neustart"
+    # The note sits in the row of its field, right under the field's name.
+    row = panels.editors["rows"].widget.parentWidget()
+    assert panels.restart_notes["rows"].parentWidget() is row
+    names = [label.text() for label in row.findChildren(QLabel) if label.objectName() == "field_label"]
+    assert names == ["Zeilen"]
 
-    dialog, *_ = page
-    labels = set()
-    for form in dialog.findChildren(QFormLayout):
-        for row in range(form.rowCount()):
-            labels.add(form.itemAt(row, QFormLayout.ItemRole.LabelRole).widget().text())
-    marked = {label for label in labels if "wirkt nach Neustart" in label}
-    assert len(marked) == 4  # rows, cols, sample_rate, data_dir (the ASIO switch is a switch row)
-    assert not any("wirkt nach Neustart" in label for label in labels - marked)
 
-
-def test_save_writes_the_file_applies_live_values_and_flags_restart(page):
-    dialog, path, applied, running = page
-    dialog.editors["loop_sync"]._box.setChecked(False)
-    dialog.editors["max_record_seconds"]._dspin.setValue(30)
-    dialog.editors["rows"]._spin.setValue(5)
-    assert dialog.save() is True
+def test_a_switch_saves_at_once_and_is_taken_over(page):
+    panels, path, applied, running = page
+    panels.editors["loop_sync"]._box.setChecked(False)
     stored = load_settings(path)
-    assert (stored.loop_sync, stored.max_record_seconds, stored.rows) == (False, 30.0, 5)
-    assert applied[0] == stored
-    assert dialog.message.text() == "Gespeichert, wirkt nach Neustart: Zeilen"
+    assert stored.loop_sync is False and applied[-1] == stored
+    assert panels.message == "Gespeichert: Loops im Takt halten" and panels.level == "ok"
     # The comments of the shipped template are in the new file.
     assert "Wirkt sofort." in path.read_text(encoding="utf-8")
+    assert running.loop_sync is True  # the running settings object itself is not changed
+
+
+def test_a_number_is_saved_once_after_the_pause_not_on_every_step(page):
+    panels, path, applied, _running = page
+    spin = panels.editors["max_record_seconds"]._dspin
+    for value in (20, 25, 30):
+        spin.setValue(value)
+    assert not path.exists() and applied == []  # nothing written while the number moves
+    QTest.qWait(NUMBER_PAUSE_MS + 200)
+    assert load_settings(path).max_record_seconds == 30.0 and len(applied) == 1
+    spin.editingFinished.emit()  # leaving the field afterwards writes nothing new
+    assert len(applied) == 1
+
+
+def test_a_number_is_saved_when_the_field_is_left(page):
+    panels, path, applied, running = page
+    panels.editors["rows"]._spin.setValue(5)
+    panels.editors["rows"]._spin.editingFinished.emit()
+    assert load_settings(path).rows == 5 and len(applied) == 1
+    assert panels.message == "Gespeichert, wirkt nach Neustart: Zeilen" and panels.level == "warning"
+    assert "jetzt noch: 3" in panels.restart_notes["rows"].text()
     assert running.rows == 3
 
 
 def test_refused_value_is_shown_and_nothing_is_written_or_applied(page):
-    dialog, path, applied, _running = page
-    dialog.editors["data_dir"]._edit.setText("   ")
-    assert dialog.save() is False
-    assert "data_dir" in dialog.message.text()
-    assert not path.exists()
-    assert applied == []
+    panels, path, applied, _running = page
+    edit = panels.editors["data_dir"]._edit
+    edit.setText("   ")
+    edit.editingFinished.emit()
+    assert not path.exists() and applied == []
+    assert panels.level == "error" and "„Datenordner“" in panels.message
+    assert "data_dir" not in panels.message and str(path) not in panels.message  # no keys, no paths
+    assert edit.text() == "   "  # the field keeps what was typed until it is corrected
+    panels.editors["loop_sync"]._box.setChecked(False)  # another field saves, the refusal stays
+    assert panels.level == "error" and load_settings(path).loop_sync is False
+    edit.setText("daten")
+    edit.editingFinished.emit()
+    assert load_settings(path).data_dir == Path("daten") and panels.level != "error"
+
+
+def test_two_numbers_that_do_not_fit_together_are_refused_by_name(page):
+    panels, path, applied, _running = page
+    spin = panels.editors["grid_bpm_min"]._dspin
+    spin.setValue(250)
+    spin.editingFinished.emit()
+    assert not path.exists() and applied == []
+    assert "„Langsamstes Tempo für den Takt“" in panels.message
+    assert "„Schnellstes Tempo für den Takt“" in panels.message and "grid_bpm" not in panels.message
+
+
+def test_a_damaged_file_is_never_overwritten(page):
+    panels, path, applied, _running = page
+    path.write_text("rows = [kaputt", encoding="utf-8")
+    panels.editors["fullscreen"]._box.setChecked(True)
+    assert path.read_text(encoding="utf-8") == "rows = [kaputt" and applied == []
+    assert panels.level == "error" and "beschädigt" in panels.message and "ungültiges TOML" in panels.message
 
 
 def test_auto_latency_roundtrip(page):
-    dialog, path, applied, _running = page
-    editor = dialog.editors["latency_ms"]
+    panels, path, applied, _running = page
+    editor = panels.editors["latency_ms"]
     assert editor.value() == "auto"
     editor._manual.setChecked(True)
     editor._dspin.setValue(90)
-    assert dialog.save()
+    editor._dspin.editingFinished.emit()
     assert load_settings(path).latency_ms == 90.0
     editor._auto.setChecked(True)
-    assert dialog.save()
     assert load_settings(path).latency_ms is None
     assert applied[-1].latency_ms is None
 
 
-def test_pending_restart_values_are_shown_when_the_page_opens_again(page, qapp):
-    dialog, path, applied, running = page
-    dialog.editors["cols"]._spin.setValue(7)
-    assert dialog.save()
-    again = SettingsDialog(path, running, lambda new: [], template=None)
-    assert "Spalten" in again.message.text()
+def test_pending_restart_values_are_shown_when_the_panel_opens_again(page, qapp):
+    panels, path, _applied, running = page
+    panels.editors["cols"]._spin.setValue(7)
+    panels.editors["cols"]._spin.editingFinished.emit()
+    again = SettingsPanels(path, running, lambda new: [], template=None)
+    again.page("system")
+    assert "gespeichert" in again.restart_notes["cols"].text()
+    assert "jetzt noch: 4" in again.restart_notes["cols"].text()
     assert again.editors["cols"]._spin.value() == 7
-    again.close()
 
 
 def test_later_packages_add_a_field_with_one_line(qapp, tmp_path, monkeypatch):
-    monkeypatch.setattr(settings_page, "FIELDS", list(settings_page.FIELDS))
+    monkeypatch.setattr(settings_panels, "FIELDS", list(settings_panels.FIELDS))
     register_field(Field("fullscreen_hint", "Beispiel", "bool"), before="rows")
-    keys = [f.key for f in settings_page.FIELDS]
+    keys = [f.key for f in settings_panels.FIELDS]
     assert keys.index("fullscreen_hint") == keys.index("rows") - 1
     with pytest.raises(ValueError):
         register_field(Field("rows", "doppelt", "int"))
+    assert settings_panels.panel_of("fullscreen_hint") == "system"  # a field no panel names: "System"
 
 
 def test_bool_fields_are_toggle_switches(page):
-    dialog, *_ = page
-    boxes = {f.key for f in settings_page.FIELDS if f.kind == "bool"}
-    assert boxes and all(isinstance(dialog.editors[k].widget, ToggleSwitch) for k in boxes)
+    panels, *_ = page
+    boxes = {f.key for f in settings_panels.FIELDS if f.kind == "bool"}
+    assert boxes and all(isinstance(panels.editors[k].widget, ToggleSwitch) for k in boxes)
+
+
+def test_no_internal_key_in_any_text_of_the_panels(page):
+    panels, *_ = page
+    texts = " ".join(label.text() for label in all_labels(panels))
+    for key in ("sample_rate", "data_dir", "rows", "cols", "stretch_engine", "rubberband", "max_level_db",
+                "latency_ms", "audio_hostapi", "settings.toml"):
+        assert key not in texts, key

@@ -34,7 +34,7 @@ from loopstation import export as ex
 from loopstation.controller import Controller
 from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
 from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardGrid, scrolled
-from loopstation.gui.settings_page import ToggleSwitch
+from loopstation.gui.settings_panels import ToggleSwitch
 from loopstation.gui.widgets import (
     ACCENT_GRAY,
     ACCENT_GREEN,
@@ -348,16 +348,16 @@ class ExportPage(QWidget):
         self.length_label.setWordWrap(True)
         self.frames_label = self._dim("")
         self.frames_label.setWordWrap(False)
-        self.frames_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        self.frames_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         length_layout.addWidget(self.length_label, 1, 0)
-        length_layout.addWidget(self.frames_label, 1, 1)
+        length_layout.addWidget(self.frames_label, 2, 0)
         length_layout.setColumnStretch(0, 1)
         layout.addWidget(length)
 
         layout.addSpacing(6)
         layout.addWidget(self._heading("Welche Pads?"))
-        pads = QHBoxLayout()
-        pads.setSpacing(20)
+        pads = QVBoxLayout()  # one under the other: the page lives in a narrow side panel
+        pads.setSpacing(6)
         self.running_count = self._dim("", 12.5)
         self.all_count = self._dim("", 12.5)
         self.scope_running, box = self._radio("Nur was gerade loopt", self.running_count, True)

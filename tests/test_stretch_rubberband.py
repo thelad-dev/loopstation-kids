@@ -238,11 +238,18 @@ def test_controller_uses_the_chosen_engine(tmp_path, clock, monkeypatch):
 
 
 def test_parents_page_shows_the_engine_choice_and_why(qapp, tmp_path, no_rubberband):
-    from loopstation.gui.settings_page import SettingsDialog
+    from loopstation.config import load_settings
+    from loopstation.gui.settings_panels import SettingsPanels
 
-    dialog = SettingsDialog(tmp_path / "settings.toml", make_settings(tmp_path), lambda s: [])
-    editor = dialog.editors["stretch_engine"]
-    assert [editor._combo.itemText(i) for i in range(editor._combo.count())] == list(STRETCH_ENGINES)
-    assert "nicht installiert" in dialog._engine_hint.text()
-    editor._combo.setCurrentText("simple")
-    assert dialog._engine_hint.text() == engine_notice("simple")
+    path = tmp_path / "settings.toml"
+    panels = SettingsPanels(path, make_settings(tmp_path), lambda s: [])
+    panels.page("system")
+    editor = panels.editors["stretch_engine"]
+    combo = editor._combo
+    assert [combo.itemData(i) for i in range(combo.count())] == list(STRETCH_ENGINES)
+    assert [combo.itemText(i) for i in range(combo.count())] == ["Automatisch", "Rubber Band", "Einfach"]
+    assert "nicht installiert" in panels.engine_hint.text()
+    combo.setCurrentIndex(combo.findData("simple"))
+    assert panels.engine_hint.text() == engine_notice("simple")
+    assert load_settings(path).stretch_engine == "simple"  # saved at once
+

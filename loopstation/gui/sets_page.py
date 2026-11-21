@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPaintEvent, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPaintEvent, QPen
 from PySide6.QtWidgets import (
     QAbstractButton,
     QDialog,
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QRadioButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -31,7 +32,7 @@ from PySide6.QtWidgets import (
 from loopstation import sets
 from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
-from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardGrid, CurrentPageStack, scrolled
+from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardGrid, CurrentPageStack, fitted_font, scrolled
 from loopstation.gui.widgets import (
     ACCENT_GRAY,
     ACCENT_ORANGE,
@@ -104,7 +105,7 @@ class TabButton(QAbstractButton):
         self.setText(text)
         self.setCheckable(True)
         self.setMinimumHeight(52)
-        self.setFixedWidth(300)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)  # the two share the row
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
@@ -120,12 +121,10 @@ class TabButton(QAbstractButton):
         painter.setPen(Qt.PenStyle.NoPen if active else QPen(QColor("#3A3A41"), 1.5))
         painter.drawRoundedRect(rect, 16, 16)
         color = QColor("#111114") if active else QColor(TEXT)
-        font = painter.font()
-        font.setPointSize(15)
-        font.setBold(True)
+        icon_size, gap = 24, 12
+        font = fitted_font(self.text(), rect.width() - icon_size - gap - 20, 20, QFont.Weight.Bold, 13)
         painter.setFont(font)
         width = QFontMetrics(font).horizontalAdvance(self.text())
-        icon_size, gap = 24, 12
         left = rect.center().x() - (icon_size + gap + width) / 2
         icon_rect = QRectF(left, rect.center().y() - icon_size / 2, icon_size, icon_size)
         draw_icon(painter, self.kind, icon_rect, color)
@@ -249,9 +248,8 @@ class SetsPage(QWidget):
         self.open_tab.clicked.connect(weak_slot(self.show_tab, "open"))
         tabs = QHBoxLayout()
         tabs.setSpacing(16)
-        tabs.addWidget(self.save_tab)
-        tabs.addWidget(self.open_tab)
-        tabs.addStretch(1)
+        tabs.addWidget(self.save_tab, 1)
+        tabs.addWidget(self.open_tab, 1)
 
         self.stack = CurrentPageStack()
         self.stack.addWidget(self._build_save_page())
@@ -278,6 +276,7 @@ class SetsPage(QWidget):
         layout.setContentsMargins(24, 14, 24, 14)
         layout.setSpacing(5)
         heading = QLabel(title)
+        heading.setWordWrap(True)
         heading.setStyleSheet("font-size: 21px; font-weight: bold;")
         if title:
             layout.addWidget(heading)
@@ -359,8 +358,9 @@ class SetsPage(QWidget):
         form.addWidget(self.target_label)
         form.addStretch(1)
 
+        # An action, not the saving of settings (those save themselves): its word says what it makes.
         self.save_button = BigButton(
-            "check", "Speichern", QColor(PARENT_ACCENT), checkable=True, min_height=56, font_pt=13)
+            "check", "Als Set sichern", QColor(PARENT_ACCENT), checkable=True, min_height=56, font_pt=13)
         self.save_button.setChecked(True)  # filled: the one main action
         self.save_button.clicked.connect(self._save_clicked)
         self.cancel_button = BigButton("close", "Abbrechen", ACCENT_GRAY, min_height=56, font_pt=13)

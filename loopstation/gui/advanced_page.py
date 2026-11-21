@@ -18,6 +18,7 @@ from PySide6.QtCore import QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QHideEvent, QIcon, QPainter, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -33,7 +34,7 @@ from loopstation.gui.grid_panel import format_seconds
 from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
 from loopstation.gui.parent_nav import PAGE_STYLE, CardGrid, dim_label, scrolled
-from loopstation.gui.settings_page import ToggleSwitch
+from loopstation.gui.settings_panels import ToggleSwitch
 from loopstation.gui.trim_card import TrimCard
 from loopstation.gui.waveform import WaveformWidget
 from loopstation.gui.widgets import TEXT_DIM, BigButton, weak_slot
@@ -81,7 +82,7 @@ class AdvancedPage(QWidget):
         self.setStyleSheet(
             PAGE_STYLE
             + "QPushButton#secondary { color: #F2F2F2; background: #26262B; border: 1.5px solid #3A3A41; "
-            "border-radius: 12px; font-size: 16px; font-weight: 700; min-height: 48px; padding: 0 18px; } "
+            "border-radius: 12px; font-size: 15px; font-weight: 700; min-height: 48px; padding: 0 8px; } "
             "QPushButton#secondary:disabled { color: #5A5A60; border-color: #2C2C31; } "
             "QRadioButton::indicator { width: 18px; height: 18px; border-radius: 11px; "
             "border: 2px solid #6E6E75; background: #1B1B1F; } "
@@ -112,6 +113,7 @@ class AdvancedPage(QWidget):
     @staticmethod
     def _heading(text: str, size: int = 15) -> QLabel:
         label = QLabel(text)
+        label.setWordWrap(True)  # the page lives in a narrow side panel
         label.setStyleSheet(f"font-size: {size}px; font-weight: bold;")
         return label
 
@@ -125,6 +127,7 @@ class AdvancedPage(QWidget):
         picker.setSpacing(10)
         label = QLabel("Pad wählen")
         label.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 14px; font-weight: bold;")
+        self.picker_label = label
         picker.addWidget(label)
         self.pad_chips: list[QPushButton] = []
         for pad in range(self.controller.pad_count):
@@ -184,20 +187,18 @@ class AdvancedPage(QWidget):
             button.setObjectName("secondary")
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
-        left = QWidget()
-        left_row = QHBoxLayout(left)
-        left_row.setContentsMargins(0, 0, 0, 0)
-        left_row.setSpacing(10)
-        for button in (self.marker_add, self.marker_delete, self.listen_button):
-            left_row.addWidget(button)
-        left_row.addStretch(1)
-        right = QWidget()
-        right_row = QHBoxLayout(right)
-        right_row.setContentsMargins(0, 0, 0, 0)
-        right_row.addStretch(1)
-        right_row.addWidget(self.stretch_button)
-        # Side by side on a wide page; the stretch button goes below on a narrow one.
-        return CardGrid([[left, right]], ratio=(3, 2), gap=10, spacing=10)
+        # Rows of two: the page lives in a side panel next to the pads.
+        holder = QWidget()
+        grid = QGridLayout(holder)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(10)
+        grid.addWidget(self.marker_add, 0, 0)
+        grid.addWidget(self.marker_delete, 0, 1)
+        grid.addWidget(self.listen_button, 1, 0)
+        grid.addWidget(self.stretch_button, 2, 0, 1, 2)  # the longest word gets the whole row
+        for button in (self.marker_add, self.marker_delete, self.listen_button, self.stretch_button):
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        return holder
 
     def _snap_row(self) -> QWidget:
         """Switch: a marker snaps to the nearest real transient when it is set (mockup 13)."""
@@ -362,6 +363,12 @@ class AdvancedPage(QWidget):
         return path
 
     # ------------------------------------------------------------- actions
+
+    def set_picker_visible(self, visible: bool) -> None:
+        """Show or hide "Pad wählen" (the side panel "Loop" follows the pad chosen in the parents' view)."""
+        self.picker_label.setVisible(visible)
+        for chip in self.pad_chips:
+            chip.setVisible(visible)
 
     def choose_pad(self, pad: int) -> None:
         """Show the loop on ``pad``."""

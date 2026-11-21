@@ -1,7 +1,8 @@
-"""The parents' pad view (Loopstation 2, mockup L2-02, variant A): the same window in another state.
+"""The parents' pad view (Loopstation 2, mockups L2-02 and L2-05, variant A): one window, another state.
 
 A header (Kinder|Eltern switch, the bar chip, Zurück / Wieder / Still, the volume), a tool bar on
-the left, the pads as wide tiles and a folded detail line for the chosen pad below them.
+the left, the pads as wide tiles and a folded detail line for the chosen pad below them. A tool opens
+its side panel (``SidePanelHost``) to the right of the pads; the pads get narrower and stay playable.
 
 The view only reads the controller. What a tap does goes out through signals that the main window
 handles, so a tile acts exactly like a pad of the child page in the mode "Spielen". The colour of a
@@ -24,6 +25,7 @@ from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
 from loopstation.gui.parent_nav import ACTIVE_FILL, CARD_BORDER, CARD_FILL, fitted_font, paint_icon
 from loopstation.gui.pulse_strip import DOT_OFF, DOT_ON
+from loopstation.gui.side_panel import SidePanelHost
 from loopstation.gui.volume_slider import FILL, TRACK, VolumeSlider, volume_to_position
 from loopstation.gui.waveform import peak_columns
 from loopstation.gui.widgets import BACKGROUND, PAD_COLORS, SURFACE, TEXT, TEXT_DIM, weak_slot
@@ -57,6 +59,10 @@ WAVE_CENTER = 0.565  # the mini wave is centred a little below the middle of the
 WAVE_SHARE = 0.3  # the loudest bar spans this share of the tile height
 WAVE_MOST = 110.0  # the mini wave never gets taller than this (large windows)
 WAVE_CACHE_SIZE = 256
+PANEL_GAP = 24  # between the pads and the side panel
+PANEL_TOP = HEADER_TOP + HEADER_HEIGHT + 20
+PANEL_SHARE = 0.42  # of the room right of the tool bar (480 px at 1280 x 800, mockup L2-05)
+PANEL_WIDTH = (380, 560)  # least, most
 
 PANEL = QColor(CARD_FILL)
 BORDER = QColor(CARD_BORDER)
@@ -69,9 +75,10 @@ SOURCE_WORDS = {
     "parent_bpm": "von Hand eingestellt",
     "free_pad": "aus freiem Pad",
 }
-KEYS_HELP = "Pfeile wählen · Leertaste spielt · L Loop · R nimmt auf · Entf löscht · F1 Kinderseite"
+KEYS_HELP = ("Pfeile wählen · Leertaste spielt · L Loop · R nimmt auf · Entf löscht · Enter Loop-Leiste · "
+             "Esc schließt die Leiste · F1 Kinderseite")
 
-# (settings page key, icon, word) of the tool bar; the gap falls after the first four.
+# (tool key, icon, word) of the tool bar; the gap falls after the first four.
 TOOLS = (
     ("pads", "pads", "Pads"),
     ("changes", "history", "Verlauf"),
@@ -79,7 +86,7 @@ TOOLS = (
     ("export", "download", "Export"),
     ("levels", "sliders", "Pegel"),
     ("devices", "headphones", "Geräte"),
-    ("advanced", "gear", "System"),
+    ("system", "gear", "System"),
 )
 TOOL_GROUP = 4
 
@@ -135,6 +142,11 @@ class WaveCache:
         while len(self._waves) > WAVE_CACHE_SIZE:
             self._waves.popitem(last=False)
         return wave
+
+
+def loop_line(index: int) -> str:
+    """The line under the title of the panel "Loop"."""
+    return f"Pad {index + 1} · Welle, Kürzen, Marker, Sichern"
 
 
 def length_text(wave: TileWave | None, free: bool, grid: int | None, rate: int) -> str:
@@ -419,7 +431,7 @@ class ToolButton(QAbstractButton):
         self.key = key
         self.icon_name = icon
         self.setText(word)
-        self.setCheckable(key == "pads")
+        self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setAccessibleName(word)
@@ -449,7 +461,10 @@ class ToolButton(QAbstractButton):
 
 
 class ToolBar(QWidget):
-    """The left column: Pads, Verlauf, Sets, Export | Pegel, Geräte, System; "Tasten ?" at the bottom."""
+    """The left column: Pads, Verlauf, Sets, Export | Pegel, Geräte, System; "Tasten ?" at the bottom.
+
+    The lit tool is the page shown: "Pads" while no side panel is open, else the tool of the panel.
+    """
 
     STEP = 74  # from one tool to the next (mockup)
     ITEM = 66  # height of a tool
@@ -464,14 +479,17 @@ class ToolBar(QWidget):
             button = ToolButton(key, icon, word, self)
             button.setVisible(key != "sets" or with_sets)
             self.buttons[key] = button
-        self.buttons["pads"].setChecked(True)
-        self.buttons["pads"].clicked.connect(weak_slot(self._keep_pads_lit))
+        self.current: str | None = None
         self.keys_button = ToolButton("keys", "keyboard", "Tasten ?", self)
-        self.keys_button.setCheckable(True)
         self._separator_y: float | None = None
+        self.set_current(None)
 
-    def _keep_pads_lit(self) -> None:
-        self.buttons["pads"].setChecked(True)  # the pads are the page this view shows
+    def set_current(self, key: str | None) -> None:
+        """Light the tool ``key`` (None: "Pads"); a tap toggles a button, this sets them all right again."""
+        self.current = key
+        lit = key or "pads"
+        for name, button in self.buttons.items():
+            button.setChecked(name == lit)
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt API
         super().resizeEvent(event)
@@ -729,12 +747,16 @@ class TileGrid(QWidget):
 class DetailLine(QWidget):
     """The chosen pad in one folded line: its number, "Pad N" and a line of facts.
 
-    The unfoldable detail panel (loop, pad, recording) follows deliberately in the next step
-    (part 3), the tool side panels in part 2; this step is the parents' mode itself.
+    A tap (``clicked``) opens the side panel "Loop" of the pad (wave, trim, markers, saving) until the
+    unfoldable detail panel replaces it (part 3).
     """
+
+    clicked = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAccessibleName("Loop des Pads")
         self.number = 0
         self.color = "white"
         self.title = ""
@@ -746,6 +768,25 @@ class DetailLine(QWidget):
         if content != (self.number, self.color, self.title, self.info, self.help):
             self.number, self.color, self.title, self.info, self.help = content
             self.update()
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt API
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+
+    def help_lines(self, room: float) -> tuple[list[str], QFont]:
+        """The key help in one line, or in two or three when it does not fit ``room`` px (a panel is open)."""
+        parts = self.help.split(" · ")
+        lines: list[str] = [self.help]
+        font = _font(14, QFont.Weight.Medium)
+        for count, pixels in ((1, 14), (2, 13), (3, 12)):
+            size = -(-len(parts) // count)  # parts per line, rounded up
+            lines = [" · ".join(parts[i:i + size]) for i in range(0, len(parts), size)]
+            longest = max(lines, key=QFontMetrics(_font(pixels, QFont.Weight.Medium)).horizontalAdvance)
+            font = fitted_font(longest, room, pixels, QFont.Weight.Medium, 10)
+            if QFontMetrics(font).horizontalAdvance(longest) <= room:
+                return lines, font
+        metrics = QFontMetrics(font)
+        return [metrics.elidedText(line, Qt.TextElideMode.ElideRight, int(room)) for line in lines], font
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)
@@ -764,12 +805,16 @@ class DetailLine(QWidget):
         left = badge.right() + 16
         help_width = 0.0
         if self.help:
-            help_font = fitted_font(self.help, rect.width() * 0.5, 14, QFont.Weight.Medium, 11)
-            help_width = min(rect.width() * 0.5, QFontMetrics(help_font).horizontalAdvance(self.help) + 4)
+            lines, help_font = self.help_lines(rect.width() * 0.5)
+            metrics = QFontMetrics(help_font)
+            help_width = max(metrics.horizontalAdvance(line) for line in lines) + 4
             painter.setFont(help_font)
             painter.setPen(LABEL)
-            painter.drawText(QRectF(rect.width() - 20 - help_width, 0, help_width, rect.height()),
-                             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, self.help)
+            height = metrics.height()
+            top = (rect.height() - height * len(lines)) / 2
+            for number, line in enumerate(lines):
+                box = QRectF(rect.width() - 20 - help_width, top + number * height, help_width, height)
+                painter.drawText(box, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, line)
         room = rect.width() - left - 20 - (help_width + 24 if help_width else 0)
         draw_line(painter, QRectF(left, 8, room, 26), self.title, _font(18), TEXT)
         draw_line(painter, QRectF(left, 34, room, 22), self.info, _font(14, QFont.Weight.Normal), TEXT_DIM)
@@ -780,15 +825,19 @@ class DetailLine(QWidget):
 
 
 class ParentView(QWidget):
-    """Header, tool bar, tiles and detail line in one frame of the parents' colour.
+    """Header, tool bar, tiles, detail line and (while a tool is open) its side panel in one frame.
 
     Signals (handled by the main window): ``kids_requested`` (the switch), ``tool_requested(key)``
-    (a settings page key, also "tempo" from the bar chip), ``pad_down(index)`` / ``pad_up(index, inside)``
-    around a press on a start field, ``undo_requested``, ``redo_requested``, ``stop_requested``.
+    (a tool of the bar, also "tempo" from the bar chip and "loop" from the detail line; "pads" and the
+    cross of the panel close it), ``pads_touched`` (a press on a tile), ``pad_down(index)`` /
+    ``pad_up(index, inside)`` around a press on a start field, ``undo_requested``, ``redo_requested``,
+    ``stop_requested``.
     """
 
     kids_requested = Signal()
     tool_requested = Signal(str)
+    pads_touched = Signal()
+    pads_touched = Signal()
     pad_down = Signal(int)
     pad_up = Signal(int, bool)
     undo_requested = Signal()
@@ -807,6 +856,9 @@ class ParentView(QWidget):
         self.toolbar = ToolBar(with_sets, self)
         self.grid = TileGrid(self.rows, self.cols, self)
         self.detail = DetailLine(self)
+        self.side_panel = SidePanelHost(self)
+        self.side_panel.hide()
+        self.side_panel.close_requested.connect(weak_slot(self._tool, "pads"))  # as "Pads" does
         self.mode_switch = self.header.mode_switch
         self.bar_chip = self.header.bar_chip
         self.undo_button = self.header.undo_button
@@ -822,17 +874,42 @@ class ParentView(QWidget):
         self.stop_button.clicked.connect(self.stop_requested)
         self.volume_slider.volumeChanged.connect(controller.set_volume)
         for key, button in self.toolbar.buttons.items():
-            if key != "pads":
-                button.clicked.connect(weak_slot(self._tool, key))
+            button.clicked.connect(weak_slot(self._tool, key))
+        self.detail.clicked.connect(weak_slot(self._tool, "loop"))
         self.toolbar.keys_button.toggled.connect(weak_slot(self._show_keys, pass_signal_args=True))
         for tile in self.tiles:
             tile.chosen.connect(weak_slot(self.select, pass_signal_args=True))
+            tile.chosen.connect(self.pads_touched)
+            tile.chosen.connect(self.pads_touched)
             tile.start_down.connect(self.pad_down)
             tile.start_up.connect(self.pad_up)
         self._colors: dict[int, str] = {}
 
     def _tool(self, key: str) -> None:
+        self.toolbar.set_current(self.panel_key)  # the main window lights the tool it opens
         self.tool_requested.emit(key)
+
+    # ---------------------------------------------------------- side panel
+
+    @property
+    def panel_key(self) -> str | None:
+        """The tool whose side panel is open, or None."""
+        return None if self.side_panel.isHidden() else self.side_panel.key
+
+    def open_panel(self, key: str, icon: str, title: str, line: str, widget: QWidget) -> None:
+        """Show ``widget`` as the side panel of the tool ``key``; the pads move over to make room."""
+        self.side_panel.show_page(key, icon, title, line, widget)
+        self.side_panel.show()
+        self.toolbar.set_current(key)
+        self._layout()
+
+    def close_panel(self) -> None:
+        """Close the side panel: the pads take the whole width again."""
+        if not self.side_panel.isHidden():
+            self.side_panel.hide()
+        self.side_panel.key = None
+        self.toolbar.set_current(None)
+        self._layout()
 
     # -------------------------------------------------------------- choice
 
@@ -840,6 +917,10 @@ class ParentView(QWidget):
         if 0 <= index < len(self.tiles) and index != self.selected:
             self.selected = index
             self._update_tiles()
+            loop = self.side_panel.page("loop") if self.panel_key == "loop" else None
+            if loop is not None and hasattr(loop, "choose_pad"):
+                loop.choose_pad(index)  # the panel "Loop" follows the chosen pad
+                self.side_panel.set_line("loop", loop_line(index))
 
     def move_selection(self, d_row: int, d_col: int) -> None:
         """Arrow keys: one pad further; at the edge the choice stays where it is."""
@@ -859,16 +940,25 @@ class ParentView(QWidget):
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt API
         super().resizeEvent(event)
+        self._layout()
+
+    def _layout(self) -> None:
         width, height = self.width(), self.height()
         self.toolbar.setGeometry(MARGIN_LEFT, MARGIN_TOP, TOOLBAR_WIDTH, height - MARGIN_TOP - MARGIN_BOTTOM)
         left = MARGIN_LEFT + TOOLBAR_WIDTH + TOOLBAR_GAP
         content = width - left - MARGIN_RIGHT
         self.header.setGeometry(left, HEADER_TOP, content, HEADER_HEIGHT)
+        pads = content
+        if not self.side_panel.isHidden():
+            panel = max(PANEL_WIDTH[0], min(PANEL_WIDTH[1], round(content * PANEL_SHARE)))
+            pads = content - panel - PANEL_GAP
+            self.side_panel.setGeometry(left + pads + PANEL_GAP, PANEL_TOP, panel,
+                                        height - MARGIN_BOTTOM - PANEL_TOP)
         detail_top = height - MARGIN_BOTTOM - DETAIL_HEIGHT
-        self.detail.setGeometry(left, detail_top, content, DETAIL_HEIGHT)
+        self.detail.setGeometry(left, detail_top, pads, DETAIL_HEIGHT)
         grid_top = HEADER_TOP + HEADER_HEIGHT + HEADER_GRID_GAP
         grid_height = detail_top - DETAIL_GAP - grid_top
-        self.grid.setGeometry(left - RING, grid_top - RING, content + 2 * RING, grid_height + 2 * RING)
+        self.grid.setGeometry(left - RING, grid_top - RING, pads + 2 * RING, grid_height + 2 * RING)
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
         return QSize(1000, 600)

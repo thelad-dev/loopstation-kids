@@ -557,7 +557,7 @@ def test_the_grid_start_switch_is_a_boolean_setting():
 
 
 def test_the_parents_page_offers_the_grid_start_switch():
-    from loopstation.gui.settings_page import FIELDS
+    from loopstation.gui.settings_panels import FIELDS
 
     assert any(f.key == "free_pad_on_grid" and f.kind == "bool" for f in FIELDS)
 
