@@ -19,6 +19,7 @@ from loopstation.audio.stretch import (
     MarkerStretchError,
     map_back,
     marker_targets,
+    rubberband_status,
     stretch_between_markers,
 )
 from loopstation.config import ConfigError, Settings, parse_settings
@@ -403,6 +404,12 @@ def test_each_stretch_starts_from_the_original_take_not_from_the_last_result(tmp
     assert takes[1] in controller.pad(1).history and original in controller.pad(1).history
 
 
+needs_rubberband = pytest.mark.skipif(
+    not rubberband_status()[0], reason=f"Rubber Band not usable here: {rubberband_status()[1]}"
+)
+
+
+@needs_rubberband
 def test_a_stretched_take_without_its_chain_is_stretched_itself_as_before(tmp_path, clock, monkeypatch):
     controller, _ = on_grid(tmp_path, clock, claps_pad1=(0.54, 1.06))
     original = controller.sample_audio(controller.pad(1).sample)
@@ -433,6 +440,7 @@ def test_a_stretched_take_without_its_chain_is_stretched_itself_as_before(tmp_pa
     again.shutdown()
 
 
+@needs_rubberband
 def test_a_piece_too_far_on_the_original_falls_back_to_stretching_the_take_as_before(
     tmp_path, clock, monkeypatch
 ):
@@ -471,6 +479,7 @@ def test_after_undo_the_earlier_take_still_stretches_from_the_original(tmp_path,
     assert controller.markers(1) == [4000, 8000, 12000]
 
 
+@needs_rubberband
 def test_a_loop_shortened_after_a_stretch_is_stretched_itself(tmp_path, clock, monkeypatch):
     controller, _ = on_grid(tmp_path, clock, claps_pad1=(0.54, 1.06))
     source = controller.sample_audio(controller.pad(1).sample)
@@ -486,6 +495,7 @@ def test_a_loop_shortened_after_a_stretch_is_stretched_itself(tmp_path, clock, m
     assert controller.markers(1) == [4000, 8000]
 
 
+@needs_rubberband
 def test_a_stretch_whose_event_is_archived_is_stretched_itself(tmp_path, clock, monkeypatch):
     settings = make_settings(tmp_path, auto_grid=True)
     store = EventStore(
