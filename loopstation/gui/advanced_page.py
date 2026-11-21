@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from loopstation.controller import Controller
-from loopstation.gui.export_dialog import default_export_dir, save_loop
+from loopstation.gui.export_dialog import CUE_TITLE, default_export_dir, save_loop
 from loopstation.gui.grid_panel import format_seconds
 from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
@@ -222,7 +222,7 @@ class AdvancedPage(QWidget):
         self.cue_switch = ToggleSwitch()
         self.cue_switch.setChecked(self.controller.settings.export_cue_points)
         self.cue_switch.toggled.connect(weak_slot(self.set_cue_points, pass_signal_args=True))
-        cue_name = QLabel("Marker als Cue-Punkte mitschreiben")
+        cue_name = QLabel(CUE_TITLE)
         cue_name.setWordWrap(True)
         cue_name.setStyleSheet("font-size: 16.5px; font-weight: 600;")
         cue_texts = QVBoxLayout()

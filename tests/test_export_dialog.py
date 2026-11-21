@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import soundfile
 from conftest import make_settings
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QWidget
 from test_export import session
 from test_parent_area import AutoDialog
 
 from loopstation.gui.export_dialog import (
+    WORD_JOINER,
     ExportDialog,
     default_export_dir,
     frames_text,
@@ -207,8 +209,18 @@ def test_main_window_offers_the_export_only_behind_the_gate(qapp, tmp_path, cloc
         store.close()
 
 
-
 # ------------------------------------------- scope chosen from what loops now
+
+
+class ShowEvent(QShowEvent):
+    """A show event whose origin the test decides (Qt sets ``spontaneous`` only for its own events)."""
+
+    def __init__(self, spontaneous: bool) -> None:
+        super().__init__()
+        self._spontaneous = spontaneous
+
+    def spontaneous(self) -> bool:
+        return self._spontaneous
 
 
 def silent_session(qapp, tmp_path, clock):
@@ -261,6 +273,12 @@ def test_the_parents_choice_on_the_open_page_is_kept(qapp, tmp_path, clock):
         dialog.bar_chips[16].click()
         dialog.one_shots.setChecked(True)
         assert dialog.scope_running.isChecked() and dialog.bars == 16
+        # The window coming back (minimised and restored) is no new visit: the choice stays.
+        dialog.showEvent(ShowEvent(spontaneous=True))
+        assert dialog.scope_running.isChecked()
+        # A new visit (the area shown again from the navigation) chooses anew from what loops now.
+        dialog.showEvent(ShowEvent(spontaneous=False))
+        assert dialog.scope_all.isChecked()
     finally:
         dialog.close()
 
@@ -297,3 +315,97 @@ def test_every_visit_of_the_kept_export_area_chooses_from_what_loops_then(qapp, 
         assert built[0].scope_all.isChecked() and built[0].running_count.text() == "0 Pads"
     finally:
         dialog.close()
+
+
+# ------------------------------------------------- the preview fits its rows
+
+
+def lowest_painted_row(widget, width, height):
+    """The lowest pixel row that differs from the background when ``widget`` is painted at this size."""
+    widget.resize(width, height)
+    image = widget.grab().toImage()
+    background = image.pixel(width - 1, height - 1)
+    for y in range(height - 1, -1, -1):
+        if any(image.pixel(x, y) != background for x in range(width)):
+            return y
+    return -1
+
+
+def test_the_preview_asks_for_room_for_every_row_and_the_bar_axis(qapp):
+    from loopstation.gui.export_dialog import PreviewRows
+
+    heights = {}
+    for count in range(1, 17):
+        preview = PreviewRows()
+        preview.set_rows([(f"Pad {i + 1}", 1.0, False) for i in range(count)], 8)
+        hint = preview.sizeHint().height()
+        assert preview.minimumSizeHint().height() == hint == preview.minimumHeight()
+        heights[count] = hint
+        if count in (1, 3, 12, 16):
+            # Rows and the axis ("Takt 1 ... 8", the lowest thing painted) lie inside the asked height.
+            lowest = lowest_painted_row(preview, 400, hint + 200)
+            assert hint - 12 <= lowest < hint, (count, lowest, hint)
+    # One more row never makes the preview lower.
+    assert all(heights[n] < heights[n + 1] for n in range(1, 16)), heights
+    assert heights[12] <= 480  # many pads make the rows lower instead of growing without end
+
+
+def test_the_preview_on_the_page_shows_all_rows_without_its_own_scrollbar(qapp, tmp_path, clock):
+    from PySide6.QtWidgets import QScrollArea
+
+    dialog, _ = silent_session(qapp, tmp_path, clock)
+    dialog.resize(940, 640)  # its room inside the parents' area at 1280 x 800
+    dialog.show()  # the page itself may scroll, the preview must not
+    try:
+        qapp.processEvents()
+        assert len(dialog.preview.rows) == 3
+        assert dialog.preview.height() >= dialog.preview.sizeHint().height()
+        page_scroll = next(s for s in dialog.findChildren(QScrollArea) if s.parent() is dialog)
+        content = page_scroll.widget()
+        # No widget between the preview and the scrolled page content cuts it off.
+        widget = dialog.preview.parentWidget()
+        while widget is not content:
+            shown = widget.rect()
+            corner = dialog.preview.mapTo(widget, dialog.preview.rect().topLeft())
+            assert shown.contains(corner) and shown.contains(
+                corner + dialog.preview.rect().bottomRight()), widget
+            widget = widget.parentWidget()
+        # The page's own scroll area is the only one around the preview.
+        around = [s for s in dialog.findChildren(QScrollArea) if s.isAncestorOf(dialog.preview)]
+        assert around == [page_scroll]
+    finally:
+        dialog.close()
+
+
+def test_the_cue_switch_title_does_not_break_inside_cue_punkte(qapp, tmp_path, clock):
+    from PySide6.QtWidgets import QLabel
+
+    dialog, _ = make(qapp, tmp_path, clock)
+    title = next(w for w in dialog.findChildren(QLabel) if "Cue" in w.text() and "mitschreiben" in w.text())
+    # The words are joined so that a narrow column breaks before "Cue-Punkte", not after "Cue-".
+    assert title.text().replace(WORD_JOINER, "") == "Marker als Cue-Punkte mitschreiben"
+    from PySide6.QtGui import QTextLayout
+
+    width = title.fontMetrics().horizontalAdvance("Marker als Cue-")
+    layout = QTextLayout(title.text(), title.font())
+    layout.beginLayout()
+    lines = []
+    while True:
+        line = layout.createLine()
+        if not line.isValid():
+            break
+        line.setLineWidth(width + 4)
+        lines.append(title.text()[line.textStart():line.textStart() + line.textLength()])
+    layout.endLayout()
+    assert not any(part.rstrip().endswith("Cue-") for part in lines), lines
+
+
+def test_the_erweitert_page_names_the_cue_switch_the_same_way(qapp, tmp_path, clock):
+    from PySide6.QtWidgets import QLabel
+
+    from loopstation.gui.advanced_page import AdvancedPage
+
+    controller, _ = session(tmp_path, clock)
+    page = AdvancedPage(controller, export_dir=tmp_path / "out")
+    titles = [w.text() for w in page.findChildren(QLabel) if "mitschreiben" in w.text()]
+    assert titles == [f"Marker als Cue-{WORD_JOINER}Punkte mitschreiben"]

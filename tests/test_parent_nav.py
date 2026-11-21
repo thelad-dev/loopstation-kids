@@ -293,7 +293,7 @@ def test_the_scroll_bars_of_the_areas_are_the_dark_ones(parts):
     for key in ("advanced", "sets", "export"):  # the areas also bring the style when they stand alone
         assert DARK_SCROLLBAR_QSS in dialog.page(key).styleSheet(), key
     areas = [a for key in dialog.page_keys for a in dialog.page(key).findChildren(QScrollArea)]
-    assert len(areas) >= 5
+    assert len(areas) >= 4  # the export preview grows with its rows and has no scroll area of its own
 
 
 def test_two_columns_on_a_wide_page_and_one_on_a_narrow_page(qapp):

@@ -7,13 +7,14 @@ the checks live in ``loopstation.export``.
 
 from __future__ import annotations
 
+import math
 import time
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, QStandardPaths, Qt
+from PySide6.QtCore import QPointF, QRectF, QSize, QStandardPaths, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPaintEvent, QPen, QShowEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -23,7 +24,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QRadioButton,
-    QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -45,6 +46,8 @@ from loopstation.gui.widgets import (
 )
 
 NBSP = " "
+WORD_JOINER = "\u2060"  # no line break here, e.g. after the hyphen of "Cue-Punkte"
+CUE_TITLE = f"Marker als Cue-{WORD_JOINER}Punkte mitschreiben"  # also on the Erweitert page
 CHIP_FILL = "#2F3550"  # selected chip, as in the parents' area mockups
 CUSTOM_BARS = 0  # id of the "..." chip: the number comes from the spin box
 EXPORT_FOLDER = ("Loopstation", "Export")
@@ -108,10 +111,13 @@ def save_loop(
 class PreviewRows(QWidget):
     """Which pads repeat how often over the bars (green = loop, grey = one-shot at the start)."""
 
-    ROW = 52
+    ROW = 52  # each of the first ``ROOMY_ROWS`` rows
+    ROOMY_ROWS = 4
+    EXTRA_ROW = 26  # each further row adds this much, so the rows get lower but the preview never shrinks
+    BLOCK = 28  # height of a pass block in a roomy row
     LABEL_W = 56
     TOP = 14
-    BOTTOM = 36
+    BOTTOM = 18  # the bar axis ("Takt 1 ... N") below the rows
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -122,25 +128,45 @@ class PreviewRows(QWidget):
 
     def set_rows(self, rows: list[tuple[str, float, bool]], bars: int) -> None:
         self.rows, self.bars = rows, max(1, bars)
-        self.setMinimumHeight(self.TOP + self.BOTTOM + max(1, len(rows)) * self.ROW)
+        self.setMinimumHeight(self._height())
+        self.updateGeometry()
         self.update()
+
+    @property
+    def row_height(self) -> float:
+        """52 px for up to four rows; beyond that the rows share the room and get lower (towards 26 px)."""
+        count = max(1, len(self.rows))
+        extra = max(0, count - self.ROOMY_ROWS)
+        return (min(count, self.ROOMY_ROWS) * self.ROW + extra * self.EXTRA_ROW) / count
+
+    def _height(self) -> int:
+        """Every row and the axis below them: grows with each row, the page scrolls."""
+        return self.TOP + math.ceil(max(1, len(self.rows)) * self.row_height) + self.BOTTOM
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API
+        return QSize(self.minimumWidth(), self._height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
+        return self.sizeHint()
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         left, right = self.LABEL_W, self.width() - 4
         bar_w = (right - left) / self.bars
-        bottom = self.TOP + len(self.rows) * self.ROW
+        row_h = self.row_height
+        block = min(self.BLOCK, row_h - 8)
+        bottom = self.TOP + len(self.rows) * row_h
         small = QFont()
         small.setPointSizeF(8.5)
         label = QFont()
         label.setPointSizeF(9.5)
         label.setBold(True)
         for index, (name, length, one_shot) in enumerate(self.rows):
-            top = self.TOP + index * self.ROW
+            top = self.TOP + index * row_h
             painter.setFont(label)
             painter.setPen(TEXT)
-            painter.drawText(QRectF(0, top, left - 6, 28), Qt.AlignmentFlag.AlignVCenter, name)
+            painter.drawText(QRectF(0, top, left - 6, block), Qt.AlignmentFlag.AlignVCenter, name)
             painter.setPen(Qt.PenStyle.NoPen)
             color = QColor("#8E8E93" if one_shot else ACCENT_GREEN.name())
             color.setAlphaF(0.85)
@@ -149,7 +175,7 @@ class PreviewRows(QWidget):
             while position < self.bars - 1e-9:
                 end = min(self.bars, position + length)
                 x0 = left + position * bar_w
-                painter.drawRoundedRect(QRectF(x0, top, max(2.0, (end - position) * bar_w - 2), 28), 6, 6)
+                painter.drawRoundedRect(QRectF(x0, top, max(2.0, (end - position) * bar_w - 2), block), 6, 6)
                 if one_shot:
                     break
                 position += length
@@ -404,16 +430,11 @@ class ExportPage(QWidget):
         preview_layout.setContentsMargins(22, 18, 22, 12)
         preview_layout.addWidget(self._heading("Vorschau: was wiederholt wird", 17))
         self.preview = PreviewRows()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setWidget(self.preview)
-        scroll.setMinimumHeight(150)  # the page scrolls; the preview keeps a size that shows its own bar
-        scroll.viewport().setAutoFillBackground(False)
-        self.preview.setAutoFillBackground(False)
-        preview_layout.addWidget(scroll, 1)
+        self.preview.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        preview_layout.addWidget(self.preview)  # as tall as its rows ask; the page scrolls
         self.preview_note = self._dim("", 11.5)
         preview_layout.addWidget(self.preview_note)
+        preview_layout.addStretch(1)  # spare room goes below the note, not between the axis and the note
         column.addWidget(preview, 1)
 
         single = self._card()
@@ -448,7 +469,7 @@ class ExportPage(QWidget):
         self.cue_switch.setChecked(self.controller.settings.export_cue_points)
         self.cue_switch.toggled.connect(self.set_cue_points)
         single_layout.addLayout(self._switch_row(
-            self.cue_switch, "Marker als Cue-Punkte mitschreiben",
+            self.cue_switch, CUE_TITLE,
             self._dim("sonst als Begleitdatei; das Sichern scheitert daran nie", 12)))
         self.loop_message = QLabel("")
         self.loop_message.setWordWrap(True)
