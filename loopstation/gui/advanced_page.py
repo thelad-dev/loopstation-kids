@@ -34,7 +34,7 @@ from loopstation.gui.export_dialog import CUE_TITLE, default_export_dir, save_lo
 from loopstation.gui.grid_panel import format_seconds
 from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
-from loopstation.gui.parent_nav import PAGE_STYLE, CardGrid, dim_label, scrolled
+from loopstation.gui.parent_nav import PAGE_STYLE, CardGrid, breakable, dim_label, scrolled
 from loopstation.gui.settings_panels import ToggleSwitch
 from loopstation.gui.trim_card import TrimCard
 from loopstation.gui.waveform import WaveformWidget
@@ -412,7 +412,8 @@ class AdvancedPage(QWidget):
         self._update_marker_buttons()
         self.trim_card.refresh()
         stamp = self._stamp()
-        self.target_label.setText(f"Ziel: {self.export_dir / f'pad{self.pad + 1:02d}_{stamp}.wav'}")
+        target = self.export_dir / f"pad{self.pad + 1:02d}_{stamp}.wav"
+        self.target_label.setText(f"Ziel: {breakable(target)}")
         self.save_button.setEnabled(controller.pad(self.pad).sample is not None)
 
     def _show_loop(self) -> None:

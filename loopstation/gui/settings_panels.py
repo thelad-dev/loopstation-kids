@@ -63,7 +63,7 @@ from loopstation.gui.devices_page import HostApiList, platform_name
 from loopstation.gui.grid_panel import GridPanel
 from loopstation.gui.level_panel import PANEL_KEYS, LevelPanel
 from loopstation.gui.parent_gate import PARENT_ACCENT
-from loopstation.gui.parent_nav import IconLabel, card, dim_label, qicon, scrolled
+from loopstation.gui.parent_nav import IconLabel, breakable, card, dim_label, qicon, scrolled
 from loopstation.gui.peak_meter import PeakMeter
 from loopstation.gui.side_panel import flatten_cards
 from loopstation.gui.tempo_card import MetronomeCard, TempoCard
@@ -620,7 +620,7 @@ class SettingsPanels(QObject):
             return
         saved, running = self._values.get(key), getattr(self.running, key)
         if saved != running:
-            shown = str(running)
+            shown = breakable(running)
             note.setText(f"gespeichert, {RESTART_TEXT} (jetzt noch: {shown})")
         else:
             note.setText(RESTART_NOTE)
