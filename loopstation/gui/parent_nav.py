@@ -68,6 +68,13 @@ _SVG_ICONS = {
     "info": ["M12 2a10 10 0 1 0 0.01 0", "M12 16v-4", "M12 8h.01"],
     "alert": ["M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z",
               "M12 9v4", "M12 17h.01"],
+    # The parents' pad view (mockup L2-02): its tool bar, the mode switch and the bar chip.
+    "pads": ["M4 4h6v6H4z", "M14 4h6v6h-6z", "M4 14h6v6H4z", "M14 14h6v6h-6z"],
+    "gear": ["M12 8.5a3.5 3.5 0 1 0 0.01 0", "M12 2v3", "M12 19v3", "M2 12h3", "M19 12h3",
+             "M4.9 4.9l2.1 2.1", "M17 17l2.1 2.1", "M4.9 19.1l2.1-2.1", "M17 7l2.1-2.1"],
+    "keyboard": ["M2 6h20v12H2z", "M6 10h.01", "M10 10h.01", "M14 10h.01", "M18 10h.01", "M7 14h10"],
+    "person": ["M12 3.5a3.5 3.5 0 1 0 0.01 0", "M5 21v-1.5a7 7 0 0 1 14 0V21"],
+    "chevron": ["M6 9l6 6 6-6"],
 }
 _renderers: dict[tuple[str, str], QSvgRenderer] = {}
 

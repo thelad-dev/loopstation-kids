@@ -22,6 +22,7 @@ from loopstation.config import (
     settings_values,
 )
 from loopstation.controller import LIVE_DEVICE_SETTINGS, LIVE_LEVEL_SETTINGS, LIVE_SETTINGS
+from loopstation.gui.main_window import PARENT_VIEW_SETTINGS
 
 
 def test_shipped_settings_file_matches_the_defaults():
@@ -60,7 +61,9 @@ RESTART_MARKER = "Neustart"
 
 
 def _all_live_keys() -> set[str]:
-    return set(LIVE_SETTINGS) | set(LIVE_DEVICE_SETTINGS) | {key for key, _ in LIVE_LEVEL_SETTINGS}
+    # The controller takes over most keys; the two of the parents' view are taken over by the window.
+    return (set(LIVE_SETTINGS) | set(LIVE_DEVICE_SETTINGS) | {key for key, _ in LIVE_LEVEL_SETTINGS}
+            | set(PARENT_VIEW_SETTINGS))
 
 
 def _comment_block(lines: list[str], key: str) -> str:

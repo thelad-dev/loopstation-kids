@@ -322,7 +322,7 @@ APP_SCRIPT = textwrap.dedent(
     from loopstation.audio.null_backend import NullAudio
     from loopstation.config import Settings
     from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QApplication, QDialog
+    from PySide6.QtWidgets import QApplication
 
     audio_pkg.create_audio = lambda settings: (NullAudio(), None)
     tmp = Path(tempfile.mkdtemp())
@@ -343,10 +343,6 @@ APP_SCRIPT = textwrap.dedent(
             timer.timeout.connect(close_modal)
             timer.start()
 
-            class Gate(QDialog):
-                def exec(self):
-                    return QDialog.DialogCode.Accepted
-
             def every_area(*args):
                 from loopstation.gui.settings_page import SettingsDialog
 
@@ -355,12 +351,14 @@ APP_SCRIPT = textwrap.dedent(
                     dialog.show_page(key)
                 return dialog
 
-            window.gate_factory = lambda parent: Gate(parent)
             window.settings_factory = every_area
             window.controller.press(0)
             window.open_history(0)
+            window.enter_parent_mode()  # the sum was answered
             for _ in range(2):
-                window.open_parent_area()
+                window.open_settings()
+            window.leave_parent_mode()
+            window.open_parent_area()  # the sum is still on show when the app ends
             timer.stop()
         QTimer.singleShot(0, app.quit)
 
