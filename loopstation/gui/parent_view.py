@@ -837,7 +837,6 @@ class ParentView(QWidget):
     kids_requested = Signal()
     tool_requested = Signal(str)
     pads_touched = Signal()
-    pads_touched = Signal()
     pad_down = Signal(int)
     pad_up = Signal(int, bool)
     undo_requested = Signal()
@@ -879,7 +878,6 @@ class ParentView(QWidget):
         self.toolbar.keys_button.toggled.connect(weak_slot(self._show_keys, pass_signal_args=True))
         for tile in self.tiles:
             tile.chosen.connect(weak_slot(self.select, pass_signal_args=True))
-            tile.chosen.connect(self.pads_touched)
             tile.chosen.connect(self.pads_touched)
             tile.start_down.connect(self.pad_down)
             tile.start_up.connect(self.pad_up)

@@ -202,7 +202,7 @@ class _SetRow(QAbstractButton):
 class SetsPage(QWidget):
     """Save the session as a set / open a saved one. ``done`` says when the page is finished with."""
 
-    done = Signal(bool)  # True: a set was opened (the parents' area ends); False: "Abbrechen"
+    done = Signal(bool)  # True: a set was opened (the app then rebuilds the window on the new session); False: "Abbrechen"
 
     def __init__(
         self,

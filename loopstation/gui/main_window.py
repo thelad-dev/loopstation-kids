@@ -654,7 +654,7 @@ class MainWindow(QMainWindow):
             view.side_panel.say(text, level)
 
     def _sets_done(self, _opened: bool) -> None:
-        """The sets page is done (a set was opened, or "Abbrechen"): close it, stay in the parents' view."""
+        """The sets page is done: close the panel. After an opened set the app rebuilds the window on the new session."""
         self.close_tool()
 
     @property
