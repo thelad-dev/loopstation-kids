@@ -38,7 +38,7 @@ from loopstation.gui.trim_card import TrimCard
 from loopstation.gui.waveform import WaveformWidget
 from loopstation.gui.widgets import TEXT_DIM, BigButton, weak_slot
 
-STRETCH_HINT = "Zwischen Markern strecken: nur bei knapper Abweichung (unter 10 %)"
+STRETCH_HINT = "Zwischen Markern strecken: jeder Marker wandert auf seinen Schlag, Zurück nimmt es zurück"
 REFRESH_MS = 100  # the waveform follows the controller this often (it redraws only when something changed)
 CHIP_FILL = "#2F3550"
 # Pad chip colours (mockup 13): empty, has a sound, plays or loops, recording.
@@ -154,6 +154,7 @@ class AdvancedPage(QWidget):
         layout.addWidget(self.waveform)
         self.waveform.selection_changed.connect(self._update_marker_buttons)
         layout.addWidget(self._marker_row())
+        layout.addWidget(self._snap_row())
         self.marker_status = self._dim(STRETCH_HINT, 13.5)
         layout.addWidget(self.marker_status)
         layout.addWidget(self._dim(
@@ -177,7 +178,7 @@ class AdvancedPage(QWidget):
         self.listen_button.setIcon(QIcon(pixmap))
         self.listen_button.clicked.connect(weak_slot(self.listen))
         self.stretch_button = QPushButton("Zwischen Markern strecken")
-        self.stretch_button.setToolTip("Nur bei knapper Abweichung (unter 10 %); Zurück nimmt es zurück")
+        self.stretch_button.setToolTip("Jeder Marker wandert auf seinen Schlag; Zurück nimmt es zurück")
         self.stretch_button.clicked.connect(weak_slot(self.stretch_markers))
         for button in (self.marker_add, self.marker_delete, self.listen_button, self.stretch_button):
             button.setObjectName("secondary")
@@ -197,6 +198,27 @@ class AdvancedPage(QWidget):
         right_row.addWidget(self.stretch_button)
         # Side by side on a wide page; the stretch button goes below on a narrow one.
         return CardGrid([[left, right]], ratio=(3, 2), gap=10, spacing=10)
+
+    def _snap_row(self) -> QWidget:
+        """Switch: a marker snaps to the nearest real transient when it is set (mockup 13)."""
+        self.snap_switch = ToggleSwitch()
+        self.snap_switch.setChecked(self.controller.settings.snap_markers)
+        self.snap_switch.toggled.connect(weak_slot(self.set_snap_markers, pass_signal_args=True))
+        name = QLabel("Marker auf Transiente einrasten")
+        name.setWordWrap(True)
+        name.setStyleSheet("font-size: 16.5px; font-weight: 600;")
+        texts = QVBoxLayout()
+        texts.setSpacing(0)
+        texts.addWidget(name)
+        texts.addWidget(self._dim(
+            "rastet auf den nächsten Schlag in der Nähe ein; ohne Schlag bleibt der Marker, wo er ist"))
+        row = QHBoxLayout()
+        row.setSpacing(16)
+        row.addWidget(self.snap_switch, 0, Qt.AlignmentFlag.AlignTop)
+        row.addLayout(texts, 1)
+        widget = QWidget()
+        widget.setLayout(row)
+        return widget
 
     def _export_card(self) -> QFrame:
         """"Diesen Loop exportieren": the loop of the chosen pad as WAV (the logic of the Export area)."""
@@ -263,7 +285,9 @@ class AdvancedPage(QWidget):
     def place_marker(self) -> bool:
         """"Marker setzen": a marker where the cursor stands."""
         frame = self.waveform.cursor_frame
-        if frame is None or not self.controller.add_marker(self.pad, frame):
+        if frame is None:
+            return False
+        if not self.controller.add_marker(self.pad, self.controller.snap_marker(self.pad, frame)):
             return False
         self.waveform.clear_selection()
         self._hint_marker()
@@ -316,6 +340,12 @@ class AdvancedPage(QWidget):
         settings = self.controller.settings
         if settings.export_cue_points != on:
             self.controller.apply_settings(replace(settings, export_cue_points=on))
+
+    def set_snap_markers(self, on: bool) -> None:
+        """Snap new markers to transients (until the settings file is saved with another value)."""
+        settings = self.controller.settings
+        if settings.snap_markers != on:
+            self.controller.apply_settings(replace(settings, snap_markers=on))
 
     def _save_clicked(self) -> None:
         self.save_button.setChecked(True)  # keep it filled after the click toggled it

@@ -23,9 +23,10 @@ from loopstation.audio import metronome
 from loopstation.audio.base import PREVIEW_VOICE, AudioBackend
 from loopstation.audio.dynamics import db_to_gain, gain_to_db
 from loopstation.audio.effects import start_beep, stop_beep
-from loopstation.audio.onset import GridResult, derive_grid, detect_onsets, rotate_to_onset
+from loopstation.audio.onset import GridResult, derive_grid, detect_onsets, nearest_transient, rotate_to_onset
 from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, save_wav
 from loopstation.audio.stretch import (
+    DEFAULT_MAX_DEVIATION,
     MarkerStretchError,
     StretchEngine,
     engine_notice,
@@ -85,8 +86,10 @@ MARKER_STRETCH_REFUSALS = {
     "recording": "Es läuft gerade eine Aufnahme.",
     "unreadable": "Die Aufnahme fehlt oder ist nicht lesbar.",
     "edge": "Ein Marker liegt am Anfang oder Ende des Loops und lässt sich nicht verschieben.",
-    "same_beat": "Zwei Marker gehören zum selben Schlag. Lösche einen davon.",
-    "too_far": "Ein Marker liegt zu weit neben seinem Schlag (mehr als 10 %). Es wurde nichts verändert.",
+    "same_beat": "Zwei Marker fallen auf denselben Schlag, so lässt sich nichts strecken. "
+                 "Verschiebe oder lösche einen.",
+    "too_far": "Ein Marker liegt zu weit neben dem Schlag des eingestellten Takts (mehr als 10 %). "
+               "Nichts verändert.",
     "already": "Die Marker liegen schon auf den Schlägen: Da gibt es nichts zu strecken.",
     "save": "Der gestreckte Loop konnte nicht gespeichert werden.",
 }
@@ -131,6 +134,7 @@ LIVE_SETTINGS = (
     "metronome_level_db",
     "free_pad_on_grid",
     "export_cue_points",
+    "snap_markers",
 )
 
 # Audio devices: the streams are opened again when one of these changes.
@@ -1407,6 +1411,24 @@ class Controller:
         self._changed()
         return True
 
+    def snap_marker(self, pad: int, frame: int) -> int:
+        """Where a marker put at ``frame`` goes: onto the nearest real transient, else ``frame`` itself.
+
+        Only with ``snap_markers`` on, and only for a transient the onset analysis
+        accepts close by (about 60 ms): no hit there, no snapping, so silence and
+        noise never pull a marker anywhere. The marker is the parents' decision;
+        this only saves them the exact click.
+        """
+        if not self.settings.snap_markers:
+            return frame
+        sample = self.pad(pad).sample
+        data = None if sample is None else self.loop_audio(sample, pad)
+        if data is None:
+            return frame
+        mono = data if data.ndim == 1 else data.mean(axis=1)
+        snapped = nearest_transient(mono, self.audio.sample_rate, frame)
+        return frame if snapped is None or snapped <= 0 else snapped
+
     def add_marker(self, pad: int, frame: int) -> bool:
         """Put a marker at ``frame``; False at the limit, on an empty pad or when it is there already."""
         current = self.markers(pad)
@@ -1577,7 +1599,10 @@ class Controller:
         length (a multiple of the grid). The result is a new sample logged like a
         recording (``record_stop`` with ``source: "markers"``), so Zurück and the
         history take it back; its markers are the beat lines. Nothing is
-        stretched when a piece would change by more than 10 %.
+        stretched when a piece would change by more than 10 % and the beat lines
+        are the parents' own tempo. A grid that only came from the recording
+        (its length or its onsets) is an estimate: it never overrules a marker the
+        parents put on a hit, so there the markers decide and Zurück takes it back.
 
         A loop that is itself the result of such a stretch is not stretched once
         more: its markers are mapped back onto the first take of the chain
@@ -1585,7 +1610,7 @@ class Controller:
         once, to the same beat lines. The parents' markers on the loop count: one
         they deleted there is not used again. The chain holds only while the
         ``record_stop`` of the stretch is in the active log (not archived); without
-        it, or when a piece of the first take would change by more than 10 %, the
+        it, or when a piece of the first take is refused as too far, the
         loop itself is stretched as before.
         """
         sample = self.pad(pad).sample
@@ -1605,6 +1630,7 @@ class Controller:
         if data is None:
             return MARKER_STRETCH_REFUSALS["unreadable"]
         total, beat, engine = len(data), grid / info.beats, self._stretch_engine()
+        limit = DEFAULT_MAX_DEVIATION if info.source == PARENT_BPM else None
         try:
             targets = marker_targets(marks, beat, total)
         except MarkerStretchError as exc:
@@ -1619,13 +1645,17 @@ class Controller:
             pins = map_back(inside, anchors, total)
             if all(a < b for a, b in zip([0, *pins], [*pins, total], strict=True)):
                 try:
-                    result, _ = stretch_between_markers(original, pins, beat, engine=engine, targets=targets)
+                    result, _ = stretch_between_markers(
+                        original, pins, beat, engine=engine, targets=targets, max_deviation=limit
+                    )
                 except MarkerStretchError:  # too far on the first take: stretch the loop itself
                     result = None
         if result is None:
             root, pins = sample, inside
             try:
-                result, _ = stretch_between_markers(data, inside, beat, engine=engine, targets=targets)
+                result, _ = stretch_between_markers(
+                    data, inside, beat, engine=engine, targets=targets, max_deviation=limit
+                )
             except MarkerStretchError as exc:
                 return MARKER_STRETCH_REFUSALS[exc.reason]
         rate = self.audio.sample_rate

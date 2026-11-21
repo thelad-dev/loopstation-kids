@@ -24,7 +24,7 @@ from loopstation.audio.stretch import (
 )
 from loopstation.config import ConfigError, Settings, parse_settings
 from loopstation.controller import LIVE_SETTINGS, MARKER_STRETCH_REFUSALS, Controller, Mode
-from loopstation.gui.advanced_page import AdvancedDialog
+from loopstation.gui.advanced_page import STRETCH_HINT, AdvancedDialog
 from loopstation.gui.export_dialog import ExportDialog
 from loopstation.gui.waveform import MARKER_COLOR, WaveformWidget, marker_name
 from loopstation.state import MAX_MARKERS, AppState, apply, parse_markers, replay
@@ -327,6 +327,8 @@ def test_a_refused_stretch_changes_nothing(tmp_path, clock, setup, reason):
     controller, _ = on_grid(tmp_path, clock)
     pad = 2 if setup == "no_pad" else 1
     marks = {"far": [6000], "same": [4100, 3900], "exact": [4000, 8000]}.get(setup, [])
+    if setup == "far":
+        assert controller.set_parent_grid(120, "4/4")  # exact beat lines: only there a far marker is refused
     if marks:
         controller.set_markers(pad, marks)
     seq, sample = controller.store.last_seq, controller.pad(pad).sample
@@ -440,17 +442,25 @@ def test_a_stretched_take_without_its_chain_is_stretched_itself_as_before(tmp_pa
     again.shutdown()
 
 
-@needs_rubberband
 def test_a_piece_too_far_on_the_original_falls_back_to_stretching_the_take_as_before(
     tmp_path, clock, monkeypatch
 ):
     # clap 2 at 12440: from the original its last piece would change by 11 %, from the take by under 10 %
-    controller, _ = on_grid(tmp_path, clock, claps_pad1=(0.54, 1.555))
+    # the limit only holds for the parents' own tempo (a grid from the recording never overrules a marker)
+    controller, audio = build(tmp_path, clock, claps=[0.5, 1.0])
+    record(controller, clock, 0, 3.0)
+    assert controller.set_parent_grid(120, "4/4") is True
+    audio.clap_times = [0.54, 1.555]
+    record(controller, clock, 1, 2.0)
+    assert controller.grid_frames() == GRID
     original = controller.sample_audio(controller.pad(1).sample)
+    # a plain resampling engine for the first stretch too: the claps then move exactly in proportion, so
+    # the margin does not depend on how far a real engine shifts a clap (it differs between platforms)
+    spy = spy_on(controller, monkeypatch)
     controller.add_marker(1, 4320)
     assert controller.stretch_to_markers(1) is None
     current = controller.sample_audio(controller.pad(1).sample)
-    spy = spy_on(controller, monkeypatch)
+    spy.inputs.clear()
     controller.add_marker(1, onset(current, 10000))
     assert controller.stretch_to_markers(1) is None
     assert spy.inputs and all(is_slice_of(piece, current) for piece in spy.inputs)
@@ -712,7 +722,7 @@ def test_a_click_puts_the_cursor_or_selects_the_marker_it_hits(qapp):
 
 @pytest.fixture
 def page(qapp, tmp_path, clock):
-    controller, _ = on_grid(tmp_path, clock)
+    controller, _ = on_grid(tmp_path, clock, snap_markers=False)  # exact clicks; snapping has its own tests
     dialog = AdvancedDialog(controller)
     dialog.choose_pad(1)
     dialog.resize(1200, 900)
@@ -759,11 +769,12 @@ def test_the_page_stretches_between_markers_and_says_what_happened(page):
 
 def test_the_page_says_why_a_stretch_does_not_happen(page):
     dialog, controller = page
+    assert controller.set_parent_grid(120, "4/4")  # the parents' own tempo: exact lines, the limit holds
     click_frame(dialog, 6000)
     dialog.place_marker()
     assert not dialog.stretch_markers() and "zu weit" in dialog.marker_status.text()
     dialog.choose_pad(1)  # showing a pad again forgets the message and the selection
-    assert "knapper Abweichung" in dialog.marker_status.text() and dialog.waveform.cursor_frame is None
+    assert dialog.marker_status.text() == STRETCH_HINT and dialog.waveform.cursor_frame is None
     dialog.listen()
     assert controller.audio.voices  # the loop plays once
 

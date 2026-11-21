@@ -977,6 +977,10 @@ register_field(Field("time_signature", "Taktart", "choice", choices=tuple(SIGNAT
                      hint="Ein Takt besteht aus so vielen Schlägen wie die Taktart (4/4 = 4). "
                           "Gilt ab der nächsten ersten Aufnahme."),
                before="latency_ms")
+register_field(Field("snap_markers", "Marker auf Transienten einrasten", "bool",
+                     hint="Ein gesetzter Marker rastet auf den nächsten Schlag in der Nähe ein; ohne Schlag "
+                          "bleibt er, wo er ist."),
+               before="latency_ms")
 register_field(Field("grid_bpm_min", "Langsamstes Tempo für den Takt", "float", 20, 300, suffix=" BPM"),
                before="latency_ms")
 register_field(Field("grid_bpm_max", "Schnellstes Tempo für den Takt", "float", 20, 300, suffix=" BPM",

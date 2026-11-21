@@ -144,6 +144,11 @@ free_pad_on_grid = false
 # das Sichern scheitert daran nie. Wirkt sofort.
 export_cue_points = true
 
+# true = ein gesetzter Marker rastet auf die nächste echte Transiente (einen
+# Schlag) in der Nähe ein; ohne Schlag in der Nähe bleibt er, wo er ist.
+# false (Standard) = er bleibt genau dort, wo er gesetzt wurde. Wirkt sofort.
+snap_markers = false
+
 # --- Stretch-Engine (Rubber Band) ---
 
 # Womit eine Aufnahme auf den Takt gezogen wird. "auto" = Rubber Band, wenn es

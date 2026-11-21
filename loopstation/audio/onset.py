@@ -87,11 +87,13 @@ GridSource = Literal["onset", "duration", "none"]
 
 # Start values, all overridable per call.
 MIN_START_SECONDS = 0.15  # start beep is 0.12 s long: ignore onsets before this
-REL_THRESHOLD = 0.25  # onset level relative to the peak of the analysed region
-MIN_PEAK = 0.01  # quieter than this (about -40 dBFS) is silence, no onsets
-MIN_GAP_SECONDS = 0.05  # refractory time between two onsets
-RISE_RATIO = 3.0  # envelope must be this many times louder than 30 ms before
-RISE_LOOKBACK_SECONDS = 0.03
+REL_THRESHOLD = 0.35  # onset level relative to the peak of the analysed region
+MIN_PEAK = 0.02  # quieter than this (about -34 dBFS) is silence, no onsets
+MIN_GAP_SECONDS = 0.08  # refractory time between two onsets
+RISE_RATIO = 4.0  # envelope must be this many times louder than 20 ms before
+RISE_LOOKBACK_SECONDS = 0.02
+NOISE_FACTOR = 5.0  # onset level must also be this many times the noise floor (quiet 20 % of the envelope)
+MAX_ATTACK_SECONDS = 0.014  # a real hit reaches its level this fast; a swell or rustle does not
 HOP_SECONDS = 0.002
 WINDOW_SECONDS = 0.008
 ATTACK_LEVEL = 0.10  # attack starts at this share of the local peak ...
@@ -195,6 +197,8 @@ def detect_onsets(
     attack_level: float = ATTACK_LEVEL,
     attack_noise_ratio: float = ATTACK_NOISE_RATIO,
     attack_noise_seconds: float = ATTACK_NOISE_SECONDS,
+    noise_factor: float = NOISE_FACTOR,
+    max_attack_seconds: float = MAX_ATTACK_SECONDS,
 ) -> list[int]:
     """Frames of the reliable onsets (first sample of each attack), ascending.
 
@@ -212,6 +216,13 @@ def detect_onsets(
     to the sample for sharp attacks over little noise; otherwise the onset
     lies at or shortly after the start of a soft rise, and it falls back to
     the envelope onset if no sample qualifies.
+
+    The detector would rather miss a quiet hit than invent one, because a marker
+    snapping to or a grid built on an invented hit is worse than none. So the
+    threshold is also ``noise_factor`` times the noise floor (the 20th percentile of the
+    envelope: room noise, hum, reverb tails), and the rise from the start of the
+    attack to the threshold may take at most ``max_attack_seconds``: a clap or a
+    stick hits within a few milliseconds, a rustle or a swell builds up slowly.
     """
     mono = np.asarray(samples, dtype=np.float64)
     if mono.ndim != 1:
@@ -225,7 +236,11 @@ def detect_onsets(
     peak = float(env[first:].max())
     if peak < min_peak:
         return []
-    threshold = rel_threshold * peak
+    noise = float(np.percentile(env[first:], 20))
+    threshold = max(rel_threshold * peak, noise_factor * noise)
+    if threshold > peak:  # the whole region is "noise": no hit stands out from it
+        return []
+    max_attack = max(1, round(max_attack_seconds * rate / hop))
     lookback = max(1, round(rise_lookback_seconds * rate / hop))
     gap = max(1, round(min_gap_seconds * rate / hop))
 
@@ -247,15 +262,54 @@ def detect_onsets(
             low = 0.2 * threshold
             while start > first and env[start - 1] >= low and env[start - 1] < env[start]:
                 start -= 1
+            armed = False
+            blocked_until = i + gap
+            if i - start > max_attack:
+                continue
             onsets.append(
                 _attack_start(
                     mono, start * hop, hop, window, rate,
                     attack_level, attack_noise_ratio, attack_noise_seconds,
                 )
             )
-            armed = False
-            blocked_until = i + gap
     return onsets
+
+
+SNAP_RADIUS_SECONDS = 0.06  # a marker snaps to a transient at most this far from where it was put
+SNAP_REL_THRESHOLD = 0.2  # snapping accepts quieter hits than the grid analysis does
+SNAP_REFINE_SECONDS = 0.03  # where to look for the very first sample of the attack
+SNAP_ATTACK_LEVEL = 0.3  # the attack starts at the first sample this loud (of the hit's peak)
+
+
+def nearest_transient(
+    samples: np.ndarray, rate: int, frame: int, *, radius_seconds: float = SNAP_RADIUS_SECONDS
+) -> int | None:
+    """Frame of the real transient nearest to ``frame`` within ``radius_seconds``, else ``None``.
+
+    Used to let a marker the parents put on the waveform snap to the hit they
+    meant. Only transients :func:`detect_onsets` accepts count (a little more
+    permissive in level), so silence, noise and swells never attract a marker;
+    ``None`` then means "leave the marker where it is". The envelope onset is
+    refined to the first loud sample of the attack so the marker sits on the
+    visible edge of the hit.
+    """
+    mono = np.asarray(samples, dtype=np.float64)
+    if mono.ndim != 1 or len(mono) == 0:
+        return None
+    onsets = detect_onsets(mono, rate, min_start_seconds=0.0, rel_threshold=SNAP_REL_THRESHOLD)
+    near = [o for o in onsets if abs(o - frame) <= radius_seconds * rate]
+    if not near:
+        return None
+    refine = max(1, round(SNAP_REFINE_SECONDS * rate))
+    loudness = {o: float(np.abs(mono[o : o + refine]).max(initial=0.0)) for o in near}
+    # A quiet blip next to the real hit (a rustle, a bounce) does not take the marker away from it.
+    strong = [o for o in near if loudness[o] >= 0.5 * max(loudness.values())]
+    onset = min(strong, key=lambda o: abs(o - frame))
+    reach = min(len(mono), onset + refine)
+    region = np.abs(mono[onset:reach])
+    if len(region) == 0 or float(region.max()) <= 0.0:
+        return onset
+    return onset + int(np.argmax(region >= SNAP_ATTACK_LEVEL * float(region.max())))
 
 
 def rotate_to_onset(samples: np.ndarray, onset: int) -> np.ndarray:
