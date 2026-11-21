@@ -20,7 +20,6 @@ from loopstation.state import master_source, parse_master
 from loopstation.store import EventStore
 
 SR = 8000
-ONSET_LEAD = 0.01  # the detector marks the attack a few ms before the burst peak
 
 
 def build(tmp_path, clock: FakeClock, claps=None, **overrides):
@@ -70,9 +69,10 @@ def test_two_claps_in_the_window_set_a_four_beat_bar_and_start_the_loop_at_the_f
     assert audio.grid == master["frames"]
     data = saved(tmp_path, controller, 0)
     assert len(data) == master["frames"]  # one bar, nothing longer than the grid
-    assert first_hit(data) < 0.02 * SR  # the loop begins at the first clap
+    assert first_hit(data) <= 1  # the loop begins at the attack of the first clap, to the sample
     stop = of_type(controller, "record_stop")[0]["data"]
-    assert stop["grid"] == "onset" and abs(stop["shift"] - (0.5 - ONSET_LEAD) * SR) < 0.01 * SR
+    # clap_signal starts with sin(0) = 0: the first loud sample of the clap is frame 0.5 s + 1.
+    assert stop["grid"] == "onset" and 0.5 * SR <= stop["shift"] <= 0.5 * SR + 1
 
 
 def test_more_claps_use_the_median_distance_and_drop_outliers(tmp_path, clock):
@@ -80,6 +80,41 @@ def test_more_claps_use_the_median_distance_and_drop_outliers(tmp_path, clock):
     record(controller, clock, 0, 3.0)
     assert controller.store.state.master["frames"] == 4 * 4000
     assert master_source(controller.store.state.master) == "onset"
+
+
+def attacks(data: np.ndarray, quiet: int = 400) -> list[int]:
+    """Frames where a clap begins: clearly loud after ``quiet`` frames of silence."""
+    loud = np.nonzero(np.abs(data) > 0.1)[0]
+    out: list[int] = []
+    for frame in loud:
+        if not out or frame - out[-1] > quiet:
+            out.append(int(frame))
+    return out
+
+
+def test_a_child_getting_slower_gives_a_loop_that_is_tight_over_the_seam(tmp_path, clock):
+    # The claps of the recording (44.1 kHz frames, here as seconds): intervals 20680, 20856,
+    # 21120, then a pause of 23000 and 21296, 21296, 21500. The median beat (21296) as the bar
+    # would leave the fourth clap 1600 frames short of the seam.
+    gaps = [20680, 20856, 21120, 23000, 21296, 21296, 21500]
+    frames = [15840]
+    for gap in gaps:
+        frames.append(frames[-1] + gap)
+    controller, _ = build(tmp_path, clock, claps=[f / 44100 for f in frames])
+    record(controller, clock, 0, 169_168 / 44100)
+    master = controller.store.state.master
+    data = saved(tmp_path, controller, 0)
+    assert master["source"] == "onset" and len(data) == master["frames"]
+    assert of_type(controller, "master_set")[0]["data"]["frames"] == master["frames"]
+    beat = master["frames"] / 4
+    hits = attacks(data)
+    assert len(hits) == 4  # the four claps of the loop window, nothing cut at the seam
+    assert hits[0] <= 0.25 * beat  # the loop starts at (or just before) the first attack
+    for k, hit in enumerate(hits):
+        assert abs(hit - k * beat) <= 0.003 * SR  # every clap within 3 ms of its line
+    inside = [b - a for a, b in zip(hits, hits[1:], strict=False)]
+    seam = master["frames"] - hits[3] + hits[0]
+    assert min(inside) <= seam <= max(inside)  # no limp over the seam
 
 
 def test_master_set_event_carries_source_signature_and_pad(tmp_path, clock):

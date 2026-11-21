@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from conftest import clap_signal
 
 from loopstation.audio.onset import (
     GridResult,
@@ -77,6 +78,47 @@ def test_threshold_is_relative_to_the_peak():
 def test_close_claps_are_separate_onsets_but_not_inside_the_gap():
     assert len(detect_onsets(_claps([0.5, 0.79]), RATE)) == 2
     assert len(detect_onsets(_claps([0.5, 0.52]), RATE)) == 1
+
+
+def test_onset_is_the_first_sample_of_the_attack():
+    # Attacks at arbitrary frames, not on the envelope hop; faint noise before them.
+    attacks = [12_345, 40_037, 70_001]
+    signal = clap_signal(RATE * 2, RATE, [a / RATE for a in attacks]).astype(np.float64)
+    signal += np.random.default_rng(3).normal(0, 0.002, len(signal))
+    found = detect_onsets(signal, RATE)
+    assert len(found) == len(attacks)
+    for frame, attack in zip(found, attacks, strict=True):
+        # clap_signal starts with sin(0) = 0, so the first loud sample is attack + 1.
+        assert attack <= frame <= attack + 1
+
+
+def _soft_burst(rise: int, length: int, seed: int) -> np.ndarray:
+    """Noise burst with a linear rise over ``rise`` frames (a shaker, not a clap)."""
+    k = np.arange(length)
+    envelope = np.minimum(1.0, k / rise) * np.exp(-np.maximum(0, k - rise) / (0.015 * RATE))
+    return 0.3 * envelope * np.random.default_rng(seed).uniform(-1, 1, length)
+
+
+def test_a_soft_attack_is_found_within_two_ms():
+    attacks = [10_000, 38_011]
+    signal = np.random.default_rng(4).normal(0, 0.001, RATE)
+    for k, attack in enumerate(attacks):
+        burst = _soft_burst(round(0.008 * RATE), round(0.06 * RATE), seed=k)
+        signal[attack : attack + len(burst)] += burst
+    found = detect_onsets(signal, RATE)
+    assert len(found) == len(attacks)
+    for frame, attack in zip(found, attacks, strict=True):
+        assert attack - 1 <= frame <= attack + 0.002 * RATE
+
+
+def test_noise_before_the_attack_does_not_trigger_early():
+    attacks = [20_000, 50_000]
+    signal = clap_signal(RATE * 2, RATE, [a / RATE for a in attacks]).astype(np.float64)
+    signal += np.random.default_rng(6).normal(0, 0.03, len(signal))
+    found = detect_onsets(signal, RATE)
+    assert len(found) == len(attacks)
+    for frame, attack in zip(found, attacks, strict=True):
+        assert attack - 1 <= frame <= attack + 0.002 * RATE
 
 
 def test_mono_only():
@@ -184,6 +226,78 @@ def test_rule_4_median_ignores_outliers():
 def test_rule_4_median_of_uneven_intervals():
     result = _grid([0.5, 1.0, 1.52, 2.1, 2.6], total_s=4.0)  # 0.50, 0.52, 0.58, 0.50
     assert result.beat_frames == round(0.51 * RATE)
+
+
+# --- the bar fitted to the claps in the loop window ------------------------------
+
+SLOW_RATE = 44100
+SLOW_FIRST = 15840
+SLOW_GAPS = [20680, 20856, 21120, 23000, 21296, 21296, 21500]  # a child getting slower, median 21296
+
+
+def _slowing_child() -> list[int]:
+    onsets = [SLOW_FIRST]
+    for gap in SLOW_GAPS:
+        onsets.append(onsets[-1] + gap)
+    return onsets
+
+
+def test_the_bar_fits_the_claps_in_the_loop_and_runs_evenly_over_the_seam():
+    onsets = _slowing_child()
+    result = derive_grid(onsets, 169_168, SLOW_RATE, max_frames=10 * SLOW_RATE)
+    assert result.source == "onset"
+    beat = result.bar_frames / 4
+    ms = SLOW_RATE / 1000
+    # The median alone (85184) leaves the claps up to 21 ms off their lines.
+    for k, onset in enumerate(onsets[:4]):
+        assert abs(onset - (result.start_frame + k * beat)) <= 3 * ms
+    # The loop starts at (or just before) the first attack, never after it.
+    assert onsets[0] - 0.25 * beat <= result.start_frame <= onsets[0]
+    # Distance from the fourth clap over the seam back to the first one in the next round.
+    inside = [b - a for a, b in zip(onsets[:4], onsets[1:4], strict=False)]
+    seam = onsets[0] + result.bar_frames - onsets[3]
+    assert min(inside) <= seam <= max(inside)
+    assert abs(seam - np.mean(inside)) <= 1 * ms
+    assert result.bpm(SLOW_RATE) == pytest.approx(4 * 60 * SLOW_RATE / result.bar_frames)
+
+
+def test_even_claps_keep_the_median_bar_and_the_first_onset():
+    onsets = [round(t * RATE) for t in (1.0, 1.5, 2.0, 2.5, 3.0)]
+    result = derive_grid(onsets, 5 * RATE, RATE, max_frames=10 * RATE)
+    assert (result.bar_frames, result.beat_frames, result.start_frame) == (4 * RATE // 2, RATE // 2, RATE)
+
+
+def test_one_late_clap_does_not_pull_the_tempo():
+    # The fourth clap comes 120 ms late: the fit would give about 7 % more, far outside
+    # the band around the median, so the median bar and the first onset stay.
+    onsets = [round(t * RATE) for t in (1.0, 1.5, 2.0, 2.62, 3.0, 3.5, 4.0)]
+    result = derive_grid(onsets, 5 * RATE, RATE, max_frames=10 * RATE)
+    assert (result.bar_frames, result.beat_frames, result.start_frame) == (2 * RATE, RATE // 2, RATE)
+
+
+def _speeding_child() -> list[int]:
+    # The mirror of the slowing child: early intervals longer than the median of 21296,
+    # the fit is about 2 % above it (inside the band).
+    onsets = [SLOW_FIRST]
+    for gap in [21912, 21736, 21472, 21296, 21296, 21296, 21100]:
+        onsets.append(onsets[-1] + gap)
+    return onsets
+
+
+def test_a_fitted_bar_beyond_the_maximum_falls_back_to_the_median():
+    fitted = derive_grid(_speeding_child(), 200_000, SLOW_RATE, max_frames=10 * SLOW_RATE)
+    assert fitted.bar_frames > 86_000  # the fit applies without the limit
+    result = derive_grid(_speeding_child(), 200_000, SLOW_RATE, max_frames=86_000)
+    assert result.source == "onset"
+    assert (result.bar_frames, result.beat_frames, result.start_frame) == (4 * 21296, 21296, SLOW_FIRST)
+
+
+def test_beat_frames_follow_the_bar():
+    result = derive_grid(_slowing_child(), 169_168, SLOW_RATE, max_frames=10 * SLOW_RATE)
+    assert result.beat_frames == round(result.bar_frames / 4)
+    length = derive_grid([], 7001, 1000, beats_per_bar=3, max_frames=10_000)
+    assert (length.source, length.bar_frames, length.beat_frames) == ("duration", 7001, 2334)
+
 
 
 def test_rule_4_with_fewer_than_two_plausible_intervals_falls_back():
