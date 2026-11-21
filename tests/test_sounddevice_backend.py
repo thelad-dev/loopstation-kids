@@ -283,6 +283,34 @@ def test_a_loop_with_a_jump_has_no_step_at_the_seam_and_keeps_its_period():
     assert np.array_equal(soft_out[GRID:2 * GRID], soft_out[:GRID])
 
 
+def test_the_engine_keeps_the_first_beat_of_every_cycle_and_has_no_step_at_the_seam():
+    sr, length, attack = 44100, 85_000, 267  # a 1.93 s loop (end fade 25 ms), the clap 6 ms in as recorded
+    k = np.arange(length)
+    rng = np.random.default_rng(3)
+    tone = 0.6 * np.sin(2 * np.pi * 1000 * k / sr) + 0.4 * rng.uniform(-1, 1, length)
+    clap = np.exp(-k / (0.006 * sr)) * tone
+    data = 0.3 * np.sin(2 * np.pi * 220 * k / sr)  # still sounding where the end meets the start
+    data[attack:] += 0.8 * clap[:length - attack]
+    data = data.astype(np.float32)
+    device = FakeSoundDevice()
+    audio = SoundDeviceAudio(sr, 10, latency_seconds=0.0, sd=device, clock=lambda: 0.0, soft_seam=True)
+    audio.set_grid(length)
+    audio.play(0, data, loop=True)
+    device.run_to(3 * length)
+    out = device.output_signal()
+    head = round(0.010 * sr)
+    n_in, n_out = round(0.002 * sr), round(0.025 * sr)
+    assert abs(data[0] - data[-1]) > 0.05  # the take itself clicks where its end meets its start
+    for cycle in range(3):
+        start = cycle * length
+        kept = float(np.sum(out[start:start + head] ** 2) / np.sum(data[:head] ** 2))
+        assert kept >= 0.90, f"cycle {cycle}: first 10 ms keep only {kept:.1%} (measured 92 %)"
+        if cycle:
+            # No click: across both fades no step is larger than the 220 Hz hum itself makes (0.0094).
+            around = out[start - n_out:start + n_in]
+            assert np.abs(np.diff(around)).max() < 0.02
+
+
 def test_switch_off_plays_the_samples_unchanged():
     saw = sawtooth()
     audio, device = make_seam(False)
