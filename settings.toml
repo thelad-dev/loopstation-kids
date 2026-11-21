@@ -1,7 +1,7 @@
 # Einstellungen der Loopstation.
 # Fehlt diese Datei, gelten genau die Werte unten.
 #
-# Änderungen in der Einstellungsseite (Eltern-Bereich) gelten sofort, außer bei
+# Änderungen in der Elternansicht (Seitenleisten der Werkzeuge) gelten sofort, außer bei
 # rows, cols, sample_rate, asio und data_dir: die wirken erst nach einem Neustart.
 # Wer diese Datei von Hand ändert, startet die Loopstation neu.
 
@@ -99,7 +99,7 @@ grid_bpm_min = 40
 grid_bpm_max = 200
 
 # --- Geräte und Audio-System ---
-# Aufnahme- und Wiedergabegerät (Name wie in der Einstellungsseite). "" = der
+# Aufnahme- und Wiedergabegerät (Name wie im Werkzeug „Geräte“). "" = der
 # Systemstandard des gewählten Audio-Systems. Wirkt sofort, die Audio-Streams
 # starten dafür kurz neu. Ist das Gerät nicht angeschlossen, nimmt die
 # Loopstation den Systemstandard und sagt es in der Statuszeile.
