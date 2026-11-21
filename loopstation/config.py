@@ -68,7 +68,9 @@ class Settings:
     asio: bool = False
     # --- Stretch into the grid (W3-STRETCH-INT) ---
     # A recording on the grid that is within 10 % of a whole number of loops is
-    # stretched to exactly that length instead of padded or cut.
+    # stretched to exactly that length instead of padded or cut. A recording
+    # over running loops already begins on a loop start in time with them: it
+    # is only cut or padded to that length, never stretched.
     stretch_to_grid: bool = True
     # --- Stretch engine (W3-RUBBERBAND) ---
     # auto = Rubber Band when it is installed and runs, else silently the simple
@@ -304,7 +306,9 @@ SETTING_COMMENTS: dict[str, str] = {
     "asio": "Nur Windows: ASIO-Treiber zulassen (für Audio-Interfaces, oft exklusiv). "
             "Wirkt erst nach einem Neustart.",
     "stretch_to_grid": "true = eine Aufnahme knapp neben einem ganzen Takt wird weich auf den Takt gezogen, "
-                       "false = immer mit Stille aufgefüllt oder geschnitten. Wirkt sofort.",
+                       "false = immer mit Stille aufgefüllt oder geschnitten. Aufnahmen über laufenden "
+                       "Loops liegen schon im Takt und werden nur geschnitten oder aufgefüllt, nie "
+                       "gestreckt. Wirkt sofort.",
     "stretch_engine": 'Stretch-Engine: "auto" = Rubber Band, wenn vorhanden, sonst still der einfache '
                       'Stretch; "rubberband" = Rubber Band gewünscht, der Elternbereich meldet, wenn es '
                       'fehlt; "simple" = immer der einfache Stretch. Wirkt sofort.',

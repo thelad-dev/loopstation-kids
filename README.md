@@ -39,10 +39,10 @@ Selbst bauen (unter Windows, mit Python 3.11 und [Inno Setup 6](https://jrsoftwa
 pip install -c packaging/windows/constraints.txt -r requirements.txt -r packaging/windows/requirements-build.txt
 python packaging/windows/make_icon.py build/loopstation.ico
 pyinstaller --noconfirm packaging/windows/loopstation.spec
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.1.1 packaging\windows\loopstation.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.1.2 packaging\windows\loopstation.iss
 ```
 
-Das Ergebnis liegt in `dist\Loopstation-Setup-1.1.1.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
+Das Ergebnis liegt in `dist\Loopstation-Setup-1.1.2.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
 
 ## Linux-Installation
 
@@ -160,7 +160,7 @@ Die erste Aufnahme bestimmt die Loop-Länge. Jede weitere Aufnahme wird auf gena
 - Laufen schon Loops, beginnt eine neue Aufnahme erst am nächsten Loop-Anfang. Bis dahin behält das Pad seine Farbe und sein Symbol, leuchtet langsam und weich himmelblau auf (0,5 Hz, ohne Blinken) und zeigt einen Balken, der sich bis zum Loop-Anfang füllt. Erst dann erscheint der Sekunden-Countdown.
 - Ein Loop startet und stoppt per Pad ebenfalls am Loop-Anfang (gleiche Anzeige). Läuft noch kein Loop, startet er sofort. „Alles still“, Löschen und „Zurück“ wirken sofort.
 - Die Loop-Länge gilt, solange irgendein Pad belegt ist, auch wenn das erste Pad gelöscht oder neu aufgenommen wird. Werden alle Pads leer, beginnt eine neue Runde: Eine himmelblaue Welle läuft über die Pads, und die nächste Aufnahme bestimmt die neue Loop-Länge. „Zurück“ holt die alte Loop-Länge mit den Aufnahmen wieder; eine frühere Version, die in eine leere Runde zurückgeholt wird, bestimmt die Loop-Länge neu.
-- Liegt eine Aufnahme knapp neben ganzen Takten (weniger als 10 % daneben), wird sie weich auf die volle Länge gezogen statt aufgefüllt oder abgeschnitten (`stretch_to_grid`, standardmäßig an). Die Tonhöhe bleibt dabei erhalten; deutlich daneben wird wie oben aufgefüllt oder geschnitten.
+- Liegt eine Aufnahme knapp neben ganzen Takten (weniger als 10 % daneben), wird sie weich auf die volle Länge gezogen statt aufgefüllt oder abgeschnitten (`stretch_to_grid`, standardmäßig an). Die Tonhöhe bleibt dabei erhalten; deutlich daneben wird wie oben aufgefüllt oder geschnitten. Aufnahmen über laufenden Loops liegen schon im Takt und werden nie gestreckt: liegen sie höchstens 10 % neben ganzen Takten, werden sie auf die nächstliegende ganze Zahl von Loops geschnitten oder mit Stille aufgefüllt (auch ein etwas zu langes Ende fällt dann weg); deutlich daneben wie oben. So bleibt jeder Schlag samplegenau dort, wo er eingespielt wurde.
 - Abschalten mit `loop_sync = false` in `settings.toml`; dann behält jede Aufnahme ihre eigene Länge wie früher.
 - Optional (`auto_grid = true`, standardmäßig aus): Die erste Aufnahme einer Sitzung beginnt bei ihrem ersten Schlag (Klatschen, Stampfen); sie wird nur verschoben, nicht gekürzt. Liegen zwei oder mehr Schläge im erlaubten Tempo (`grid_bpm_min`, `grid_bpm_max`), entscheidet der Median ihrer Abstände über den Takt gemäß `time_signature` (`2/4`, `3/4`, `4/4`, `6/8`); danach verfeinern die Schläge, die im Loop landen (der erste Takt ab dem ersten Schlag), Tempo und Einsatz, damit der Loop in sich gleichmäßig ist und ohne Hinken über die Naht läuft. Wird das Kind beim Klatschen etwas langsamer, passt der Takt so zu den Schlägen im Loop statt zum Durchschnitt; die Verfeinerung darf das Tempo aber höchstens um 3 % vom Median wegziehen (ein einzelner verrutschter Klatscher zieht es nicht), sonst bleibt der Median-Takt. Der Loop beginnt am Schlag oder knapp davor, bei scharfen Angriffen probengenau. Liegen keine zwei Schläge im erlaubten Tempo, gilt die Aufnahmelänge, aber nur, wenn sie als Takt taugt (dieselben Tempo-Grenzen); sonst bekommt die Sitzung lieber keinen Takt als einen falschen. Weitere Aufnahmen werden nie verschoben. Im Elternbereich stehen Tempo, Taktart und woher der Takt kommt (Aufnahmelänge, Schläge oder Eltern-Vorgabe).
 
@@ -223,7 +223,7 @@ Erwachsene frieren die laufende Sitzung als Set ein und öffnen gespeicherte Set
 
 ## Stretch-Engine (Rubber Band)
 
-Eine Aufnahme knapp neben einem ganzen Takt (unter 10 %) wird beim Stopp auf genau diese Länge gezogen, die Tonhöhe bleibt (`stretch_to_grid`). Dafür gibt es zwei Engines hinter derselben Schnittstelle (`loopstation/audio/stretch.py`):
+Eine Aufnahme knapp neben einem ganzen Takt (unter 10 %) wird beim Stopp auf genau diese Länge gezogen, die Tonhöhe bleibt (`stretch_to_grid`). Aufnahmen über laufenden Loops liegen schon im Takt und werden nur geschnitten oder aufgefüllt, nie gestreckt. Dafür gibt es zwei Engines hinter derselben Schnittstelle (`loopstation/audio/stretch.py`):
 
 - **Rubber Band** über das Python-Paket `pylibrb` (Wheel mit eingebauter Bibliothek): sauberer, vor allem bei Stimmen. Es ist **nicht Teil der Loopstation und nicht im Windows-Installer enthalten**; es wird nur auf Wunsch nachgeladen (siehe unten). Die Loopstation prüft beim Start, ob es sich laden und rechnen lässt, und schreibt das Ergebnis ins Protokoll (`stretch engine: ...`). Die App selbst greift dafür nie ins Netz.
 - **Einfacher Stretch** (WSOLA, nur numpy): immer eingebaut. Klatscher und Schläge setzt er an ihre gestreckte Stelle, damit der Takt im Loop stimmt. Er läuft, wenn Rubber Band fehlt, nicht lädt oder bei einem einzelnen Stretch einen Fehler meldet. Eine Aufnahme geht deshalb nie verloren.

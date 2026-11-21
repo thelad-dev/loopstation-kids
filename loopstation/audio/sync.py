@@ -62,12 +62,20 @@ def fit_to_grid(data: np.ndarray, grid: int, grace: int = 0, limit: int | None =
 
     Returns ``data`` itself when it already has the right length.
     """
-    target = fit_length(len(data), grid, grace, limit)
-    if len(data) == target:
+    return fit_exact(data, fit_length(len(data), grid, grace, limit))
+
+
+def fit_exact(data: np.ndarray, frames: int) -> np.ndarray:
+    """``data`` cut at its end or padded with silence to exactly ``frames`` frames.
+
+    The start stays where it is, so material that is already on the grid keeps
+    its place to the frame. Returns ``data`` itself when it already has that length.
+    """
+    if len(data) == frames:
         return data
-    if len(data) > target:
-        return np.ascontiguousarray(data[:target])
-    out = np.zeros(target, dtype=np.float32)
+    if len(data) > frames:
+        return np.ascontiguousarray(data[:frames])
+    out = np.zeros(frames, dtype=np.float32)
     out[: len(data)] = data
     return out
 

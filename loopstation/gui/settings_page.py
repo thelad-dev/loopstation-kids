@@ -987,7 +987,8 @@ register_field(Field("grid_bpm_max", "Schnellstes Tempo für den Takt", "float",
 # --- Stretch into the grid (W3-STRETCH-INT) ---
 register_field(Field("stretch_to_grid", "Aufnahmen weich in den Takt ziehen", "bool",
                      hint="Knapp neben einem ganzen Takt: auf den Takt ziehen statt auffüllen oder "
-                          "schneiden. Aus = immer auffüllen oder schneiden."),
+                          "schneiden. Aufnahmen über laufenden Loops werden nur geschnitten oder "
+                          "aufgefüllt, nie gestreckt. Aus = immer auffüllen oder schneiden."),
                before="soft_seam")
 
 

@@ -35,8 +35,15 @@ from loopstation.audio.stretch import (
     stretch_between_markers,
     stretch_target,
     stretch_to_grid,
+    within_stretch,
 )
-from loopstation.audio.sync import SEAM_FADE_MAX_SECONDS, fit_to_grid, grace_frames, max_grid_frames
+from loopstation.audio.sync import (
+    SEAM_FADE_MAX_SECONDS,
+    fit_exact,
+    fit_to_grid,
+    grace_frames,
+    max_grid_frames,
+)
 from loopstation.clips import ClipEvent, ClipLog
 from loopstation.config import SIGNATURES, Settings, restart_keys_changed
 from loopstation.state import MAX_MARKERS, PadState, find_entry, master_source
@@ -158,6 +165,9 @@ class _Recording:
     synced: bool = False
     # Recorded on a free pad: kept as it is, neither cut nor stretched.
     free: bool = False
+    # Began on a loop start while loops ran on the grid (an overdub): the take is
+    # already in time, so at stop it is only cut or padded, never stretched.
+    aligned: bool = False
 
 
 @dataclass
@@ -881,6 +891,9 @@ class Controller:
         if not started:
             self._set_notice("Mikrofon lässt sich nicht öffnen")
             return
+        # Asked of the engine after the start, not predicted before it: a loop
+        # with a pending stop may end in between.
+        aligned = synced and self.audio.recording_aligned()
         self._clips_seen = self.audio.poll_input_level()[1]
         self._clip_at = None
         self._input_peak = 0.0
@@ -889,7 +902,7 @@ class Controller:
         if self.settings.sound_effects:
             self.audio.play_effect(start_beep(self.audio.sample_rate))
         self.store.append(ev.RECORD_START, pad, {"stamp": stamp})
-        self._recording = _Recording(pad, stamp, self._clock(), synced, free)
+        self._recording = _Recording(pad, stamp, self._clock(), synced, free, aligned)
 
     def _stop_recording(self) -> bool:
         """Stop the running recording; return True if a sample was kept."""
@@ -913,7 +926,7 @@ class Controller:
             grid = self._grid() if recording.synced else None
             if grid is not None:
                 limit = int(self.settings.max_record_seconds * rate)
-                data = self._fit_recording(data, grid, rate, limit)
+                data = self._fit_recording(data, grid, rate, limit, aligned=recording.aligned)
                 duration = len(data) / rate
             elif (self._parent_grid is not None and self.settings.loop_sync
                   and self.store.state.master is None):
@@ -977,16 +990,27 @@ class Controller:
             self._engine = (key, resolve_engine(*key))
         return self._engine[1]
 
-    def _fit_recording(self, data: np.ndarray, grid: int, rate: int, limit: int) -> np.ndarray:
+    def _fit_recording(
+        self, data: np.ndarray, grid: int, rate: int, limit: int, aligned: bool = False
+    ) -> np.ndarray:
         """A recording on the grid: stretched when it is just off a whole number of loops.
 
         Runs once at stop, outside the audio callback. Anything further off, a
         stop within the grace window after a boundary, a result over the
         recording limit, or ``stretch_to_grid`` off falls back to
         ``fit_to_grid``, so the length is always a multiple of the grid.
+
+        ``aligned``: the take began on a loop start over running loops and was
+        played in time with them; only the stop was early or late. It gets the
+        same target length, but its end is cut or padded with silence instead
+        of stretching, so every frame stays where it was played on the grid.
         """
         grace = grace_frames(grid, rate)
-        if self.settings.stretch_to_grid:
+        if self.settings.stretch_to_grid and aligned:
+            target = stretch_target(len(data), grid)
+            if target <= max_grid_frames(grid, limit) and within_stretch(len(data), grid):
+                return fit_exact(data, target)
+        elif self.settings.stretch_to_grid:
             target = stretch_target(len(data), grid)
             over = len(data) - target
             if target <= max_grid_frames(grid, limit) and not 0 < over <= grace:

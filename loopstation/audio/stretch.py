@@ -410,6 +410,12 @@ def stretch_target(frames: int, grid: int) -> int:
     return max(1, round(frames / grid)) * grid
 
 
+def within_stretch(frames: int, grid: int, max_deviation: float = DEFAULT_MAX_DEVIATION) -> bool:
+    """True if ``frames`` is at most ``max_deviation`` off its ``stretch_target``."""
+    target = stretch_target(frames, grid)
+    return abs(frames - target) / target <= max_deviation
+
+
 def stretch_to_grid(
     data: np.ndarray,
     grid: int,
@@ -425,9 +431,9 @@ def stretch_to_grid(
     """
     if len(data) == 0:
         return None
-    target = stretch_target(len(data), grid)
-    if abs(len(data) - target) / target > max_deviation:
+    if not within_stretch(len(data), grid, max_deviation):
         return None
+    target = stretch_target(len(data), grid)
     if len(data) == target:
         return data
     result = (engine or WsolaEngine()).stretch(data, target)

@@ -152,11 +152,14 @@ def test_recording_waits_for_the_loop_start_and_begins_exactly_on_it():
     assert audio.start_recording()
     assert audio.recording_wait() == (2000 - 1200) / SR
     assert audio.next_boundary_in() == (2000 - 1200) / SR
+    assert audio.recording_aligned()
     device.run_to(2000)
     assert audio.recording_seconds() == 0.0  # nothing before the loop start
     device.run_to(4000)
     assert audio.recording_wait() == 0.0
+    assert audio.recording_aligned()  # still true once the first block is placed
     data = audio.stop_recording()
+    assert not audio.recording_aligned()
     # The last block heard frames 3800..3899.
     assert np.array_equal(data, coded(np.arange(2000, 3900)))
 
@@ -209,12 +212,22 @@ def test_a_microphone_that_opens_late_gets_silence_in_front():
     assert np.array_equal(data[100:], coded(np.arange(2100, 2500)))
 
 
+def test_a_recording_started_without_align_is_not_aligned_even_over_running_loops():
+    audio, device = make()
+    audio.play(0, clicks(GRID, 0.25), loop=True)
+    device.run_to(1200)
+    assert audio.start_recording(align=False)
+    assert audio.recording_wait() == 0.0 and not audio.recording_aligned()
+    audio.stop_recording()
+
+
 def test_without_running_loops_the_recording_starts_at_once():
     audio, device = make()
     device.voice = coded
     device.run_to(1200)
     audio.start_recording()
     assert audio.recording_wait() == 0.0
+    assert not audio.recording_aligned()
     device.run_to(1500)
     data = audio.stop_recording()
     assert np.array_equal(data, coded(np.arange(1100, 1400)))  # as without a grid
