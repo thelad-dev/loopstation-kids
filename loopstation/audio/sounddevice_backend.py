@@ -124,6 +124,9 @@ class SoundDeviceAudio:
         # microphone as it comes) and whether its first block was placed.
         self._rec_start: int | None = None
         self._rec_aligned = False
+        # Whether the running recording was started on the grid (it begins on a
+        # loop start). Set in start_recording only, never by the input callback.
+        self._rec_on_grid = False
         self._latency_frames = 0
         self._input: Any = None
 
@@ -262,6 +265,7 @@ class SoundDeviceAudio:
             self._recorded_frames = 0
             self._rec_start = None
             self._rec_aligned = False
+            self._rec_on_grid = False
         self._apply_devices(input_name, output_name, hostapi)
         return self.device_notice
 
@@ -481,10 +485,12 @@ class SoundDeviceAudio:
             self._recorded_frames = 0
             self._rec_start = None
             self._rec_aligned = False
+            self._rec_on_grid = False
             self._auto_db = 0.0
             self._input_peak = 0.0
             if align and self._grid is not None and self._grid_running():
                 self._rec_start = next_boundary(self._frame, self._origin, self._grid)
+                self._rec_on_grid = True
         try:
             stream = self._sd.InputStream(
                 callback=self._input_callback, **self._stream_args(self._input_index)
@@ -502,6 +508,7 @@ class SoundDeviceAudio:
             self._discard_input()
             with self._lock:
                 self._rec_start = None
+                self._rec_on_grid = False
             return False
         return True
 
@@ -522,6 +529,7 @@ class SoundDeviceAudio:
             self._recorded_frames = 0
             self._rec_start = None
             self._rec_aligned = False
+            self._rec_on_grid = False
         if not chunks:
             return None
         return np.concatenate(chunks).astype(np.float32)
@@ -535,6 +543,10 @@ class SoundDeviceAudio:
             if self._rec_start is None or self._rec_aligned:
                 return 0.0
             return max(0, self._rec_start - self._frame) / self.sample_rate
+
+    def recording_aligned(self) -> bool:
+        with self._lock:
+            return self._rec_on_grid
 
     def _discard_input(self) -> None:
         if self._input is not None:

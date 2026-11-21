@@ -33,6 +33,9 @@ class NullAudio:
     def recording_wait(self) -> float:
         return 0.0
 
+    def recording_aligned(self) -> bool:
+        return False
+
     def set_grid(self, frames: int | None) -> None:
         pass  # nothing is audible, so there is nothing to keep in time
 

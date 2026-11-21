@@ -136,8 +136,10 @@ def undo_depth(rig: Rig) -> int:
     return len(rig.store.state.undo_stack)
 
 
-def test_the_whole_session_end_to_end(rig, tmp_path):
+def test_the_whole_session_end_to_end(rig, tmp_path, monkeypatch):
     c, device = rig.controller, rig.device
+    spy = SpyEngine(c._stretch_engine())
+    monkeypatch.setattr(c, "_stretch_engine", lambda: spy)
 
     # --- 1. the first recording makes the bar; only it is shifted to its first onset
     first_take(rig)
@@ -162,6 +164,7 @@ def test_the_whole_session_end_to_end(rig, tmp_path):
     assert "shift" not in stop1 and stop1.get("grid") != "onset"
     pad1 = rig.wav(1)
     assert len(pad1) == BAR
+    assert spy.calls == 1  # no loop ran when it began: it was stretched, not padded
     assert rig.store.state.master == master  # the bar did not move
 
     # --- 3. both loop; the engine plays exactly their sum, the seam of pad 1 has no click
@@ -374,3 +377,95 @@ def test_the_bar_survives_undoing_everything_and_bringing_it_back(rig):
     c.undo()
     c.undo()  # the first delete taken back: the old session with its own bar
     assert c.grid_frames() == BAR and rig.store.state.master == master
+
+
+
+BEAT = BAR // 4
+
+
+class SpyEngine:
+    """A stretch engine that notes every call; it stretches with ``inner`` or by plain interpolation."""
+
+    def __init__(self, inner=None) -> None:
+        self.inner = inner
+        self.calls = 0
+
+    def stretch(self, data: np.ndarray, target: int) -> np.ndarray:
+        self.calls += 1
+        if self.inner is not None:
+            return self.inner.stretch(data, target)
+        positions = np.linspace(0, len(data) - 1, target)
+        return np.interp(positions, np.arange(len(data)), data).astype(np.float32)
+
+
+def onsets(data: np.ndarray, threshold: float = 0.1, gap: int = 1000) -> list[int]:
+    """First frame of every burst: above ``threshold`` after at least ``gap`` quiet frames."""
+    hits = np.nonzero(np.abs(data) > threshold)[0]
+    if len(hits) == 0:
+        return []
+    starts = np.concatenate(([True], np.diff(hits) > gap))
+    return [int(h) for h in hits[starts]]
+
+
+def overdub(rig: Rig, monkeypatch, bars: float) -> tuple[np.ndarray, SpyEngine, list[int]]:
+    """Pad 1 recorded over the looping pad 0 for ``bars`` bars, claps exactly on every beat line.
+
+    Returns the saved take, the stretch spy and where the claps were played in it
+    (frames from its start, the engine begins it on a loop start).
+    """
+    c, device = rig.controller, rig.device
+    first_take(rig)
+    spy = SpyEngine()
+    monkeypatch.setattr(c, "_stretch_engine", lambda: spy)
+    c.set_mode(Mode.LOOP)
+    anchor = device.frame
+    c.press(0)  # pad 0 loops and anchors the bar lines
+    c.set_mode(Mode.RECORD)
+    device.step(30)
+    burst = clap_signal(BEAT, SR, [0.0])
+
+    def voice(frames: np.ndarray) -> np.ndarray:
+        rel = (frames - anchor) % BEAT
+        out = np.zeros(len(frames), dtype=np.float32)
+        ok = frames >= anchor
+        out[ok] = burst[rel[ok]]
+        return out
+
+    c.press(1)
+    while c.recording_waits():
+        device.step()
+    device.voice = voice
+    played = round(bars * BAR / BLOCK) * BLOCK
+    device.step(played // BLOCK)
+    c.press(1)
+    device.voice = None
+    assert c.recording_pad is None and c.pad(0).looping
+    claps = [e for e in onsets(np.tile(burst, -(-played // BEAT))) if e < played]
+    return rig.wav(1), spy, claps
+
+
+@pytest.mark.parametrize("off", [0.045, -0.045], ids=["late_stop", "early_stop"])
+def test_an_overdub_on_a_running_loop_is_cut_or_padded_never_stretched(rig, monkeypatch, off):
+    take, spy, claps = overdub(rig, monkeypatch, 2 * (1 + off))  # stop 4.5 % after or before two bars
+    assert len(take) == 2 * BAR
+    if off < 0:  # padded with silence after the last frame played
+        assert np.abs(take[round(2 * BAR * (1 + off)):]).max() == 0.0
+    assert onsets(take) == [e for e in claps if e < 2 * BAR]  # every clap on its beat line, to the frame
+    assert spy.calls == 0
+
+
+def test_an_overdub_with_stretching_off_is_fitted_to_the_grid_as_before(rig, monkeypatch):
+    rig.controller.apply_settings(replace(rig.controller.settings, stretch_to_grid=False))
+    take, spy, claps = overdub(rig, monkeypatch, 2 * 1.045)
+    assert len(take) == 3 * BAR  # past the stop grace: up to the next whole loop
+    assert onsets(take) == claps
+    assert np.abs(take[round(2 * 1.045 * BAR):]).max() == 0.0
+    assert spy.calls == 0
+
+
+def test_an_overdub_far_off_whole_loops_is_fitted_to_the_grid(rig, monkeypatch):
+    take, spy, claps = overdub(rig, monkeypatch, 2.4)  # 20 % over two bars: not cut back
+    assert len(take) == 3 * BAR
+    assert onsets(take) == claps
+    assert np.abs(take[round(2.4 * BAR):]).max() == 0.0
+    assert spy.calls == 0

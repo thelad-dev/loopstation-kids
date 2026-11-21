@@ -60,6 +60,9 @@ class FakeAudio:
         # (free, align) each pad was last played with (see ``AudioBackend.play``).
         self.play_modes: dict[int, tuple[bool, bool]] = {}
         self.record_align = True  # ``align`` of the last start_recording
+        # What recording_aligned() reports: in this model a recording waits for a
+        # loop start when it is aligned, a grid is set and boundary_in says loops run.
+        self._record_aligned = False
         self.effects: list[np.ndarray] = []
         self.calls: list[tuple[Any, ...]] = []
         self._record_start: float | None = None
@@ -86,6 +89,7 @@ class FakeAudio:
             return False
         self.calls.append(("start_recording",))
         self.record_align = align
+        self._record_aligned = align and self.grid is not None and self.boundary_in is not None
         self._record_start = self.clock()
         return True
 
@@ -95,6 +99,7 @@ class FakeAudio:
             return None
         frames = int(round((self.clock() - self._record_start) * self.sample_rate))
         self._record_start = None
+        self._record_aligned = False
         if frames <= 0:
             return None
         if self.clap_times is not None:
@@ -107,6 +112,9 @@ class FakeAudio:
 
     def recording_wait(self) -> float:
         return self.wait if self._record_start is not None else 0.0
+
+    def recording_aligned(self) -> bool:
+        return self._record_aligned
 
     def set_grid(self, frames: int | None) -> None:
         self.calls.append(("set_grid", frames))

@@ -41,6 +41,15 @@ class AudioBackend(Protocol):
         """Seconds until a recording that waits for the next loop start begins (0 if not waiting)."""
         ...
 
+    def recording_aligned(self) -> bool:
+        """True if the running recording was started so that it begins on the next loop start.
+
+        That is: a grid is set and loops ran on it when ``start_recording`` was
+        called with ``align``. False without a recording, for a free pad and
+        for a recording that began at once.
+        """
+        ...
+
     def set_grid(self, frames: int | None) -> None:
         """Loop length in frames that loops and recordings snap to (None = free, as without sync).
 
