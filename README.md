@@ -240,7 +240,7 @@ So kommt Rubber Band auf den Rechner (immer nur mit Zustimmung):
 
 ## Drittanbieter-Lizenzen
 
-Dieses Projekt hat selbst noch keine Lizenzdatei; das ist eine offene Entscheidung. Die Programme und Bibliotheken, die es benutzt, haben ihre eigenen Lizenzen:
+Dieses Projekt selbst steht unter Apache-2.0 (siehe [LICENSE](LICENSE)). Die Programme und Bibliotheken, die es benutzt, haben ihre eigenen Lizenzen:
 
 | Bestandteil | Lizenz | Hinweis |
 |---|---|---|
@@ -268,3 +268,7 @@ ruff check .
 Die Tests brauchen weder Audiogerät noch Launchpad (Audio, MIDI und Uhr werden nachgebaut, die Oberfläche läuft mit `QT_QPA_PLATFORM=offscreen`).
 
 Aufbau: `loopstation/store.py` (Ereignis-Protokoll), `state.py` (Zustand und Nachspielen), `controller.py` (Bedienlogik ohne Qt), `audio/` (Aufnahme und Wiedergabe, `audio/sync.py` rechnet das Loop-Raster), `midi/` (Launchpad), `clips.py` (Merkzettel zu lauter Aufnahmen), `gui/` (Oberfläche), `sets.py` und `session.py` (Sets schreiben, lesen, Sitzung tauschen), `installed.py` (Start der installierten App mit Datenordner im Benutzerprofil), `packaging/windows/` (PyInstaller-Spec, Inno-Setup-Skript, App-Symbol).
+
+## License
+
+Copyright 2026 thelad-dev. Licensed under the Apache License 2.0, see [LICENSE](LICENSE).
