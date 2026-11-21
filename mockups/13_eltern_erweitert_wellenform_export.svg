@@ -257,8 +257,8 @@
 <text x="756.125" y="457.4" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#F2F2F2" text-anchor="start" >Anhören</text>
 <rect x="952" y="428" width="278" height="48" rx="12" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
 <text x="1091.0" y="457.76" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#F2F2F2" text-anchor="middle" >Zwischen Markern strecken</text>
-<rect x="334" y="486" width="64" height="36" rx="18" fill="#32D74B" />
-<circle cx="380" cy="504" r="14" fill="#FFFFFF"/>
+<rect x="334" y="486" width="64" height="36" rx="18" fill="#48484F" />
+<circle cx="352" cy="504" r="14" fill="#FFFFFF"/>
 <text x="414" y="502" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16.5" font-weight="600" fill="#F2F2F2" text-anchor="start" >Marker auf Transiente einrasten</text>
 <text x="414" y="522" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="400" fill="#8E8E93" text-anchor="start" >rastet auf den nächsten Schlag in der Nähe ein; ohne Schlag bleibt der Marker, wo er ist</text>
 <rect x="312" y="550" width="940" height="226" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />

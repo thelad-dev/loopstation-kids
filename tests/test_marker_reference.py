@@ -144,8 +144,8 @@ def test_a_quiet_blip_does_not_steal_the_marker_from_the_hit():
 
 # ----------------------------------------------------------- settings and page
 
-def test_the_snap_setting_is_a_live_bool_that_is_on_by_default():
-    assert Settings().snap_markers is True and "snap_markers" in LIVE_SETTINGS
+def test_the_snap_setting_is_a_live_bool_that_is_off_by_default():
+    assert Settings().snap_markers is False and "snap_markers" in LIVE_SETTINGS
     assert parse_settings({"snap_markers": False}).snap_markers is False
     with pytest.raises(ConfigError):
         parse_settings({"snap_markers": "ja"})
@@ -157,14 +157,23 @@ def snap_page(qapp, tmp_path, clock):
     dialog = AdvancedDialog(controller)
     dialog.choose_pad(1)
     dialog.resize(1200, 900)
+    assert not dialog.snap_switch.isChecked()
     yield dialog, controller
     dialog.close()
     controller.store.close()
 
 
-def test_the_marker_button_snaps_to_the_hit_and_logs_the_snapped_frame(snap_page):
+def test_by_default_a_marker_stays_exactly_where_it_was_put(snap_page):
     dialog, controller = snap_page
-    assert dialog.snap_switch.isChecked()
+    click_frame(dialog, int(0.37 * SR) + 120)
+    assert dialog.place_marker()
+    assert controller.markers(1) == [int(0.37 * SR) + 120]
+
+
+def test_with_snapping_on_the_marker_snaps_to_the_hit_and_logs_the_snapped_frame(snap_page):
+    dialog, controller = snap_page
+    dialog.snap_switch.setChecked(True)
+    assert controller.settings.snap_markers is True
     click_frame(dialog, int(0.37 * SR) + 120)  # 15 ms late
     assert dialog.place_marker()
     (frame,) = controller.markers(1)
@@ -173,19 +182,19 @@ def test_the_marker_button_snaps_to_the_hit_and_logs_the_snapped_frame(snap_page
     assert dialog.place_marker() and int(0.9 * SR) in controller.markers(1)
 
 
-def test_the_switch_turns_snapping_off_at_once(snap_page):
+def test_the_switch_turns_snapping_on_and_off_at_once(snap_page):
     dialog, controller = snap_page
+    dialog.snap_switch.setChecked(True)
+    assert controller.settings.snap_markers is True
     dialog.snap_switch.setChecked(False)
     assert controller.settings.snap_markers is False
     click_frame(dialog, int(0.37 * SR) + 120)
     assert dialog.place_marker() and controller.markers(1) == [int(0.37 * SR) + 120]
-    dialog.snap_switch.setChecked(True)
-    assert controller.settings.snap_markers is True
 
 
 def test_the_snap_switch_is_on_the_page_like_the_other_switches(snap_page):
     dialog, _ = snap_page
     assert dialog.snap_switch.parent() is not None
-    dialog.snap_switch.setChecked(False)
+    assert dialog.snap_switch.isChecked() is False
     QTest.mouseClick(dialog.snap_switch, Qt.MouseButton.LeftButton, pos=QPoint(10, 10))
     assert dialog.snap_switch.isChecked() is True

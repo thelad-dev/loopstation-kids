@@ -638,7 +638,7 @@ for mx, ml in ((0.02, "A"), (0.51, "B")):
 d.add(button(CX0 + 22, 428, 170, 48, "Marker setzen", "secondary"), button(CX0 + 202, 428, 170, 48, "Marker löschen", "secondary"),
       button(CX0 + 382, 428, 150, 48, "Anhören", "secondary", "play", 15))
 d.add(button(CX0 + 640, 428, 278, 48, "Zwischen Markern strecken", "secondary"))
-d.add(toggle(CX0 + 22, 486, True, "Marker auf Transiente einrasten", "rastet auf den nächsten Schlag in der Nähe ein; ohne Schlag bleibt der Marker, wo er ist"))
+d.add(toggle(CX0 + 22, 486, False, "Marker auf Transiente einrasten", "rastet auf den nächsten Schlag in der Nähe ein; ohne Schlag bleibt der Marker, wo er ist"))
 d.add(card(CX0, 550, 940, 226, "Diesen Loop exportieren", "Lokal auf diesem Rechner · kein Upload, kein Teilen"))
 d.add(text(CX0 + 22, 640, "Format", 15, TEXT, 700))
 d.add(radio(CX0 + 22, 656, True, "WAV", "unverändert, Standard"), radio(CX0 + 200, 656, False, "MP3", "braucht ffmpeg – nicht gefunden", dis=True))
