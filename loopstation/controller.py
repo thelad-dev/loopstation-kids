@@ -29,6 +29,8 @@ from loopstation.audio.stretch import (
     MarkerStretchError,
     StretchEngine,
     engine_notice,
+    map_back,
+    marker_targets,
     resolve_engine,
     stretch_between_markers,
     stretch_target,
@@ -1507,6 +1509,43 @@ class Controller:
         self._changed()
         return None
 
+    def _marker_chain(self, sample: str, length: int) -> tuple[str, np.ndarray, list[list[int]]] | None:
+        """Where ``sample`` came from, if it was made by stretching between markers.
+
+        The ``record_stop`` of such a take names the first take of the chain
+        (``root``) and where its inner pieces start in both (``map``). None when that
+        is unknown or no longer fits: older logs and archived events, shortened
+        loops, another grid or sample rate, a missing original.
+        """
+        stop = None
+        for event in reversed(list(self.store.active_events().values())):
+            if event.type == ev.RECORD_STOP and event.data.get("sample") == sample:
+                stop = event.data
+                break
+        if stop is None or stop.get("source") != MARKER_STRETCH:
+            return None
+        root, anchors = stop.get("root"), stop.get("map")
+        rate = self.audio.sample_rate
+        if (not isinstance(root, str) or root == sample or not isinstance(anchors, list)
+                or stop.get("frames") != length or stop.get("duration") != round(length / rate, 3)):
+            return None
+        points = []
+        for pair in anchors:
+            if (not isinstance(pair, list) or len(pair) != 2
+                    or not all(isinstance(v, int) and not isinstance(v, bool) for v in pair)):
+                return None
+            points.append(pair)
+        for i in (0, 1):
+            line = [0, *(p[i] for p in points), length]
+            if any(b <= a for a, b in zip(line, line[1:], strict=False)):
+                return None
+        if root not in self._cache and not (self.samples_dir / root).is_file():
+            return None
+        data = self._loop_data(root)
+        if data is None or len(data) != length:
+            return None
+        return root, data, points
+
     def stretch_to_markers(self, pad: int) -> str | None:
         """Stretch the loop on ``pad`` so its markers sit on the beat lines; None, or why not.
 
@@ -1515,6 +1554,15 @@ class Controller:
         recording (``record_stop`` with ``source: "markers"``), so Zurück and the
         history take it back; its markers are the beat lines. Nothing is
         stretched when a piece would change by more than 10 %.
+
+        A loop that is itself the result of such a stretch is not stretched once
+        more: its markers are mapped back onto the first take of the chain
+        (``root`` and ``map`` in its ``record_stop``) and that take is stretched
+        once, to the same beat lines. The parents' markers on the loop count: one
+        they deleted there is not used again. The chain holds only while the
+        ``record_stop`` of the stretch is in the active log (not archived); without
+        it, or when a piece of the first take would change by more than 10 %, the
+        loop itself is stretched as before.
         """
         sample = self.pad(pad).sample
         if sample is None:
@@ -1532,14 +1580,30 @@ class Controller:
         data = self._loop_data(sample)
         if data is None:
             return MARKER_STRETCH_REFUSALS["unreadable"]
+        total, beat, engine = len(data), grid / info.beats, self._stretch_engine()
         try:
-            result, targets = stretch_between_markers(
-                data, marks, grid / info.beats, engine=self._stretch_engine()
-            )
+            targets = marker_targets(marks, beat, total)
         except MarkerStretchError as exc:
             return MARKER_STRETCH_REFUSALS[exc.reason]
-        if np.array_equal(result, data):
+        inside = sorted({m for m in marks if 0 < m < total})
+        if inside == targets:  # every piece keeps its length: nothing to stretch
             return MARKER_STRETCH_REFUSALS["already"]
+        result: np.ndarray | None = None
+        chain = self._marker_chain(sample, total)
+        if chain is not None:
+            root, original, anchors = chain
+            pins = map_back(inside, anchors, total)
+            if all(a < b for a, b in zip([0, *pins], [*pins, total], strict=True)):
+                try:
+                    result, _ = stretch_between_markers(original, pins, beat, engine=engine, targets=targets)
+                except MarkerStretchError:  # too far on the first take: stretch the loop itself
+                    result = None
+        if result is None:
+            root, pins = sample, inside
+            try:
+                result, _ = stretch_between_markers(data, inside, beat, engine=engine, targets=targets)
+            except MarkerStretchError as exc:
+                return MARKER_STRETCH_REFUSALS[exc.reason]
         rate = self.audio.sample_rate
         stamp = int(self._clock() * 1000)
         while (self.samples_dir / sample_filename(pad, stamp)).exists():
@@ -1555,6 +1619,7 @@ class Controller:
         self.store.append(ev.RECORD_STOP, pad, {
             "sample": name, "duration": round(len(result) / rate, 3), "frames": len(result),
             "source": MARKER_STRETCH, "from": sample,
+            "root": root, "map": [[p, t] for p, t in zip(pins, targets, strict=True)],
         })
         self.store.append(ev.MARKER_SET, pad, {"sample": name, "rate": rate, "frames": targets})
         self._changed()
