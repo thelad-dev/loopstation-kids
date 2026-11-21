@@ -42,8 +42,9 @@ latency_ms = "auto"
 data_dir = "."
 
 # --- Loop-Naht ---
-# Die ersten und letzten Millisekunden jedes Loops werden weich ein- und ausgeblendet,
-# damit es beim Sprung vom Ende zum Anfang nicht knackt. Die Loop-Länge bleibt gleich.
+# Das Ende jedes Loops wird weich ausgeblendet (bis 25 ms), der Anfang nur 2 ms eingeblendet,
+# damit es beim Sprung vom Ende zum Anfang nicht knackt und der erste Schlag erhalten bleibt.
+# Die Loop-Länge bleibt gleich.
 # false = harter Sprung wie bisher. Wirkt sofort (für neue Aufnahmen und den Export).
 soft_seam = true
 

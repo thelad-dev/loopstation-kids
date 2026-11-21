@@ -14,7 +14,8 @@ import numpy as np
 # an eighth of the loop so short loops keep most of their tail.
 STOP_GRACE_SECONDS = 0.15
 
-# Seam fade: 2 % of the loop, at least 2 ms, at most 25 ms, never over 10 %.
+# Seam fade at the end: 2 % of the loop, at least 2 ms, at most 25 ms, never over 10 %.
+# The fade-in at the start is only SEAM_FADE_MIN_SECONDS (see ``seam_fade_in_frames``).
 SEAM_FADE_FRACTION = 0.02
 SEAM_FADE_MIN_SECONDS = 0.002
 SEAM_FADE_MAX_SECONDS = 0.025
@@ -72,7 +73,7 @@ def fit_to_grid(data: np.ndarray, grid: int, grace: int = 0, limit: int | None =
 
 
 def seam_fade_frames(length: int, sample_rate: int) -> int:
-    """Length in frames of the fade at each end of a loop of ``length`` frames."""
+    """Length in frames of the fade-out at the end of a loop of ``length`` frames."""
     if length <= 0:
         return 0
     frames = round(SEAM_FADE_FRACTION * length)
@@ -81,18 +82,35 @@ def seam_fade_frames(length: int, sample_rate: int) -> int:
     return min(frames, int(SEAM_FADE_LIMIT_FRACTION * length))
 
 
+def seam_fade_in_frames(length: int, sample_rate: int) -> int:
+    """Length in frames of the fade-in at the start of a loop of ``length`` frames.
+
+    Only ``SEAM_FADE_MIN_SECONDS``: the first beat lies on frame 0 on purpose
+    (the onset shift puts the first attack there, every overdub starts on its
+    downbeat), and a long ramp would swallow it. Never longer than the fade-out.
+    """
+    return min(round(SEAM_FADE_MIN_SECONDS * sample_rate), seam_fade_frames(length, sample_rate))
+
+
+def _hann_ramp(n: int) -> np.ndarray:
+    """Rising half Hann window of ``n`` frames, starting at exactly 0."""
+    return (0.5 * (1.0 - np.cos(np.pi * np.arange(n) / n))).astype(np.float32)
+
+
 def soften_seam(data: np.ndarray, sample_rate: int) -> np.ndarray:
     """Copy of the loop ``data`` with its first and last frames faded through zero.
 
-    The length is unchanged, so the loop period and the grid stay exact; the
-    first and the last frame are 0, which removes the step where the end meets
-    the beginning. A silent end stays silent.
+    The end fades out over ``seam_fade_frames``, the start fades in over the
+    much shorter ``seam_fade_in_frames`` so the first beat on frame 0 keeps its
+    attack. The length is unchanged, so the loop period and the grid stay
+    exact; the first and the last frame are 0, which removes the step where the
+    end meets the beginning. A silent end stays silent.
     """
     out = np.array(data, dtype=np.float32)
-    n = seam_fade_frames(len(out), sample_rate)
-    if n < 2:
+    n_out = seam_fade_frames(len(out), sample_rate)
+    if n_out < 2:
         return out
-    ramp = (0.5 * (1.0 - np.cos(np.pi * np.arange(n) / n))).astype(np.float32)
-    out[:n] *= ramp
-    out[len(out) - n:] *= ramp[::-1]
+    n_in = seam_fade_in_frames(len(out), sample_rate)
+    out[:n_in] *= _hann_ramp(n_in)
+    out[len(out) - n_out:] *= _hann_ramp(n_out)[::-1]
     return out
