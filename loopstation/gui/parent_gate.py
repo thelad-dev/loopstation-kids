@@ -282,7 +282,7 @@ class GateOverlay(QWidget):
 
     @property
     def keep_unlocked(self) -> bool:
-        """Is the lock to stay open after a right answer (the setting allows it and the switch was turned on)?"""
+        """Does the lock stay open after a right answer (setting above 0 and the switch turned on)?"""
         return self.unlock_minutes > 0 and self.keep_open.isChecked()
 
     def open(self) -> None:
