@@ -40,6 +40,7 @@ if TYPE_CHECKING:
 # The settings this panel takes over from the generic rows of the page.
 PANEL_KEYS = (
     "volume", "max_level_db", "input_gain_db", "auto_gain", "peak_meter", "soft_seam", "sound_effects",
+    "record_start_tone",
 )
 
 HONESTY_TITLE = "Echte Lautstärke hängt vom Kopfhörer ab"
@@ -457,6 +458,9 @@ class LevelPanel(QWidget):
             "soft_seam", values["soft_seam"]))
         layout.addLayout(self._switch_row(
             "Start-/Stopp-Pieps", "läuft durch dieselbe Grenze", "sound_effects", values["sound_effects"]))
+        layout.addLayout(self._switch_row(
+            "Aufnahmestart-Ton", "klingt vor der Aufnahme aus · Standard an",
+            "record_start_tone", values["record_start_tone"]))
         layout.addLayout(self._switch_row(
             "Pegelanzeige bei Aufnahme",
             "drei Balken am Pad und die Skala hier · das Warnzeichen bleibt immer",

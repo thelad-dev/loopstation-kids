@@ -18,6 +18,12 @@ sample_rate = 44100
 # Kurzer Piepton beim Start und Ende einer Aufnahme. Wirkt sofort.
 sound_effects = true
 
+# Piepton beim Start einer Aufnahme (gilt nur, solange sound_effects = true).
+# Er klingt vollständig aus, bevor die Aufnahme beginnt, und ist nie auf ihr zu
+# hören; die Aufnahme beginnt dadurch einen Moment nach dem Druck.
+# false = kein Start-Ton, die Aufnahme beginnt sofort. Wirkt sofort.
+record_start_tone = true
+
 # true = Vollbild ohne Fensterrahmen, false = maximiertes Fenster. Wirkt sofort.
 fullscreen = false
 
@@ -122,7 +128,8 @@ stretch_to_grid = true
 # --- Metronom (Erweitert) ---
 
 # true = leiser Ton auf jedem Schlag des Takts, durch Lautstärke und Obergrenze.
-# Das Kind sieht nur den Puls. Wirkt sofort.
+# Das Kind sieht nur den Puls. Während einer Aufnahme schweigt er, damit er nie
+# auf der Aufnahme landet. Wirkt sofort.
 metronome_tone = false
 
 # Pegel des Metronom-Tons in dB(FS) von -40 bis -6, vor Lautstärke und

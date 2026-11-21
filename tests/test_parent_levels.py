@@ -231,6 +231,9 @@ def test_trim_and_switches_write_the_file_and_reach_the_engine(parts, dialog):
     assert controller.peak_meter is False and load_settings(path).peak_meter is False
     switches["sound_effects"].setChecked(False)
     assert controller.settings.sound_effects is False and load_settings(path).sound_effects is False
+    assert controller.settings.record_start_tone is True and switches["record_start_tone"].isChecked()
+    switches["record_start_tone"].setChecked(False)
+    assert controller.settings.record_start_tone is False and load_settings(path).record_start_tone is False
     switches["soft_seam"].setChecked(False)
     assert controller.settings.soft_seam is False and load_settings(path).soft_seam is False
     # The values the child set meanwhile are kept in the file, too.

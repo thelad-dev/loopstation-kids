@@ -59,6 +59,11 @@ SOFT_CLIP_KNEE = 0.7
 MIN_CEILING = 1e-4
 # Work buffers start at this block size and grow if the device asks for more.
 MIN_SCRATCH_FRAMES = 8192
+# A recording starts this long after the last sound the engine was told to
+# play (the start beep, a queued metronome tick, the stop beep of the take
+# before): the room and the latency setting are never exact, so it keeps a
+# little distance from the tail.
+RECORD_GUARD_SECONDS = 0.05
 
 
 @dataclass
@@ -124,6 +129,11 @@ class SoundDeviceAudio:
         # microphone as it comes) and whether its first block was placed.
         self._rec_start: int | None = None
         self._rec_aligned = False
+        # Output frame before which the microphone is not kept for a recording
+        # that starts at once (it waits for the sounds that are still playing)
+        # and whether its first block was placed.
+        self._rec_gate: int | None = None
+        self._rec_gate_open = False
         # Whether the running recording was started on the grid (it begins on a
         # loop start). Set in start_recording only, never by the input callback.
         self._rec_on_grid = False
@@ -265,6 +275,7 @@ class SoundDeviceAudio:
             self._recorded_frames = 0
             self._rec_start = None
             self._rec_aligned = False
+            self._rec_gate = None
             self._rec_on_grid = False
         self._apply_devices(input_name, output_name, hostapi)
         return self.device_notice
@@ -370,6 +381,16 @@ class SoundDeviceAudio:
     def _input_callback(self, indata: np.ndarray, frames: int, _time: Any, status: Any) -> None:
         with self._lock:
             block = indata[:, 0]
+            if self._rec_gate is not None and not self._rec_gate_open:
+                # Same mapping as below: the output frame that was audible when the
+                # first frame of this block reached the microphone.
+                first = self._now_frame() - self._latency_frames - frames
+                skip = self._rec_gate - first
+                if skip >= frames:
+                    return  # the speaker is still playing what the take must not hold
+                self._rec_gate_open = True
+                if skip > 0:
+                    block = block[skip:]
             if self._rec_start is not None and not self._rec_aligned:
                 # Output frame that was audible when the first frame of this
                 # block reached the microphone.
@@ -476,7 +497,7 @@ class SoundDeviceAudio:
 
     # ------------------------------------------------------------ recording
 
-    def start_recording(self, align: bool = True) -> bool:
+    def start_recording(self, align: bool = True, cue: np.ndarray | None = None) -> bool:
         if not self.available_input:
             return False
         self._discard_input()
@@ -485,12 +506,22 @@ class SoundDeviceAudio:
             self._recorded_frames = 0
             self._rec_start = None
             self._rec_aligned = False
+            self._rec_gate = None
+            self._rec_gate_open = False
             self._rec_on_grid = False
             self._auto_db = 0.0
             self._input_peak = 0.0
+            if cue is not None:
+                self._effects.append(_Voice(np.asarray(cue, dtype=np.float32), loop=False, start=self._frame))
+            # Nothing of what the speaker still plays may end up in the take.
+            quiet = self._effects_end()
+            if quiet is not None:
+                quiet += int(round(RECORD_GUARD_SECONDS * self.sample_rate))
             if align and self._grid is not None and self._grid_running():
-                self._rec_start = next_boundary(self._frame, self._origin, self._grid)
+                self._rec_start = next_boundary(max(self._frame, quiet or 0), self._origin, self._grid)
                 self._rec_on_grid = True
+            else:
+                self._rec_gate = quiet
         try:
             stream = self._sd.InputStream(
                 callback=self._input_callback, **self._stream_args(self._input_index)
@@ -508,6 +539,7 @@ class SoundDeviceAudio:
             self._discard_input()
             with self._lock:
                 self._rec_start = None
+                self._rec_gate = None
                 self._rec_on_grid = False
             return False
         return True
@@ -529,10 +561,17 @@ class SoundDeviceAudio:
             self._recorded_frames = 0
             self._rec_start = None
             self._rec_aligned = False
+            self._rec_gate = None
             self._rec_on_grid = False
         if not chunks:
             return None
         return np.concatenate(chunks).astype(np.float32)
+
+    def _effects_end(self) -> int | None:
+        """Output frame where the last queued sound effect ends, None if none is left (lock held)."""
+        ends = [e.start + len(e.data) for e in self._effects]
+        end = max(ends, default=0)
+        return end if end > self._frame else None
 
     def recording_seconds(self) -> float:
         with self._lock:

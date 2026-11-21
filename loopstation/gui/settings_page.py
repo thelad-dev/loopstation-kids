@@ -171,6 +171,8 @@ FIELDS: list[Field] = [
           hint="Blendet das Ende jedes Loops kurz aus und den Anfang ganz kurz ein, damit es nicht "
                "knackt. Der erste Schlag bleibt dabei hörbar."),
     Field("sound_effects", "Piepton bei Aufnahme", "bool"),
+    Field("record_start_tone", "Aufnahmestart-Ton", "bool",
+          hint="Der Ton klingt aus, bevor die Aufnahme beginnt, und ist nie auf ihr zu hören."),
     Field("max_record_seconds", "Längste Aufnahme", "float", 1, 120, suffix=" s"),
     Field("latency_ms", "Latenz Lautsprecher zu Mikrofon", "auto_float", 0, 1000, suffix=" ms",
           hint="Der Auto-Wert hängt vom Gerät ab. Mit Mikrofon und Kopfhörer gegenhören: "
@@ -1006,8 +1008,8 @@ register_field(Field("stretch_engine", "Stretch-Engine", "choice", choices=STRET
 
 # --- Metronome (W3-ERWEITERT) ---
 register_field(Field("metronome_tone", "Metronom-Ton (leise)", "bool",
-                     hint="Ein leiser Ton auf jedem Schlag des Takts. "
-                          "Mit Lautsprecher hört ihn das Mikrofon mit."),
+                     hint="Ein leiser Ton auf jedem Schlag des Takts. Während einer Aufnahme "
+                          "schweigt er, damit er nie auf der Aufnahme landet."),
                before="latency_ms")
 register_field(Field("metronome_level_db", "Pegel des Metronom-Tons", "float", -40, -6, suffix=" dB",
                      hint="Vor Lautstärke und Obergrenze; leise gewählt, damit er nie scharf klickt."),

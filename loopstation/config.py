@@ -30,6 +30,8 @@ class Settings:
     max_record_seconds: float = 10.0
     sample_rate: int = 44100
     sound_effects: bool = True
+    # The start beep is on top of sound_effects; it plays before the take, never on it.
+    record_start_tone: bool = True
     fullscreen: bool = False
     launchpad: bool = True
     # Cut recordings to the length of the first loop and keep loops in time.
@@ -169,7 +171,7 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
         )
     if "sample_rate" in raw:
         values["sample_rate"] = _check_int(source, "sample_rate", raw["sample_rate"], 8000, 192000)
-    for key in ("sound_effects", "fullscreen", "launchpad", "loop_sync"):
+    for key in ("sound_effects", "record_start_tone", "fullscreen", "launchpad", "loop_sync"):
         if key in raw:
             values[key] = _check_bool(source, key, raw[key])
     if "latency_ms" in raw and raw["latency_ms"] != "auto":
@@ -287,6 +289,9 @@ SETTING_COMMENTS: dict[str, str] = {
     "sample_rate": "Abtastrate für Aufnahme und Wiedergabe in Hz (8000 bis 192000). "
                    "Wirkt erst nach einem Neustart.",
     "sound_effects": "Kurzer Piepton beim Start und Ende einer Aufnahme. Wirkt sofort.",
+    "record_start_tone": "Piepton beim Start einer Aufnahme (nur bei sound_effects = true). Er klingt "
+                         "vollständig aus, bevor die Aufnahme beginnt, und ist nie auf ihr zu hören. "
+                         "false = kein Start-Ton. Wirkt sofort.",
     "fullscreen": "true = Vollbild ohne Fensterrahmen, false = maximiertes Fenster. Wirkt sofort.",
     "launchpad": "Novation Launchpad automatisch suchen und benutzen. Wirkt sofort.",
     "loop_sync": "Taktgenauer Schnitt der Loops (true) oder jede Aufnahme mit eigener Länge (false). "

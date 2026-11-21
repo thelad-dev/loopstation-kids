@@ -1,6 +1,6 @@
 ; Inno Setup script for the Loopstation installer (Inno Setup 6.3 or newer).
 ;
-;   iscc /DAppVersion=1.1.2 packaging\windows\loopstation.iss
+;   iscc /DAppVersion=1.1.3 packaging\windows\loopstation.iss
 ;
 ; Expects the PyInstaller output in dist\Loopstation and the icon in
 ; build\loopstation.ico (both relative to the repository root).
