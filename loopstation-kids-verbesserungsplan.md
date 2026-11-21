@@ -1,7 +1,7 @@
 # Loopstation Kids — Verbesserungsplan
 
 Stand: 20. November 2026 (Europe/Berlin). Finale Fassung.
-Ausgangslage: Plan vom 20. November 2026 (Gespräch Sebastian / Aurora), Abgleich mit dem Code, Überarbeitung (v2) und Ergänzungen aus dem Voice-Chat (Sets, Plattformen, Windows-Backends, Export-Summe, Session-View-Rahmen).
+Ausgangslage: Plan vom 20. November 2026, Abgleich mit dem Code, Überarbeitung (v2) und Ergänzungen aus dem Voice-Chat (Sets, Plattformen, Windows-Backends, Export-Summe, Session-View-Rahmen).
 Repo: [thelad-dev/loopstation-kids](https://github.com/thelad-dev/loopstation-kids) (Python, PySide6, sounddevice/PortAudio), zuletzt gegen Commit-Stand vor dieser Fassung und gegen den Code (u. a. Controller, Event-Store, Audio-Backend) geprüft.
 
 Ziel: Aus dem bestehenden Kinderspielzeug eine richtig gute Loopstation machen — einfach für Kinder (auch mit neurodiversen Bedürfnissen: Reizempfindlichkeit, Vorhersehbarkeit, motorische Unterschiede), mit genug Eltern-Einstellungen für ein ordentliches Produkt. Die Kindseite bleibt strikt dünn (Pad-Raster, Puls, sichtbares Zurück, Lautstärke, fertig); alles andere gehört hinter den Eltern- bzw. Erweitert-Bereich.
