@@ -226,7 +226,7 @@ Erwachsene frieren die laufende Sitzung als Set ein und öffnen gespeicherte Set
 Eine Aufnahme knapp neben einem ganzen Takt (unter 10 %) wird beim Stopp auf genau diese Länge gezogen, die Tonhöhe bleibt (`stretch_to_grid`). Dafür gibt es zwei Engines hinter derselben Schnittstelle (`loopstation/audio/stretch.py`):
 
 - **Rubber Band** über das Python-Paket `pylibrb` (Wheel mit eingebauter Bibliothek): sauberer, vor allem bei Stimmen. Es ist **nicht Teil der Loopstation und nicht im Windows-Installer enthalten**; es wird nur auf Wunsch nachgeladen (siehe unten). Die Loopstation prüft beim Start, ob es sich laden und rechnen lässt, und schreibt das Ergebnis ins Protokoll (`stretch engine: ...`). Die App selbst greift dafür nie ins Netz.
-- **Einfacher Stretch** (WSOLA, nur numpy): immer eingebaut. Er läuft, wenn Rubber Band fehlt, nicht lädt oder bei einem einzelnen Stretch einen Fehler meldet. Eine Aufnahme geht deshalb nie verloren.
+- **Einfacher Stretch** (WSOLA, nur numpy): immer eingebaut. Klatscher und Schläge setzt er an ihre gestreckte Stelle, damit der Takt im Loop stimmt. Er läuft, wenn Rubber Band fehlt, nicht lädt oder bei einem einzelnen Stretch einen Fehler meldet. Eine Aufnahme geht deshalb nie verloren.
 
 Die Einstellung `stretch_engine` (im Elternbereich „Stretch-Engine“) wählt: `auto` (Standard) nimmt Rubber Band, wenn es gefunden wird, sonst still den einfachen Stretch (ohne Hinweis); `rubberband` will Rubber Band: fehlt es, meldet der Elternbereich deutlich „Rubber Band nicht installiert, einfache Engine aktiv“ mit dem Weg zum Nachinstallieren, und die App läuft mit dem einfachen Stretch weiter; `simple` nimmt immer den einfachen Stretch. Der Elternbereich zeigt den Status: installiert (mit Version) oder nicht installiert.
 
