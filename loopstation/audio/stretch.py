@@ -336,6 +336,7 @@ def stretch_between_markers(
     *,
     max_deviation: float = DEFAULT_MAX_DEVIATION,
     engine: StretchEngine | None = None,
+    targets: list[int] | None = None,
 ) -> tuple[np.ndarray, list[int]]:
     """Move each marker to its beat line by stretching the stretches between them.
 
@@ -346,22 +347,48 @@ def stretch_between_markers(
     off by at most ``max_deviation`` of its new length, else nothing is
     stretched (``MarkerStretchError("too_far")``): a marker far from a beat is
     more likely misplaced than meant.
+
+    ``targets`` (one per marker inside the loop, strictly increasing) replaces
+    the nearest beat lines: used when the markers were set on a stretched copy
+    and are mapped back onto the original, so they keep the copy's beat lines.
     """
     total = len(data)
-    targets = marker_targets(markers, beat_frames, total)
     inside = sorted({m for m in markers if 0 < m < total})
+    if targets is None:
+        targets = marker_targets(markers, beat_frames, total)
+    elif len(targets) != len(inside) or any(
+        b <= a for a, b in zip([0, *targets], [*targets, total], strict=True)
+    ):
+        raise ValueError("targets must be one strictly increasing position per marker inside the loop")
     source = [0, *inside, total]
     target = [0, *targets, total]
-    pieces = []
-    for (s0, s1), (t0, t1) in zip(
+    spans = list(zip(
         zip(source, source[1:], strict=False), zip(target, target[1:], strict=False), strict=True
-    ):
+    ))
+    for (s0, s1), (t0, t1) in spans:  # all checked before anything is stretched
         want, have = t1 - t0, s1 - s0
         if have != want and abs(have - want) / want > max_deviation:
             raise MarkerStretchError("too_far")
+    pieces = []
+    for (s0, s1), (t0, t1) in spans:
+        want, have = t1 - t0, s1 - s0
         piece = np.asarray(data[s0:s1], dtype=np.float32)
         pieces.append(piece if have == want else (engine or WsolaEngine()).stretch(piece, want))
     result = np.concatenate(pieces).astype(np.float32, copy=False)
     if len(result) != total:
         raise ValueError(f"stretched to {len(result)} frames, expected {total}")
     return result, targets
+
+
+def map_back(frames: list[int], anchors: list[list[int]], total: int) -> list[int]:
+    """Positions in a stretched loop mapped back onto the loop it was stretched from.
+
+    ``anchors`` are ``[frame_in_original, frame_in_result]`` pairs (both strictly
+    increasing, inside ``0 .. total``); the start and end of the loop are fixed
+    points. Between the anchors the stretch is taken as linear. That is only
+    approximately true: an engine may move an event inside a piece (WSOLA up to
+    about its search window), so a position mapped back can be off by that much.
+    """
+    original = [0, *(int(a[0]) for a in anchors), total]
+    stretched = [0, *(int(a[1]) for a in anchors), total]
+    return [int(round(v)) for v in np.interp(frames, stretched, original)]

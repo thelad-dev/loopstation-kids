@@ -62,6 +62,13 @@ MARKER_SET = "marker_set"
 # (the new bar, when the parents let a loop that set the grid define a new one) and ``grid``
 # (what the onset analysis decided for ``from``, passed on to the new sample).
 LOOP_TRIM = "loop_trim"
+# A loop the parents stretched between markers (Erweitert) is a ``record_stop`` with
+# ``source: "markers"``, ``from`` (the sample it replaced on the pad), ``frames``, and
+# (newer logs) ``root`` (the first take of the chain of such stretches, which is what was
+# stretched) and ``map`` (``[[frame_in_root, frame_in_result], ...]`` for the inner piece
+# boundaries; start and end map onto themselves). The next stretch of that sample maps the
+# markers back over ``map`` and stretches ``root`` once. Without ``root``/``map`` (older
+# logs) the sample itself is stretched; the state ignores both fields.
 
 EVENT_TYPES = frozenset(
     {

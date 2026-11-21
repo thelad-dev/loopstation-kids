@@ -15,7 +15,12 @@ from PySide6.QtTest import QTest
 from loopstation import events as ev
 from loopstation import export as ex
 from loopstation import sets
-from loopstation.audio.stretch import MarkerStretchError, marker_targets, stretch_between_markers
+from loopstation.audio.stretch import (
+    MarkerStretchError,
+    map_back,
+    marker_targets,
+    stretch_between_markers,
+)
 from loopstation.config import ConfigError, Settings, parse_settings
 from loopstation.controller import LIVE_SETTINGS, MARKER_STRETCH_REFUSALS, Controller, Mode
 from loopstation.gui.advanced_page import AdvancedDialog
@@ -241,6 +246,22 @@ def test_the_length_never_changes_whatever_the_markers(seed):
     assert len(result) == frames and targets == [int(b * BEAT) for b in sorted(chosen)]
 
 
+def test_markers_on_a_stretched_loop_map_back_onto_the_original():
+    anchors = [[4320, 4000], [8480, 8000]]  # the pieces of the original and where they went
+    assert map_back([4000, 8000], anchors, GRID) == [4320, 8480]
+    assert map_back([6000, 12000], anchors, GRID) == [6400, 12240]  # linear inside a piece
+    assert map_back([5], [], GRID) == [5]
+
+
+def test_given_beat_lines_are_used_as_they_are():
+    data = clap_signal(GRID, SR, [0.54, 1.06])
+    result, targets = stretch_between_markers(data, [4320, 8480], BEAT, targets=[4000, 8000])
+    plain, _ = stretch_between_markers(data, [4320, 8480], BEAT)
+    assert targets == [4000, 8000] and np.array_equal(result, plain)
+    with pytest.raises(ValueError):
+        stretch_between_markers(data, [4320, 4320], BEAT, targets=[4000, 8000])  # one marker, two lines
+
+
 @pytest.mark.parametrize(("marks", "reason"), [
     ([], "no_markers"),
     ([GRID + 5, -3], "no_markers"),
@@ -310,6 +331,190 @@ def test_a_refused_stretch_changes_nothing(tmp_path, clock, setup, reason):
     seq, sample = controller.store.last_seq, controller.pad(pad).sample
     assert controller.stretch_to_markers(pad) == MARKER_STRETCH_REFUSALS[reason]
     assert controller.store.last_seq == seq and controller.pad(pad).sample == sample
+
+
+class SpyEngine:
+    """A plain resampling stretch (every frame moves exactly in proportion), remembering its input."""
+
+    def __init__(self) -> None:
+        self.inputs: list[np.ndarray] = []
+
+    def stretch(self, data: np.ndarray, target: int) -> np.ndarray:
+        self.inputs.append(np.array(data, dtype=np.float32, copy=True))
+        where = np.linspace(0, len(data) - 1, target)
+        return np.interp(where, np.arange(len(data)), data).astype(np.float32)
+
+
+def is_slice_of(piece: np.ndarray, ref: np.ndarray) -> bool:
+    """Is ``piece`` exactly a stretch of consecutive frames of ``ref``?"""
+    loud = np.flatnonzero(piece)
+    if len(loud) == 0:
+        return bool(len(piece) <= len(ref))
+    first = int(loud[0])
+    for at in np.flatnonzero(ref == piece[first]):
+        start = int(at) - first
+        if start >= 0 and start + len(piece) <= len(ref) and np.array_equal(
+            ref[start : start + len(piece)], piece
+        ):
+            return True
+    return False
+
+
+def onset(data: np.ndarray, after: int) -> int:
+    """First frame from ``after`` on where a clap is loud."""
+    return after + int(np.argmax(np.abs(data[after:]) > 0.2))
+
+
+def spy_on(controller: Controller, monkeypatch) -> SpyEngine:
+    spy = SpyEngine()
+    monkeypatch.setattr(controller, "_stretch_engine", lambda: spy)
+    return spy
+
+
+def test_each_stretch_starts_from_the_original_take_not_from_the_last_result(tmp_path, clock, monkeypatch):
+    # claps at 4320, 8480 and 12360: one marker more each time, stretched after each, as parents do it
+    controller, _ = on_grid(tmp_path, clock, claps_pad1=(0.54, 1.06, 1.545))
+    original = controller.pad(1).sample
+    source = controller.sample_audio(original)
+    spy = spy_on(controller, monkeypatch)
+    takes = [original]
+    for search, beats in ((3000, [4000]), (6000, [4000, 8000]), (10000, [4000, 8000, 12000])):
+        current = controller.sample_audio(controller.pad(1).sample)
+        controller.add_marker(1, onset(current, search))
+        spy.inputs.clear()
+        assert controller.stretch_to_markers(1) is None
+        # the engine only ever got pieces of the original take, never of an earlier result
+        assert spy.inputs and all(is_slice_of(piece, source) for piece in spy.inputs)
+        takes.append(controller.pad(1).sample)
+        assert controller.markers(1) == beats  # the same beat lines as before
+        result = controller.sample_audio(takes[-1])
+        assert len(result) == GRID
+        for beat in beats:
+            assert abs(onset(result, beat - 400) - beat) <= 40  # every clap on its beat line
+        stop = events_of(controller, "record_stop")[-1]["data"]
+        assert stop["source"] == "markers" and stop["from"] == takes[-2]
+    # every stretched take names the original take as the root of its chain
+    assert [e["data"].get("root") for e in events_of(controller, "record_stop")[-3:]] == [original] * 3
+    # Zurück and Wiederholen work as before: one step back is the take before, with its markers
+    controller.undo(1)
+    assert controller.pad(1).sample == takes[2] and len(controller.markers(1)) == 3
+    controller.redo(1)
+    assert controller.pad(1).sample == takes[3] and controller.markers(1) == [4000, 8000, 12000]
+    assert takes[1] in controller.pad(1).history and original in controller.pad(1).history
+
+
+def test_a_stretched_take_without_its_chain_is_stretched_itself_as_before(tmp_path, clock, monkeypatch):
+    controller, _ = on_grid(tmp_path, clock, claps_pad1=(0.54, 1.06))
+    original = controller.sample_audio(controller.pad(1).sample)
+    controller.add_marker(1, 4320)
+    assert controller.stretch_to_markers(1) is None
+    first = controller.pad(1).sample
+    controller.shutdown()
+    # a log as written by 1.1.0: the stretched take does not say where it came from
+    log_path = controller.store.log_path
+    lines = []
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        event = json.loads(line)
+        if event["type"] == "record_stop" and event["data"].get("source") == "markers":
+            event["data"].pop("root", None)
+            event["data"].pop("map", None)
+            line = json.dumps(event, separators=(",", ":"))
+        lines.append(line)
+    log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    again = reopen(tmp_path, clock)
+    assert again.pad(1).sample == first
+    current = again.sample_audio(first)
+    spy = spy_on(again, monkeypatch)
+    again.add_marker(1, onset(current, 6000))
+    assert again.stretch_to_markers(1) is None
+    assert spy.inputs and all(is_slice_of(piece, current) for piece in spy.inputs)
+    assert not all(is_slice_of(piece, original) for piece in spy.inputs)
+    assert again.markers(1) == [4000, 8000]
+    again.shutdown()
+
+
+def test_a_piece_too_far_on_the_original_falls_back_to_stretching_the_take_as_before(
+    tmp_path, clock, monkeypatch
+):
+    # clap 2 at 12440: from the original its last piece would change by 11 %, from the take by under 10 %
+    controller, _ = on_grid(tmp_path, clock, claps_pad1=(0.54, 1.555))
+    original = controller.sample_audio(controller.pad(1).sample)
+    controller.add_marker(1, 4320)
+    assert controller.stretch_to_markers(1) is None
+    current = controller.sample_audio(controller.pad(1).sample)
+    spy = spy_on(controller, monkeypatch)
+    controller.add_marker(1, onset(current, 10000))
+    assert controller.stretch_to_markers(1) is None
+    assert spy.inputs and all(is_slice_of(piece, current) for piece in spy.inputs)
+    assert not all(is_slice_of(piece, original) for piece in spy.inputs)
+    assert controller.markers(1) == [4000, 12000]
+
+
+def test_after_undo_the_earlier_take_still_stretches_from_the_original(tmp_path, clock, monkeypatch):
+    controller, _ = on_grid(tmp_path, clock, claps_pad1=(0.54, 1.06, 1.545))
+    original = controller.pad(1).sample
+    source = controller.sample_audio(original)
+    spy = spy_on(controller, monkeypatch)
+    controller.add_marker(1, 4320)
+    controller.stretch_to_markers(1)
+    first = controller.pad(1).sample
+    controller.add_marker(1, onset(controller.sample_audio(first), 6000))
+    controller.stretch_to_markers(1)
+    controller.undo(1)  # back to the first stretched take, with its two markers
+    assert controller.pad(1).sample == first and len(controller.markers(1)) == 2
+    controller.add_marker(1, onset(controller.sample_audio(first), 10000))
+    spy.inputs.clear()
+    assert controller.stretch_to_markers(1) is None
+    assert spy.inputs and all(is_slice_of(piece, source) for piece in spy.inputs)
+    stop = events_of(controller, "record_stop")[-1]["data"]
+    assert stop["from"] == first and stop["root"] == original
+    assert controller.markers(1) == [4000, 8000, 12000]
+
+
+def test_a_loop_shortened_after_a_stretch_is_stretched_itself(tmp_path, clock, monkeypatch):
+    controller, _ = on_grid(tmp_path, clock, claps_pad1=(0.54, 1.06))
+    source = controller.sample_audio(controller.pad(1).sample)
+    controller.add_marker(1, 4320)
+    controller.stretch_to_markers(1)
+    assert controller.trim_loop(1, 100, 100 + GRID) is None  # one bar from frame 100, markers move along
+    trimmed = controller.sample_audio(controller.pad(1).sample)
+    spy = spy_on(controller, monkeypatch)
+    controller.add_marker(1, onset(trimmed, 6000))
+    assert controller.stretch_to_markers(1) is None
+    assert spy.inputs and all(is_slice_of(piece, trimmed) for piece in spy.inputs)
+    assert not all(is_slice_of(piece, source) for piece in spy.inputs)
+    assert controller.markers(1) == [4000, 8000]
+
+
+def test_a_stretch_whose_event_is_archived_is_stretched_itself(tmp_path, clock, monkeypatch):
+    settings = make_settings(tmp_path, auto_grid=True)
+    store = EventStore(
+        settings.log_dir, settings.pad_count, snapshot_interval=2, max_active_events=6, clock=clock
+    )
+    audio = FakeAudio(clock)
+    audio.clap_times = [0.5, 1.0]
+    controller = Controller(store, audio, settings, clock=clock)
+    controller.startup()
+    record(controller, clock, 0, 3.0)
+    audio.clap_times = [0.54, 1.06]
+    record(controller, clock, 1, 2.0)
+    source = controller.sample_audio(controller.pad(1).sample)
+    controller.add_marker(1, 4320)
+    assert controller.stretch_to_markers(1) is None
+    first = controller.pad(1).sample
+    for _ in range(4):  # more events of the parents push the stretch into the archive
+        controller.add_marker(1, 15000)
+        controller.remove_marker(1, 15000)
+    assert not any(e.data.get("sample") == first and e.type == ev.RECORD_STOP
+                   for e in store.active_events().values())
+    current = controller.sample_audio(first)
+    spy = spy_on(controller, monkeypatch)
+    controller.add_marker(1, onset(current, 6000))
+    assert controller.stretch_to_markers(1) is None
+    assert spy.inputs and all(is_slice_of(piece, current) for piece in spy.inputs)
+    assert not all(is_slice_of(piece, source) for piece in spy.inputs)
+    assert controller.markers(1) == [4000, 8000]
+    controller.shutdown()
 
 
 def test_a_free_pad_is_not_stretched_to_beat_lines(tmp_path, clock):
