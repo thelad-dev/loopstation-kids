@@ -727,7 +727,11 @@ class TileGrid(QWidget):
 
 
 class DetailLine(QWidget):
-    """The chosen pad in one folded line: its number, "Pad N" and a line of facts (unfolds later)."""
+    """The chosen pad in one folded line: its number, "Pad N" and a line of facts.
+
+    The unfoldable detail panel (loop, pad, recording) follows deliberately in the next step
+    (part 3), the tool side panels in part 2; this step is the parents' mode itself.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)

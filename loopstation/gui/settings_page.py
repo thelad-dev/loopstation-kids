@@ -186,9 +186,9 @@ FIELDS: list[Field] = [
     Field("peak_meter", "Pegelanzeige bei Aufnahme", "bool"),
     Field("launchpad", "Launchpad benutzen", "bool"),
     Field("fullscreen", "Vollbild", "bool"),
-    Field("parent_unlock_minutes", "Schloss offen lassen", "int", 0, 240, suffix=" min",
-          hint="So lange öffnet erneutes Halten des Schlosses die Elternansicht ohne Rechenaufgabe. "
-               "0 = immer fragen."),
+    Field("parent_unlock_minutes", "Schloss offen lassen", "int", 0, 15, suffix=" min",
+          hint="So lange darf erneutes Halten des Schlosses die Elternansicht ohne Rechenaufgabe öffnen, "
+               "wenn die Eltern es in der Aufgabe einschalten. 0 = immer fragen."),
     Field("parent_idle_minutes", "Zurück zur Kinderseite nach", "int", 0, 240, suffix=" min",
           hint="Ohne Eingabe kehrt die Elternansicht nach dieser Zeit zur Kinderseite zurück. 0 = nie."),
     Field("rows", "Zeilen", "int", 1, 16),

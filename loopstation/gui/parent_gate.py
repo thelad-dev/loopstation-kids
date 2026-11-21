@@ -250,7 +250,7 @@ class GateOverlay(QWidget):
         self.hint.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 14px; background: transparent;")
         self.keep_open = QPushButton(keep_open_text(unlock_minutes))
         self.keep_open.setCheckable(True)
-        self.keep_open.setChecked(True)
+        self.keep_open.setChecked(False)
         self.keep_open.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.keep_open.setCursor(Qt.CursorShape.PointingHandCursor)
         self.keep_open.setStyleSheet(
@@ -260,7 +260,7 @@ class GateOverlay(QWidget):
             f"QPushButton:checked {{ color: {TEXT.name()}; border-color: {PARENT_ACCENT}; }}")
         self.keep_open.setVisible(unlock_minutes > 0)
         self.keep_open.toggled.connect(weak_slot(self._show_keep_open, pass_signal_args=True))
-        self._show_keep_open(True)
+        self._show_keep_open(False)
         # Hint and switch sit between the number pad and "Abbrechen".
         body = self.card.body
         at = body.indexOf(self.card.cancel_button)
@@ -282,7 +282,7 @@ class GateOverlay(QWidget):
 
     @property
     def keep_unlocked(self) -> bool:
-        """Is the lock to stay open after a right answer (the setting allows it and the switch is on)?"""
+        """Is the lock to stay open after a right answer (the setting allows it and the switch was turned on)?"""
         return self.unlock_minutes > 0 and self.keep_open.isChecked()
 
     def open(self) -> None:
