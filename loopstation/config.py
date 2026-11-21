@@ -327,7 +327,8 @@ SETTING_COMMENTS: dict[str, str] = {
     "export_cue_points": "true = ein einzeln gesicherter Loop bekommt seine Marker als Cue-Punkte in die "
                          "WAV-Datei (oder als .markers.json daneben). Wirkt sofort.",
     "snap_markers": "true = ein gesetzter Marker rastet auf die nächste echte Transiente (einen Schlag) in "
-                    "der Nähe ein, false (Standard) = er bleibt genau dort, wo er gesetzt wurde. Wirkt sofort.",
+                    "der Nähe ein, false (Standard) = er bleibt genau dort, wo er gesetzt wurde. "
+                    "Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 
