@@ -308,9 +308,9 @@ def test_the_settings_page_gets_a_sets_button_only_with_a_session(running, qapp)
                 return QDialog.DialogCode.Accepted
 
         for window in (with_session, without):
-            window.gate_factory = lambda _parent: type("G", (QDialog,), {"exec": lambda self: 1})()
             window.settings_factory = Settings
-            window.open_parent_area()
+            window.enter_parent_mode()  # the sum was answered
+            window.open_settings()
         assert "Sets" in seen[0] and "Sets" not in seen[1]
     finally:
         for window in (with_session, without):
@@ -340,9 +340,9 @@ def test_opening_a_set_closes_the_parents_area(running, qapp):
                 closed.append(1)
                 super().accept()
 
-        window.gate_factory = lambda _parent: type("G", (QDialog,), {"exec": lambda self: 1})()
         window.settings_factory = Parents
-        window.open_parent_area()
+        window.enter_parent_mode()  # the sum was answered
+        window.open_settings()
         assert len(handed) == 1 and closed == [1]
     finally:
         window.timer.stop()

@@ -99,6 +99,13 @@ class Settings:
     # (a hit, a clap) close to the click. Off (the default): it stays exactly
     # where it was put.
     snap_markers: bool = False
+    # --- Parents' mode (Loopstation 2) ---
+    # Minutes the lock stays open after the sum was answered: holding the lock
+    # again within that time opens the parents' view without a sum (0 = always ask).
+    parent_unlock_minutes: int = 0
+    # Minutes without any input after which the parents' view goes back to the
+    # child page by itself (0 = never).
+    parent_idle_minutes: int = 10
 
     @property
     def beats_per_bar(self) -> int:
@@ -243,6 +250,13 @@ def parse_settings(raw: dict[str, Any], source: str = DEFAULT_CONFIG_NAME) -> Se
         values["export_cue_points"] = _check_bool(source, "export_cue_points", raw["export_cue_points"])
     if "snap_markers" in raw:
         values["snap_markers"] = _check_bool(source, "snap_markers", raw["snap_markers"])
+    # Parents' mode (Loopstation 2).
+    if "parent_unlock_minutes" in raw:
+        values["parent_unlock_minutes"] = _check_int(
+            source, "parent_unlock_minutes", raw["parent_unlock_minutes"], 0, 15)
+    if "parent_idle_minutes" in raw:
+        values["parent_idle_minutes"] = _check_int(
+            source, "parent_idle_minutes", raw["parent_idle_minutes"], 0, 240)
     return Settings(**values)
 
 
@@ -334,6 +348,12 @@ SETTING_COMMENTS: dict[str, str] = {
     "snap_markers": "true = ein gesetzter Marker rastet auf die nächste echte Transiente (einen Schlag) in "
                     "der Nähe ein, false (Standard) = er bleibt genau dort, wo er gesetzt wurde. "
                     "Wirkt sofort.",
+    "parent_unlock_minutes": "Minuten, die das Schloss nach der Rechenaufgabe offen bleiben darf (0 bis 15): "
+                             "so lange öffnet erneutes Halten die Elternansicht ohne Aufgabe, aber nur, "
+                             "wenn die Eltern es in der Aufgabe einschalten. "
+                             "0 (Standard) = immer fragen. Wirkt sofort.",
+    "parent_idle_minutes": "Minuten ohne Eingabe, nach denen die Elternansicht von selbst zur Kinderseite "
+                           "zurückkehrt (0 bis 240). 0 = nie. Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 

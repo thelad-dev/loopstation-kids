@@ -166,3 +166,15 @@ snap_markers = false
 # "simple" = immer der einfache Stretch. Rubber Band steht unter der GPL,
 # siehe README. Wirkt sofort.
 stretch_engine = "auto"
+
+# --- Elternansicht ---
+
+# Minuten, die das Schloss nach der Rechenaufgabe offen bleiben darf (0 bis 15):
+# so lange öffnet erneutes Halten des Schlosses die Elternansicht ohne Aufgabe,
+# aber nur, wenn die Eltern es in der Aufgabe einschalten.
+# 0 (Standard) = immer fragen. Wirkt sofort.
+parent_unlock_minutes = 0
+
+# Minuten ohne Eingabe, nach denen die Elternansicht von selbst zur Kinderseite
+# zurückkehrt (0 bis 240). 0 = nie. Wirkt sofort.
+parent_idle_minutes = 10

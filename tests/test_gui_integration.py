@@ -32,7 +32,7 @@ from loopstation.gui.advanced_page import AdvancedDialog
 from loopstation.gui.export_dialog import ExportDialog
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.main_window import MainWindow
-from loopstation.gui.parent_gate import ParentEntryButton, ParentGate
+from loopstation.gui.parent_gate import GateCard, ParentEntryButton, new_question
 from loopstation.gui.sets_page import SetsDialog
 from loopstation.gui.settings_page import SettingsDialog
 from loopstation.gui.volume_slider import VolumeSlider
@@ -229,7 +229,7 @@ def test_every_parents_page_fits_1024_px_without_a_sideways_scroll_bar(world, na
 
 
 def test_the_gate_fits_1024_px(world):
-    assert ParentGate(world.window).minimumSizeHint().width() <= MIN_WINDOW_WIDTH
+    assert GateCard(new_question()).minimumSizeHint().width() <= MIN_WINDOW_WIDTH
 
 
 # ------------------------------------------------- 4. dark scroll bars on every scrolling page
@@ -293,7 +293,7 @@ def test_widget_trees_are_freed_when_the_last_reference_goes(qapp, tmp_path, clo
         if name == "sets":
             dialog.open_tab.click()
         del dialog
-    gate = ParentGate()
+    gate = GateCard(new_question())
     watch("gate", gate)
     del gate
     gc.collect()
@@ -322,7 +322,7 @@ APP_SCRIPT = textwrap.dedent(
     from loopstation.audio.null_backend import NullAudio
     from loopstation.config import Settings
     from PySide6.QtCore import QTimer
-    from PySide6.QtWidgets import QApplication, QDialog
+    from PySide6.QtWidgets import QApplication
 
     audio_pkg.create_audio = lambda settings: (NullAudio(), None)
     tmp = Path(tempfile.mkdtemp())
@@ -343,10 +343,6 @@ APP_SCRIPT = textwrap.dedent(
             timer.timeout.connect(close_modal)
             timer.start()
 
-            class Gate(QDialog):
-                def exec(self):
-                    return QDialog.DialogCode.Accepted
-
             def every_area(*args):
                 from loopstation.gui.settings_page import SettingsDialog
 
@@ -355,12 +351,14 @@ APP_SCRIPT = textwrap.dedent(
                     dialog.show_page(key)
                 return dialog
 
-            window.gate_factory = lambda parent: Gate(parent)
             window.settings_factory = every_area
             window.controller.press(0)
             window.open_history(0)
+            window.enter_parent_mode()  # the sum was answered
             for _ in range(2):
-                window.open_parent_area()
+                window.open_settings()
+            window.leave_parent_mode()
+            window.open_parent_area()  # the sum is still on show when the app ends
             timer.stop()
         QTimer.singleShot(0, app.quit)
 

@@ -583,10 +583,10 @@ def test_the_parents_area_offers_erweitert_and_the_child_page_has_nothing_of_it(
         child = [b.text() for b in window.frame.findChildren(QAbstractButton)]
         assert not any(word in text for text in child for word in ("Erweitert", "Metronom", "BPM"))
         shown, opened = [], []
-        window.gate_factory = lambda _parent: Auto(QDialog.DialogCode.Accepted)
         window.settings_factory = lambda *a: shown.append(a) or Auto(QDialog.DialogCode.Rejected)
         window.advanced_factory = lambda c, p: opened.append((c, p)) or QWidget()
-        window.open_parent_area()
+        window.enter_parent_mode()  # the sum was answered
+        window.open_settings()
         pages = {page.key: page for page in shown[0][5]}
         assert pages["advanced"].label == "Erweitert" and pages["advanced"].icon == "layers"
         pages["advanced"].build()

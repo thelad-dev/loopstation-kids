@@ -195,10 +195,10 @@ def test_main_window_offers_the_export_only_behind_the_gate(qapp, tmp_path, cloc
         child = [b.text() for b in win.frame.findChildren(QAbstractButton)]
         assert not any("xport" in t for t in child)
         shown, exports = [], []
-        win.gate_factory = lambda _parent: AutoDialog(QDialog.DialogCode.Accepted)
         win.settings_factory = lambda *a: shown.append(a) or AutoDialog(QDialog.DialogCode.Rejected)
         win.export_factory = lambda c, p: exports.append((c, p)) or QWidget()
-        win.open_parent_area()
+        win.enter_parent_mode()  # the sum was answered
+        win.open_settings()
         pages = shown[0][5]
         assert [page.label for page in pages] == ["Verlauf & Undo", "Erweitert", "Export"]
         pages[-1].build()

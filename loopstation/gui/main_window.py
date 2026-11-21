@@ -2,21 +2,38 @@
 
 The window only talks to the controller (and mirrors colours to the
 Launchpad); it contains no audio, MIDI or event-store logic of its own.
+
+It has two states: the child page (``frame``) and the parents' pad view
+(``parent_view``, Loopstation 2 variant A). The way from the children to the
+parents is the held lock plus a sum that lies over the window (``GateOverlay``);
+the way back is one tap on "Kinder" or F1. The music goes on throughout.
 """
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QRectF, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QKeySequence, QPainter, QPaintEvent, QPen, QResizeEvent, QShortcut
+from PySide6.QtCore import QEvent, QObject, QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import (
+    QColor,
+    QKeyEvent,
+    QKeySequence,
+    QPainter,
+    QPaintEvent,
+    QPen,
+    QResizeEvent,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QHBoxLayout,
     QMainWindow,
     QSizePolicy,
+    QStackedLayout,
     QVBoxLayout,
     QWidget,
 )
@@ -28,10 +45,11 @@ from loopstation.gui.changes_page import ChangesPage
 from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
-from loopstation.gui.parent_gate import ParentGate
+from loopstation.gui.parent_gate import GateOverlay
 from loopstation.gui.parent_nav import ParentPage
 from loopstation.gui.parent_tile import ParentTile
-from loopstation.gui.pulse_strip import PulseStrip
+from loopstation.gui.parent_view import ParentView, WaveCache
+from loopstation.gui.pulse_strip import PulseStrip, glow_levels
 from loopstation.gui.sets_page import SetsPage
 from loopstation.gui.settings_page import SettingsDialog
 from loopstation.gui.volume_slider import VolumeSlider
@@ -75,6 +93,30 @@ MODES = [
     (Mode.HISTORY, "history", "Verlauf", ACCENT_PURPLE),
 ]
 MODE_ACCENT = {mode: accent for mode, _icon, _word, accent in MODES}
+
+# Settings the window takes over while the app runs (the controller does not use them).
+PARENT_VIEW_SETTINGS = ("parent_unlock_minutes", "parent_idle_minutes")
+
+# Input that counts as "the parents are still here" (the idle return of the parents' view).
+INPUT_EVENTS = (
+    QEvent.Type.MouseButtonPress,
+    QEvent.Type.KeyPress,
+    QEvent.Type.Wheel,
+    QEvent.Type.TouchBegin,
+)
+# Keys of the parents' view (none of them acts on the child page).
+ARROWS = {
+    Qt.Key.Key_Left: (0, -1),
+    Qt.Key.Key_Right: (0, 1),
+    Qt.Key.Key_Up: (-1, 0),
+    Qt.Key.Key_Down: (1, 0),
+}
+PAD_KEYS = {
+    Qt.Key.Key_Space: Mode.PLAY,
+    Qt.Key.Key_L: Mode.LOOP,
+    Qt.Key.Key_R: Mode.RECORD,
+    Qt.Key.Key_Delete: Mode.DELETE,
+}
 
 
 class Frame(QWidget):
@@ -160,11 +202,26 @@ class MainWindow(QMainWindow):
         # Sets (parents' area only): the session they work on and what to do with a set to open.
         self.set_session = set_session
         self.on_open_set = on_open_set
+        # A real modal dialog is open (history, the settings of the parents): pads and Launchpad wait.
         self._dialog_open = False
         self._settings_dialog: QDialog | None = None
+        # The parents' view: built when it is entered, gone again on the child page.
+        self.parent_view: ParentView | None = None
+        self.gate_overlay: GateOverlay | None = None
+        # Lock time and idle time run on a monotonic clock (a change of the wall clock must not open
+        # the lock or keep the parents' view open); tests hand in their own clock.
+        self.clock: Callable[[], float] = time.monotonic
+        self._unlocked_until = 0.0  # ``clock`` time until which the lock opens without a sum
+        self._last_input = 0.0  # ``clock`` time of the last screen or keyboard input in the parents' view
+        self._unlock_minutes = controller.settings.parent_unlock_minutes
+        self._idle_minutes = controller.settings.parent_idle_minutes
+        self._waves = WaveCache()  # mini waves of the tiles, kept across visits
+        self._parent_selected = 0
+        self._idle_out = False  # the idle time closed the settings dialog: on to the child page
+        # Pads held on the screen (child pads and the start fields of the tiles); let go on a change of view.
+        self._screen_down: set[int] = set()
         # Factories so tests can replace the modal dialogs.
         self.history_factory: Callable[[Controller, int, QWidget], QDialog] = HistoryDialog
-        self.gate_factory: Callable[[QWidget], QDialog] = ParentGate
         self.settings_factory: Callable[..., QDialog] = SettingsDialog
         # The areas of the parents' area (widgets, built on their first visit).
         self.export_factory: Callable[[Controller, QWidget | None], QWidget] = ExportPage
@@ -173,8 +230,12 @@ class MainWindow(QMainWindow):
         self.changes_factory: Callable[[Controller, QWidget | None], QWidget] = ChangesPage
 
         self.setWindowTitle("Loopstation")
+        # The child page and (while it is shown) the parents' view share one stack in the window.
         self.frame = Frame()
-        self.setCentralWidget(self.frame)
+        self.view_host = QWidget()
+        self.view_stack = QStackedLayout(self.view_host)
+        self.view_stack.addWidget(self.frame)
+        self.setCentralWidget(self.view_host)
 
         # Mode bar.
         self.mode_buttons: dict[Mode, BigButton] = {}
@@ -254,6 +315,9 @@ class MainWindow(QMainWindow):
             shortcut.activated.connect(self.redo)
         self.escape_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         self.escape_shortcut.activated.connect(self.escape)
+        # F1 leads from the parents' view back to the children, never the other way.
+        self.kids_shortcut = QShortcut(QKeySequence(Qt.Key.Key_F1), self)
+        self.kids_shortcut.activated.connect(self.leave_parent_mode)
 
         controller.add_listener(weak_slot(self.refresh))
         controller.add_history_listener(weak_slot(self._history_requested, pass_signal_args=True))
@@ -266,16 +330,56 @@ class MainWindow(QMainWindow):
 
     # -------------------------------------------------------------- actions
 
+    @property
+    def _inputs_locked(self) -> bool:
+        """A dialog or the sum is open: no new press reaches a pad (what plays goes on)."""
+        return self._dialog_open or self.gate_overlay is not None
+
     def press(self, pad: int) -> None:
-        if not self._dialog_open:
+        if not self._inputs_locked:
             self.controller.press(pad)
 
     def _pad_down(self, pad: int) -> None:
-        if not self._dialog_open:
+        if not self._inputs_locked:
+            self._screen_down.add(pad)
             self.controller.press_down(pad)
 
     def _pad_up(self, pad: int) -> None:
+        self._screen_down.discard(pad)
         self._tap[pad] = self.controller.press_up(pad)
+
+    def _tile_down(self, pad: int) -> None:
+        """A press on the start field of a tile in the parents' view (as a finger on a child pad)."""
+        self._pad_down(pad)
+
+    def _tile_up(self, pad: int, inside: bool) -> None:
+        """The start field is let go: a tap there acts like a tap on the pad ("Spielen")."""
+        self._screen_down.discard(pad)
+        if self.controller.press_up(pad) and inside:
+            self.press(pad)
+
+    def press_as(self, pad: int, mode: Mode) -> None:
+        """A key of the parents' view: press ``pad`` as in ``mode``, then back to "Spielen"."""
+        if self._inputs_locked:
+            return
+        controller = self.controller
+        if controller.mode != mode:
+            controller.set_mode(mode)
+        controller.press(pad)
+        if controller.mode != Mode.PLAY:
+            controller.set_mode(Mode.PLAY)
+
+    def _release_screen_holds(self) -> None:
+        """Let go of every pad held on the screen: its release will not come (view change, focus lost)."""
+        for pad in self._screen_down:
+            self.controller.cancel_hold(pad)
+            self._tap.pop(pad, None)
+        self._screen_down.clear()
+        for pad in self.grid.pads:
+            if pad.isDown():
+                pad.setDown(False)
+        if self.parent_view is not None:
+            self.parent_view.let_go()
 
     def _pad_clicked(self, pad: int) -> None:
         if self._tap.pop(pad, True):
@@ -293,17 +397,22 @@ class MainWindow(QMainWindow):
             dialog.deleteLater()
 
     def undo(self) -> None:
-        self.controller.undo()
+        if self.gate_overlay is None:
+            self.controller.undo()
 
     def undo_pad(self, pad: int) -> None:
         """The "back" badge of a pad: take back the latest change of that pad only."""
-        if not self._dialog_open:
+        if not self._inputs_locked:
             self.controller.undo(pad)
 
     def redo(self) -> None:
-        self.controller.redo()
+        if self.gate_overlay is None:
+            self.controller.redo()
 
     def escape(self) -> None:
+        if self.gate_overlay is not None:
+            self._close_gate()  # Esc cancels the sum
+            return
         self.controller.escape()
 
     def stop_all(self) -> None:
@@ -322,25 +431,146 @@ class MainWindow(QMainWindow):
             self._dialog_open = False
         self.refresh()
 
+    # ---------------------------------------------------------- parents' view
+
+    @property
+    def parent_mode(self) -> bool:
+        """Is the parents' view shown (instead of the child page)?"""
+        return self.parent_view is not None
+
     def open_parent_area(self) -> None:
-        """Parental gate, then the settings page. Pads are locked while either is open."""
+        """The lock was held: the sum over the window, then the parents' view.
+
+        Within ``parent_unlock_minutes`` after a right answer the sum is skipped. Nothing happens while
+        the sum, the parents' view or a dialog is already open.
+        """
+        if self._dialog_open or self.parent_view is not None or self.gate_overlay is not None:
+            return
+        if self._unlock_minutes > 0 and self.clock() < self._unlocked_until:
+            self.enter_parent_mode()
+            return
+        self._release_screen_holds()
+        overlay = GateOverlay(self.view_host, self._unlock_minutes)
+        overlay.answered.connect(weak_slot(self._gate_answered, pass_signal_args=True))
+        overlay.cancelled.connect(weak_slot(self._close_gate))
+        self.gate_overlay = overlay
+        overlay.open()
+
+    def _gate_answered(self, right: bool) -> None:
+        overlay = self.gate_overlay
+        keep = overlay is not None and overlay.keep_unlocked
+        self._close_gate()
+        if right:
+            self._unlocked_until = self.clock() + 60 * self._unlock_minutes if keep else 0.0
+            self.enter_parent_mode()
+
+    def _close_gate(self) -> None:
+        """Take the sum away; the keyboard goes back to the window (Esc, Strg+Z work at once)."""
+        overlay = self.gate_overlay
+        if overlay is None:
+            return
+        self.gate_overlay = None
+        overlay.card.answer_edit.clearFocus()
+        overlay.hide()
+        overlay.deleteLater()
+        self.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def enter_parent_mode(self) -> None:
+        """Show the parents' view in this window. The children's mode becomes "Spielen"."""
+        if self.parent_view is not None:
+            return
+        self._release_screen_holds()
+        controller = self.controller
+        if controller.mode != Mode.PLAY:
+            controller.set_mode(Mode.PLAY)
+        view = ParentView(controller, self._waves, self.set_session is not None, self._parent_selected)
+        view.kids_requested.connect(weak_slot(self.leave_parent_mode))
+        view.tool_requested.connect(weak_slot(self.open_settings, pass_signal_args=True))
+        view.pad_down.connect(weak_slot(self._tile_down, pass_signal_args=True))
+        view.pad_up.connect(weak_slot(self._tile_up, pass_signal_args=True))
+        view.undo_requested.connect(weak_slot(self.undo))
+        view.redo_requested.connect(weak_slot(self.redo))
+        view.stop_requested.connect(weak_slot(self.stop_all))
+        self.parent_view = view
+        self.view_stack.addWidget(view)
+        self.view_stack.setCurrentWidget(view)
+        self._last_input = self.clock()
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
+        self.refresh()
+
+    def leave_parent_mode(self) -> None:
+        """Back to the child page (the switch, F1 or the idle time)."""
+        view = self.parent_view
+        if view is None:
+            return
+        self._release_screen_holds()
+        self._parent_selected = view.selected
+        self.parent_view = None
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
+        self.view_stack.setCurrentWidget(self.frame)
+        self.view_stack.removeWidget(view)
+        view.hide()
+        view.deleteLater()
+        self.refresh()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt API
+        # Installed on the application only while the parents' view is shown: any input keeps it open.
+        if self.parent_view is not None and event.type() in INPUT_EVENTS:
+            self._last_input = self.clock()
+        return super().eventFilter(watched, event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt API
+        """Keys of the parents' view: arrows choose, Leertaste plays, L loop, R record, Entf delete."""
+        view = self.parent_view
+        key = event.key()
+        if (view is None or self._dialog_open or self.gate_overlay is not None
+                or event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier)
+                or (key not in ARROWS and key not in PAD_KEYS)):
+            super().keyPressEvent(event)
+            return
+        if key in ARROWS:
+            view.move_selection(*ARROWS[Qt.Key(key)])
+        elif not event.isAutoRepeat():
+            self.press_as(view.selected, PAD_KEYS[Qt.Key(key)])
+        event.accept()
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 - Qt API
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.ActivationChange and not self.isActiveWindow():
+            self._release_screen_holds()  # no release will reach a pad of a window that lost the focus
+
+    def open_settings(self, key: str | None = None) -> None:
+        """The parents' settings (the dialog of before) on the area ``key``; pads wait while it is open."""
         if self._dialog_open:
             return
+        self._release_screen_holds()
         self._dialog_open = True
+        self._idle_out = False
+        to_kids: list[bool] = []
         try:
-            if self._exec(self.gate_factory(self)) != QDialog.DialogCode.Accepted:
-                return
-            pages = self.parent_pages()
             dialog = self.settings_factory(
                 self.config_path, self.controller.settings, self.apply_settings,
-                self.settings_template, self, pages,
+                self.settings_template, self, self.parent_pages(),
             )
+            if key is not None and key in getattr(dialog, "page_keys", ()):
+                dialog.show_page(key)
+            # Its button "Zur Kinderseite" leads there; Esc only closes the dialog (back to this view).
+            back = getattr(dialog, "close_button", None)
+            if back is not None:
+                back.clicked.connect(lambda: to_kids.append(True))
             self._settings_dialog = dialog
             self._exec(dialog)
         finally:
             self._settings_dialog = None
             self._dialog_open = False
+            self._last_input = self.clock()
             self.refresh()
+        if to_kids or self._idle_out:
+            self.leave_parent_mode()
 
     def parent_pages(self) -> list[ParentPage]:
         """The areas of the parents' area behind the three settings pages: history, Erweitert, sets, export.
@@ -371,6 +601,9 @@ class MainWindow(QMainWindow):
     def apply_settings(self, settings: Settings) -> list[str]:
         """Live-apply ``settings``; returns the keys that need a restart."""
         restart = self.controller.apply_settings(settings)
+        # The parents' view keeps its own two values (the controller does not need them).
+        self._unlock_minutes = settings.parent_unlock_minutes
+        self._idle_minutes = settings.parent_idle_minutes
         wanted = self.controller.settings
         if wanted.launchpad != (self.launchpad is not None) and self.launchpad_factory is not None:
             if self.launchpad is not None:
@@ -390,7 +623,7 @@ class MainWindow(QMainWindow):
         self.controller.tick()
         if self.launchpad is not None:
             for pad, down in self.launchpad.poll_events():
-                if down and not self._dialog_open:
+                if down and not self._inputs_locked:
                     self._launchpad_down.add(pad)
                     self.controller.press_down(pad)
                 elif not down:
@@ -401,7 +634,25 @@ class MainWindow(QMainWindow):
                 self._release_launchpad_holds()
         elif self._launchpad_down:
             self._release_launchpad_holds()
+        self._check_idle()
         self.refresh()
+
+    def _check_idle(self) -> None:
+        """No screen or keyboard input for ``parent_idle_minutes``: back to the child page.
+
+        This also closes a settings dialog left open (input in it counts as input), and it ends
+        the lock time: whoever comes next has to answer the sum again.
+        """
+        if self.parent_view is None or self._idle_minutes <= 0:
+            return
+        if self.clock() - self._last_input < 60 * self._idle_minutes:
+            return
+        self._unlocked_until = 0.0
+        if self._settings_dialog is not None:
+            self._idle_out = True
+            self._settings_dialog.reject()  # ``open_settings`` goes on to the child page
+        else:
+            self.leave_parent_mode()
 
     def _release_launchpad_holds(self) -> None:
         """No note off will come for keys that were down when the Launchpad went away."""
@@ -430,7 +681,7 @@ class MainWindow(QMainWindow):
         delay = 0.15 + 0.75 * (row + col) / spread
         return max(0.0, 1.0 - abs(elapsed - delay) / SESSION_WAVE_WIDTH)
 
-    def _update_pulse(self, colors: dict[int, str], waiting: set[int]) -> None:
+    def _update_pulse(self, colors: dict[int, str], waiting: set[int]) -> tuple[float, ...]:
         """Dots for the beats of the bar, lit softly by the grid; at rest when nothing plays.
 
         A grid that has just been set shows the pulse for a few seconds even if no loop runs
@@ -449,6 +700,7 @@ class MainWindow(QMainWindow):
         lit = info is not None and (playing or now < self._pulse_until)
         position = controller.beat_position() if lit else None
         self.pulse_strip.set_pulse(beats, position)
+        return glow_levels(beats, position)
 
     def refresh(self) -> None:
         """Bring every widget (and the Launchpad LEDs) in line with the controller."""
@@ -490,7 +742,9 @@ class MainWindow(QMainWindow):
             parts.append(self.launchpad.status_text)
         unique = list(dict.fromkeys(p for p in parts if p))
         self.pulse_strip.set_status("   ·   ".join(unique))
-        self._update_pulse(colors, waiting)
+        levels = self._update_pulse(colors, waiting)
+        if self.parent_view is not None:
+            self.parent_view.refresh(colors, levels)
 
         if self.launchpad is not None:
             self.launchpad.set_colors(colors)
