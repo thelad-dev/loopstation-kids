@@ -34,6 +34,11 @@ follows in the log). Undo entries remember the previous master under
 brings the grid back together with the samples. Logs and snapshots written
 before the grid existed simply have no master.
 
+A ``loop_trim`` (the parents shortened a loop) is a content change like a new recording: the
+shortened sample goes on the pad, the original stays in its history, and the markers of the
+original move with the cut. If the event carries a ``master`` it is the new loop grid, and
+the undo entry keeps the old one like for any event that changed the grid.
+
 The parents' markers are kept per sample file (``markers``), set by
 ``marker_set`` events. They are not on the undo stack: the child's undo, redo
 and the history swap samples, and each sample brings its own markers back.
@@ -47,6 +52,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from loopstation import events as ev
+from loopstation.trim import shift_markers
 
 log = logging.getLogger(__name__)
 
@@ -409,6 +415,9 @@ def apply(state: AppState, event: ev.Event) -> AppState:
             if sample not in pad.history:
                 pad.history = [*pad.history, sample]
 
+    elif event.type == ev.LOOP_TRIM:
+        _apply_trim(new, event)
+
     elif event.type == ev.DELETE_PAD:
         if pad_id is not None:
             pad = _pad(new, pad_id)
@@ -496,6 +505,45 @@ def apply(state: AppState, event: ev.Event) -> AppState:
         # Remember the previous grid so that undoing this event restores it.
         new.undo_stack[-1] = {**new.undo_stack[-1], "master": master_before}
     return new
+
+
+def _apply_trim(new: AppState, event: ev.Event) -> None:
+    """A ``loop_trim``: the shortened sample replaces the one on the pad, like a new recording.
+
+    The markers of the old sample move with the cut (those outside it are dropped). A ``master``
+    in the event is the new bar; the undo entry then keeps the old one (see ``apply``).
+    """
+    data, pad_id = event.data, event.pad
+    sample, origin = data.get("sample"), data.get("from")
+    start, frames, rate = data.get("start_frames"), data.get("frames"), data.get("rate")
+    numbers = (start, frames, rate)
+    if (pad_id is None or not isinstance(sample, str) or not sample or not isinstance(origin, str)
+            or any(not isinstance(n, int) or isinstance(n, bool) for n in numbers)
+            or start < 0 or frames <= 0 or rate <= 0):
+        log.warning("loop_trim seq=%s: invalid data %r; ignored", event.seq, data)
+        return
+    pad = _pad(new, pad_id)
+    if pad.sample != origin:
+        log.warning("loop_trim seq=%s: pad %s holds %r, not %r; ignored",
+                    event.seq, pad_id, pad.sample, origin)
+        return
+    _push_undo(new, event.seq, {pad_id: pad.sample})
+    pad.sample = sample
+    pad.looping = False
+    if sample not in pad.history:
+        pad.history = [*pad.history, sample]
+    old = new.markers.get(origin)
+    if old is not None:
+        moved = shift_markers(old["frames"], old["rate"], rate, start, frames)
+        markers = dict(new.markers)
+        if moved:
+            markers[sample] = {"rate": rate, "frames": moved}
+        else:
+            markers.pop(sample, None)
+        new.markers = markers
+    master = parse_master(data.get("master"))
+    if master is not None:
+        new.master = master
 
 
 def replay(events: Iterable[ev.Event], pad_count: int) -> AppState:

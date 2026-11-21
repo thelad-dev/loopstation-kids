@@ -77,6 +77,11 @@ def describe_change(entry: ChangeEntry) -> str:
         return f"{who} · Aufnahme gelöscht"
     if entry.kind == ev.RESTORE_PAD:
         return f"{who} · älterer Take zurückgeholt"
+    if entry.kind == ev.LOOP_TRIM:
+        frames, rate = entry.detail.get("frames"), entry.detail.get("rate")
+        length = (f" ({seconds_text(frames / rate)})"
+                  if isinstance(frames, int) and isinstance(rate, int) and rate > 0 else "")
+        return f"{who} · Loop gekürzt{length}"
     if entry.kind == ev.PAD_FREE:
         return f"{who} · freier Modus " + ("an" if entry.detail.get("free", True) else "aus")
     return f"{who} · Änderung"
