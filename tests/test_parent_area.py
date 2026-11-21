@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QDialog
 from loopstation.config import Settings, load_settings
 from loopstation.controller import Controller
 from loopstation.gui import settings_page
-from loopstation.gui.parent_gate import ENTRY_SIZE, HOLD_MS, GateQuestion, ParentGate, new_question
+from loopstation.gui.parent_gate import ENTRY_SIZE, HOLD_MS, GateCard, GateQuestion, new_question
 from loopstation.gui.parent_tile import TILE_HEIGHT, TILE_WIDTH
 from loopstation.gui.settings_page import NOTES, Field, SettingsDialog, ToggleSwitch, register_field
 from loopstation.store import EventStore
@@ -48,37 +48,47 @@ def test_questions_are_two_digit_sums_with_carry():
         assert question.answer == a + b
 
 
+def gate_card():
+    """The card of the sum and what it reported: ``answers`` (True/False) and ``cancels``."""
+    card = GateCard(GateQuestion("17 + 25 = ?", 42))
+    answers, cancels = [], []
+    card.answered.connect(answers.append)
+    card.cancelled.connect(lambda: cancels.append(1))
+    return card, answers, cancels
+
+
 def test_wrong_answer_opens_nothing_and_just_closes(qapp):
     for wrong in ("41", "", "0"):
-        gate = ParentGate(question=GateQuestion("17 + 25 = ?", 42))
-        gate.answer_edit.setText(wrong)
-        assert gate.check() is False
-        assert gate.result() == QDialog.DialogCode.Rejected  # back to the child page, no alarm
+        card, answers, _cancels = gate_card()
+        card.answer_edit.setText(wrong)
+        assert card.check() is False
+        assert answers == [False]  # back to the child page, no alarm
 
 
 def test_number_pad_types_and_deletes_digits(qapp):
-    gate = ParentGate(question=GateQuestion("17 + 25 = ?", 42))
-    assert gate.question_label.text() == "Wie viel ist 17 + 25 ?"
-    gate.keys["4"].click()
-    gate.keys["3"].click()
-    gate.keys["⌫"].click()
-    gate.keys["2"].click()
-    assert gate.answer_edit.text() == "42"
-    gate.keys["OK"].click()
-    assert gate.result() == QDialog.DialogCode.Accepted
+    card, answers, _cancels = gate_card()
+    assert card.question_label.text() == "Wie viel ist 17 + 25 ?"
+    card.keys["4"].click()
+    card.keys["3"].click()
+    card.keys["⌫"].click()
+    card.keys["2"].click()
+    assert card.answer_edit.text() == "42"
+    card.keys["OK"].click()
+    assert answers == [True]
 
 
 def test_right_answer_opens(qapp):
-    gate = ParentGate(question=GateQuestion("17 + 25 = ?", 42))
-    gate.answer_edit.setText("42")
-    assert gate.check() is True
-    assert gate.result() == QDialog.DialogCode.Accepted
+    card, answers, _cancels = gate_card()
+    card.answer_edit.setText("42")
+    assert card.check() is True
+    assert answers == [True]
 
 
 def test_cancel_rejects(qapp):
-    gate = ParentGate(question=GateQuestion("17 + 25 = ?", 42))
-    gate.cancel_button.click()
-    assert gate.result() == QDialog.DialogCode.Rejected
+    card, answers, cancels = gate_card()
+    card.cancel_button.click()
+    assert cancels == [1] and answers == []
+    assert card.cancel_button.text() == "Abbrechen, zurück zur Kinderseite"
 
 
 # ---------------------------------------------------------------- window
@@ -130,12 +140,12 @@ def answer_gate(win, text):
     overlay = win.gate_overlay
     assert overlay is not None and overlay.isVisible()
     for digit in text:
-        overlay.keys[digit].click()
-    overlay.ok_button.click()
+        overlay.card.keys[digit].click()
+    overlay.card.keys["OK"].click()
 
 
 def right_answer(win):
-    return str(win.gate_overlay.question.answer)
+    return str(win.gate_overlay.card.question.answer)
 
 
 def test_wrong_gate_answer_never_shows_the_settings(parts):
@@ -143,7 +153,7 @@ def test_wrong_gate_answer_never_shows_the_settings(parts):
     shown = []
     win.settings_factory = lambda *a: shown.append(a) or AutoDialog(QDialog.DialogCode.Accepted)
     win.open_parent_area()
-    wrong = str(win.gate_overlay.question.answer + 1)
+    wrong = str(win.gate_overlay.card.question.answer + 1)
     answer_gate(win, wrong)
     assert win.gate_overlay is None and not win.parent_mode  # back on the child page
     assert shown == []
@@ -171,11 +181,12 @@ def test_pads_are_locked_while_the_parents_area_is_open(parts):
         seen.append(controller.recording_pad)
 
     win.open_parent_area()
-    answer_gate(win, str(win.gate_overlay.question.answer + 1))  # the wrong answer opens nothing
+    during()  # under the sum
+    answer_gate(win, str(win.gate_overlay.card.question.answer + 1))  # the wrong answer opens nothing
     win.settings_factory = lambda *_a: AutoDialog(QDialog.DialogCode.Rejected, during)
     win.enter_parent_mode()
     win.parent_view.toolbar.buttons["levels"].click()
-    assert seen == [None]
+    assert seen == [None, None]
     win.press(0)  # the dialog is closed: the pads play again
     assert controller.recording_pad == 0
 

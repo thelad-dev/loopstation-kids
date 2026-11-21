@@ -38,7 +38,7 @@ class ShapedAudio(FakeAudio):
         if data is None:
             return None
         t = np.arange(len(data)) / self.sample_rate
-        return (data * (0.35 + 0.65 * np.abs(np.sin(2 * np.pi * 1.6 * t)))).astype(np.float32)
+        return (data * (0.3 + 0.7 * np.sin(2 * np.pi * 1.6 * t) ** 8)).astype(np.float32)
 
 
 class FakePad:
@@ -86,6 +86,7 @@ class World:
         self.window = MainWindow(self.controller, self.launchpad, [], config_path=self.config,
                                  set_session=self.session)
         self.window.timer.stop()  # the test ticks itself
+        self.window.clock = clock  # lock and idle time on the test clock
         self.window.resize(*size)
         self.window.show()
         QTest.qWaitForWindowExposed(self.window)
@@ -107,6 +108,8 @@ class World:
         self.controller.press(0)
         self.controller.press(4)
         self.controller.set_mode(Mode.PLAY)
+        self.controller.set_max_level_db(-5.0)  # the ceiling and the volume of the mockup
+        self.controller.set_volume(0.3)
 
     def close(self) -> None:
         self.window.timer.stop()
@@ -130,9 +133,9 @@ def hold_the_lock(window: MainWindow) -> None:
 
 def type_answer(window: MainWindow, right: bool) -> None:
     overlay = window.gate_overlay
-    answer = overlay.question.answer + (0 if right else 1)
-    QTest.keyClicks(overlay.answer_edit, str(answer))
-    QTest.keyClick(overlay.answer_edit, Qt.Key.Key_Return)
+    answer = overlay.card.question.answer + (0 if right else 1)
+    QTest.keyClicks(overlay.card.answer_edit, str(answer))
+    QTest.keyClick(overlay.card.answer_edit, Qt.Key.Key_Return)
 
 
 def open_parents(window: MainWindow) -> ParentView:
@@ -186,10 +189,10 @@ def test_the_right_answer_shows_the_parents_view_in_the_same_window(world):
 def test_cancel_and_escape_close_the_sum(world):
     window = world.window
     hold_the_lock(window)
-    window.gate_overlay.cancel_button.click()
+    window.gate_overlay.card.cancel_button.click()
     assert window.gate_overlay is None and not window.parent_mode
     hold_the_lock(window)
-    QTest.keyClick(window.gate_overlay.answer_edit, Qt.Key.Key_Escape)
+    QTest.keyClick(window.gate_overlay.card.answer_edit, Qt.Key.Key_Escape)
     assert window.gate_overlay is None and not window.parent_mode
 
 
@@ -213,10 +216,10 @@ def test_the_music_goes_on_under_the_sum_and_nothing_reaches_the_pads(world):
     tap(hit, hit.mapFrom(window.view_host, point))
     # Keys go to the answer, never to a pad (digits, the letters of the parents' view, the space bar).
     for key in (Qt.Key.Key_R, Qt.Key.Key_L, Qt.Key.Key_Space, Qt.Key.Key_Delete):
-        QTest.keyClick(overlay.answer_edit, key)
+        QTest.keyClick(overlay.card.answer_edit, key)
         QTest.keyClick(window, key)
-    QTest.keyClick(overlay.answer_edit, Qt.Key.Key_3)
-    assert overlay.answer_edit.text() == "3"
+    QTest.keyClick(overlay.card.answer_edit, Qt.Key.Key_3)
+    assert overlay.card.answer_edit.text() == "3"
     assert controller.recording_pad is None and audio.calls == before
     QTest.keyClick(window, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)  # no undo under the sum
     assert audio.calls == before and controller.pad(0).sample is not None
@@ -228,7 +231,7 @@ def test_after_the_sum_the_keyboard_works_again(world):
     QTest.qWaitForWindowActive(window)
     world.record(3, 1.0)
     hold_the_lock(window)
-    assert QApplication.focusWidget() is window.gate_overlay.answer_edit
+    assert QApplication.focusWidget() is window.gate_overlay.card.answer_edit
     type_answer(window, right=False)
     assert QApplication.focusWidget() is not None
     assert not isinstance(QApplication.focusWidget().parentWidget(), GateOverlay)
@@ -259,6 +262,56 @@ def test_a_tap_on_the_symbol_plays_a_tap_on_the_tile_only_chooses(world):
     world.clock.advance(1.0)
     tap(empty, empty.start_field().center())
     assert controller.recording_pad is None and controller.pad(7).sample is not None
+
+
+def test_a_new_take_of_the_same_length_and_its_undo_update_the_tile(world):
+    """Same colour, same length, a new sample: the tile must follow (and the window keep ticking)."""
+    window, controller, clock = world.window, world.controller, world.clock
+    world.record(0, 2.5)
+    world.record(1, 2.5)
+    view = open_parents(window)
+    window._tick()
+    first = view.tiles[1].look.wave
+    QTest.keyClick(window, Qt.Key.Key_Right)
+    QTest.keyClick(window, Qt.Key.Key_R)  # a new take on pad 2, as long as the old one
+    clock.advance(2.5)
+    QTest.keyClick(window, Qt.Key.Key_R)
+    window._tick()
+    assert controller.mode == Mode.PLAY and controller.recording_pad is None
+    second = view.tiles[1].look.wave
+    assert second is not None and second is not first
+    view.undo_button.click()  # back to the first take
+    window._tick()
+    assert view.tiles[1].look.wave is first
+    view.redo_button.click()
+    window._tick()
+    assert view.tiles[1].look.wave is second
+    assert world.launchpad.colors[1] == "yellow"
+
+
+def test_the_view_and_the_window_are_freed(qapp, tmp_path, clock):
+    import gc
+    import weakref
+
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    w = World(tmp_path, clock)
+    w.record(0, 1.0)
+    view = weakref.ref(open_parents(w.window))
+    w.window.leave_parent_mode()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
+    assert view() is None
+    open_parents(w.window)  # the window ends in the parents' view
+    window = weakref.ref(w.window)
+    w.window.timer.stop()
+    w.window.close()
+    w.window.deleteLater()
+    w.store.close()
+    w.window = None
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
+    assert window() is None
 
 
 def test_entering_sets_the_children_mode_to_play(world):
@@ -367,21 +420,103 @@ def test_the_parents_view_goes_back_after_the_idle_time(world):
     assert not window.parent_mode
 
 
-def test_no_idle_return_while_a_parents_dialog_is_open_and_zero_means_never(world):
+def test_the_idle_time_closes_a_settings_dialog_left_open(world):
     window, clock = world.window, world.clock
     open_parents(window)
+    closed = []
 
-    def long_visit():
-        clock.advance(30 * 60)
+    def left_open():
+        clock.advance(10 * 60 + 1)
         window._tick()
+        closed.append(dialog.result())
 
-    window.settings_factory = lambda *a: AutoDialog(long_visit)
+    dialog = AutoDialog(left_open)
+    window.settings_factory = lambda *a: dialog
     window.parent_view.toolbar.buttons["levels"].click()
-    assert window.parent_mode
+    assert closed == [QDialog.DialogCode.Rejected]  # the dialog was closed
+    assert not window.parent_mode and not window._dialog_open
+
+
+def test_zero_idle_minutes_means_never(world):
+    window, clock = world.window, world.clock
+    open_parents(window)
     window.apply_settings(replace(world.controller.settings, parent_idle_minutes=0))
     clock.advance(120 * 60)
     window._tick()
     assert window.parent_mode
+
+
+def test_the_idle_return_ends_the_lock_time_the_switch_does_not(world):
+    window, clock = world.window, world.clock
+    view = open_parents(window)
+    view.mode_switch.kids_button.click()  # the parents leave on purpose: the lock time stays
+    hold_the_lock(window)
+    assert window.parent_mode and window.gate_overlay is None
+    clock.advance(10 * 60)
+    window._tick()  # idle: back to the children, and the lock is shut again
+    assert not window.parent_mode
+    hold_the_lock(window)
+    assert window.gate_overlay is not None and not window.parent_mode
+
+
+def test_launchpad_taps_do_not_keep_the_parents_view_open(world):
+    window, clock = world.window, world.clock
+    world.record(0, 1.0)
+    open_parents(window)
+    for _ in range(11):
+        clock.advance(60)
+        world.launchpad.events = [(0, True), (0, False)]  # a child plays on the Launchpad
+        window._tick()
+    assert not window.parent_mode
+
+
+def test_lock_and_idle_time_use_a_monotonic_clock(qapp, tmp_path, clock):
+    import time
+
+    settings = make_settings(tmp_path)
+    store = EventStore(settings.log_dir, settings.pad_count, clock=clock)
+    window = MainWindow(Controller(store, FakeAudio(clock), settings, clock=clock), None, [],
+                        config_path=tmp_path / "settings.toml")
+    try:
+        assert window.clock is time.monotonic
+    finally:
+        window.timer.stop()
+        window.close()
+        store.close()
+
+
+# ------------------------------------------------------------ the sum locks input
+
+
+def test_the_launchpad_does_not_delete_under_the_sum(world):
+    world.record(0, 2.0)
+    world.controller.set_mode(Mode.DELETE)  # the child chose "Löschen", then held the lock
+    hold_the_lock(world.window)
+    world.launchpad.events = [(0, True), (0, False)]
+    world.window._tick()
+    assert world.controller.pad(0).sample is not None
+
+
+def test_the_launchpad_does_not_record_under_the_sum_but_the_music_goes_on(world):
+    world.record(1, 2.0)
+    world.controller.set_mode(Mode.LOOP)
+    world.controller.press(1)
+    world.controller.set_mode(Mode.PLAY)
+    hold_the_lock(world.window)
+    world.launchpad.events = [(3, True), (3, False)]
+    world.window._tick()
+    world.window.press(4)
+    assert world.controller.recording_pad is None
+    assert 1 in world.audio.voices
+
+
+def test_keep_open_follows_the_setting_and_the_switch(world):
+    window = world.window
+    overlay = GateOverlay(window.view_host, 5)  # never shown
+    assert overlay.keep_unlocked
+    overlay.keep_open.setChecked(False)
+    assert not overlay.keep_unlocked
+    assert not GateOverlay(window.view_host, 0).keep_unlocked
 
 
 # -------------------------------------------------------------------------- keys
@@ -413,6 +548,13 @@ def test_keys_of_the_parents_view(world):
     assert controller.pad(1).sample is None and controller.mode == Mode.PLAY
     view.undo_button.click()  # "Zurück" brings it back
     assert controller.pad(1).sample is not None
+
+
+def test_backspace_deletes_nothing(world):
+    world.record(0, 2.0)
+    open_parents(world.window)
+    QTest.keyClick(world.window, Qt.Key.Key_Backspace)
+    assert world.controller.pad(0).sample is not None
 
 
 def test_the_keys_do_nothing_on_the_child_page(world):
@@ -533,10 +675,10 @@ def _difference(a: QImage, b: QImage) -> float:
     return float(np.mean(np.abs(_small(a) - _small(b))))
 
 
-# The parents' view at 1280 x 800 against the mockup. At 64 x 40 one cell is 20 x 20 px, so the
+# The whole parents' view at 1280 x 800 against the mockup. At 64 x 40 one cell is 20 x 20 px, so the
 # check sees the layout (tool bar, header, which tiles are coloured where, the detail line) and not
 # the type. Differences that remain on purpose: the mockup shows pad names, a sixth pad with a sound
-# (pad 10) and the tabs of the detail field (later parts). Measured with the test font: about 11.5.
+# (pad 10) and the tabs of the detail field (later parts). Measured with the test font: about 10.3.
 # The counter-checks lie far above: the child page about 82, an empty dark window about 110, a black
 # one about 124. The threshold leaves room for font rendering, not for a different layout.
 LOOK_THRESHOLD = 15.0
@@ -611,3 +753,78 @@ def test_nothing_overlaps_at_any_size(qapp, tmp_path, clock, size):
         assert card.height() >= card.minimumSizeHint().height(), size
     finally:
         w.close()
+
+
+def _part(image: QImage, box: tuple[int, int, int, int], width: int, height: int) -> np.ndarray:
+    """The part ``box`` (x, y, w, h) of ``image`` shrunk to ``width`` x ``height`` (smooth), as RGB values."""
+    part = image.copy(*box).convertToFormat(QImage.Format.Format_RGB32).scaled(
+        width, height, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    raw = np.frombuffer(bytes(part.constBits()), np.uint8).reshape(height, part.bytesPerLine())
+    return raw[:, :width * 4].reshape(height, width, 4)[:, :, :3].astype(np.float64)
+
+
+# Parts of the mockup at 1280 x 800: (x, y, w, h) and the size they are compared at, with the
+# threshold. Measured with the test font: header 10.9, loop tile 3.7, its loop symbol 6.3, its wave
+# 1.9, empty tile 0.4, its record symbol 3.1, detail badge 3.2, detail text 7.9. What is left are
+# the mockup's annotation badges, its pad names and font. Each threshold lies between that and the
+# matching counter-check below (Kinder lit 25, play symbol 14 / 7, no wave 4.8, no text 15.8).
+# Cells are 8 px for areas, 4 px for symbols; a wave or a text block is compared as a vertical
+# profile (one column), because single bars and letters do not line up with the mockup.
+PARTS = {
+    "header": ((108, 24, 1148, 64), (143, 8), 14.0),
+    "loop_tile": ((108, 112, 276, 186), (34, 23), 6.0),
+    "loop_symbol": ((118, 262, 32, 28), (8, 7), 10.0),
+    "loop_wave": ((124, 160, 246, 110), (1, 24), 3.2),
+    "empty_tile": ((980, 112, 276, 186), (34, 23), 4.0),
+    "empty_symbol": ((990, 262, 32, 28), (8, 7), 5.0),
+    "detail_badge": ((124, 732, 36, 36), (9, 9), 10.0),
+    "detail_text": ((176, 724, 330, 48), (1, 12), 11.0),
+}
+
+
+def _part_difference(shot: QImage, mockup: QImage, name: str) -> float:
+    box, (width, height), _threshold = PARTS[name]
+    return float(np.mean(np.abs(_part(shot, box, width, height) - _part(mockup, box, width, height))))
+
+
+def test_each_part_of_the_parents_view_looks_like_the_mockup(world):
+    world.like_the_mockup()
+    window = world.window
+    view = open_parents(window)
+    view.select(4)
+    window._tick()
+    QTest.qWait(20)
+    mockup = QImage(str(MOCKUP)).copy(0, 0, 1280, 800)
+    shot = window.grab().toImage()
+    for name, (_box, _size, threshold) in PARTS.items():
+        assert _part_difference(shot, mockup, name) < threshold, (name, _part_difference(shot, mockup, name))
+
+    def fails(name: str) -> bool:
+        QTest.qWait(10)
+        return _part_difference(window.grab().toImage(), mockup, name) >= PARTS[name][2]
+
+    # Counter-checks: each wrong state fails its part.
+    loop_tile, empty_tile = view.tiles[0], view.tiles[3]
+    good_loop, good_empty = loop_tile.look, empty_tile.look
+    loop_tile.set_look(replace(good_loop, wave=None))
+    assert fails("loop_wave")
+    loop_tile.set_look(replace(good_loop, looping=False))  # play instead of the loop sign
+    assert fails("loop_symbol")
+    loop_tile.set_look(replace(good_loop, color="yellow"))
+    assert fails("loop_tile")
+    loop_tile.set_look(good_loop)
+    empty_tile.set_look(replace(good_empty, filled=True))  # play instead of the record dot
+    assert fails("empty_symbol")
+    empty_tile.set_look(replace(good_empty, color="green"))
+    assert fails("empty_tile")
+    empty_tile.set_look(good_empty)
+    view.mode_switch.parents_button.setChecked(False)
+    view.mode_switch.kids_button.setChecked(True)
+    assert fails("header")
+    detail = view.detail
+    content = (detail.number, detail.color, detail.title, detail.info, detail.help)
+    detail.set_content(content[0], "white", *content[2:])
+    assert fails("detail_badge")
+    detail.set_content(content[0], content[1], "", "", "")
+    assert fails("detail_text")
+

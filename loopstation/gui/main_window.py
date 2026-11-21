@@ -11,6 +11,7 @@ the way back is one tap on "Kinder" or F1. The music goes on throughout.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -115,7 +116,6 @@ PAD_KEYS = {
     Qt.Key.Key_L: Mode.LOOP,
     Qt.Key.Key_R: Mode.RECORD,
     Qt.Key.Key_Delete: Mode.DELETE,
-    Qt.Key.Key_Backspace: Mode.DELETE,
 }
 
 
@@ -208,12 +208,16 @@ class MainWindow(QMainWindow):
         # The parents' view: built when it is entered, gone again on the child page.
         self.parent_view: ParentView | None = None
         self.gate_overlay: GateOverlay | None = None
-        self._unlocked_until = 0.0  # controller time until which the lock opens without a sum
-        self._last_input = 0.0  # controller time of the last input in the parents' view
+        # Lock time and idle time run on a monotonic clock (a change of the wall clock must not open
+        # the lock or keep the parents' view open); tests hand in their own clock.
+        self.clock: Callable[[], float] = time.monotonic
+        self._unlocked_until = 0.0  # ``clock`` time until which the lock opens without a sum
+        self._last_input = 0.0  # ``clock`` time of the last screen or keyboard input in the parents' view
         self._unlock_minutes = controller.settings.parent_unlock_minutes
         self._idle_minutes = controller.settings.parent_idle_minutes
         self._waves = WaveCache()  # mini waves of the tiles, kept across visits
         self._parent_selected = 0
+        self._idle_out = False  # the idle time closed the settings dialog: on to the child page
         # Pads held on the screen (child pads and the start fields of the tiles); let go on a change of view.
         self._screen_down: set[int] = set()
         # Factories so tests can replace the modal dialogs.
@@ -326,12 +330,17 @@ class MainWindow(QMainWindow):
 
     # -------------------------------------------------------------- actions
 
+    @property
+    def _inputs_locked(self) -> bool:
+        """A dialog or the sum is open: no new press reaches a pad (what plays goes on)."""
+        return self._dialog_open or self.gate_overlay is not None
+
     def press(self, pad: int) -> None:
-        if not self._dialog_open:
+        if not self._inputs_locked:
             self.controller.press(pad)
 
     def _pad_down(self, pad: int) -> None:
-        if not self._dialog_open:
+        if not self._inputs_locked:
             self._screen_down.add(pad)
             self.controller.press_down(pad)
 
@@ -351,7 +360,7 @@ class MainWindow(QMainWindow):
 
     def press_as(self, pad: int, mode: Mode) -> None:
         """A key of the parents' view: press ``pad`` as in ``mode``, then back to "Spielen"."""
-        if self._dialog_open:
+        if self._inputs_locked:
             return
         controller = self.controller
         if controller.mode != mode:
@@ -393,7 +402,7 @@ class MainWindow(QMainWindow):
 
     def undo_pad(self, pad: int) -> None:
         """The "back" badge of a pad: take back the latest change of that pad only."""
-        if not self._dialog_open:
+        if not self._inputs_locked:
             self.controller.undo(pad)
 
     def redo(self) -> None:
@@ -437,7 +446,7 @@ class MainWindow(QMainWindow):
         """
         if self._dialog_open or self.parent_view is not None or self.gate_overlay is not None:
             return
-        if self._unlock_minutes > 0 and self.controller.now() < self._unlocked_until:
+        if self._unlock_minutes > 0 and self.clock() < self._unlocked_until:
             self.enter_parent_mode()
             return
         self._release_screen_holds()
@@ -452,7 +461,7 @@ class MainWindow(QMainWindow):
         keep = overlay is not None and overlay.keep_unlocked
         self._close_gate()
         if right:
-            self._unlocked_until = self.controller.now() + 60 * self._unlock_minutes if keep else 0.0
+            self._unlocked_until = self.clock() + 60 * self._unlock_minutes if keep else 0.0
             self.enter_parent_mode()
 
     def _close_gate(self) -> None:
@@ -461,7 +470,7 @@ class MainWindow(QMainWindow):
         if overlay is None:
             return
         self.gate_overlay = None
-        overlay.answer_edit.clearFocus()
+        overlay.card.answer_edit.clearFocus()
         overlay.hide()
         overlay.deleteLater()
         self.setFocus(Qt.FocusReason.OtherFocusReason)
@@ -485,7 +494,7 @@ class MainWindow(QMainWindow):
         self.parent_view = view
         self.view_stack.addWidget(view)
         self.view_stack.setCurrentWidget(view)
-        self._last_input = controller.now()
+        self._last_input = self.clock()
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self)
@@ -511,7 +520,7 @@ class MainWindow(QMainWindow):
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt API
         # Installed on the application only while the parents' view is shown: any input keeps it open.
         if self.parent_view is not None and event.type() in INPUT_EVENTS:
-            self._last_input = self.controller.now()
+            self._last_input = self.clock()
         return super().eventFilter(watched, event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt API
@@ -540,6 +549,7 @@ class MainWindow(QMainWindow):
             return
         self._release_screen_holds()
         self._dialog_open = True
+        self._idle_out = False
         to_kids: list[bool] = []
         try:
             dialog = self.settings_factory(
@@ -557,9 +567,9 @@ class MainWindow(QMainWindow):
         finally:
             self._settings_dialog = None
             self._dialog_open = False
-            self._last_input = self.controller.now()
+            self._last_input = self.clock()
             self.refresh()
-        if to_kids:
+        if to_kids or self._idle_out:
             self.leave_parent_mode()
 
     def parent_pages(self) -> list[ParentPage]:
@@ -612,11 +622,8 @@ class MainWindow(QMainWindow):
     def _tick(self) -> None:
         self.controller.tick()
         if self.launchpad is not None:
-            events = self.launchpad.poll_events()
-            if events:
-                self._last_input = self.controller.now()
-            for pad, down in events:
-                if down and not self._dialog_open:
+            for pad, down in self.launchpad.poll_events():
+                if down and not self._inputs_locked:
                     self._launchpad_down.add(pad)
                     self.controller.press_down(pad)
                 elif not down:
@@ -631,13 +638,20 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def _check_idle(self) -> None:
-        """No input in the parents' view for ``parent_idle_minutes``: back to the child page."""
+        """No screen or keyboard input for ``parent_idle_minutes``: back to the child page.
+
+        This also closes a settings dialog left open (input in it counts as input), and it ends
+        the lock time: whoever comes next has to answer the sum again.
+        """
         if self.parent_view is None or self._idle_minutes <= 0:
             return
-        now = self.controller.now()
-        if self._dialog_open:
-            self._last_input = now  # the parents work in a dialog
-        elif now - self._last_input >= 60 * self._idle_minutes:
+        if self.clock() - self._last_input < 60 * self._idle_minutes:
+            return
+        self._unlocked_until = 0.0
+        if self._settings_dialog is not None:
+            self._idle_out = True
+            self._settings_dialog.reject()  # ``open_settings`` goes on to the child page
+        else:
             self.leave_parent_mode()
 
     def _release_launchpad_holds(self) -> None:

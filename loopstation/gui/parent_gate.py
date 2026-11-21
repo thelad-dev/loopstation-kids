@@ -15,7 +15,6 @@ from PySide6.QtCore import QEvent, QObject, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QIntValidator, QKeyEvent, QMouseEvent, QPainter, QPaintEvent, QPixmap
 from PySide6.QtWidgets import (
     QAbstractButton,
-    QDialog,
     QFrame,
     QGridLayout,
     QLabel,
@@ -100,7 +99,7 @@ class _IconLabel(QWidget):
 class GateCard(QFrame):
     """The card with the sum: title, question, answer field, number pad and "Abbrechen".
 
-    It is shared by the modal ``ParentGate`` and the in-window ``GateOverlay``. ``answered(bool)``
+    The in-window ``GateOverlay`` shows it over the child page. ``answered(bool)``
     tells whether the answer was right; ``cancelled`` is the way back without an answer.
     """
 
@@ -151,10 +150,9 @@ class GateCard(QFrame):
             pad.addWidget(key, index // 3, index % 3)
         self.keys["⌫"].clicked.connect(self._backspace)
         self.keys["OK"].clicked.connect(self.check)
-        self.ok_button = self.keys["OK"]
         self._pad = pad
 
-        self.cancel_button = QPushButton("Abbrechen – zurück zur Kinderseite")
+        self.cancel_button = QPushButton("Abbrechen, zurück zur Kinderseite")
         self.cancel_button.setFlat(True)
         self.cancel_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancel_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -214,44 +212,6 @@ class GateCard(QFrame):
         return right
 
 
-class ParentGate(QDialog):
-    """Asks one sum on a big number pad; ``exec()`` is Accepted only for the right answer.
-
-    A wrong answer simply closes the dialog (back to the child page, no alarm).
-    """
-
-    def __init__(self, parent: QWidget | None = None, question: GateQuestion | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Für Erwachsene")
-        self.setModal(True)
-        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.question = question or new_question()
-        self.card = GateCard(self.question)
-        self.card.answered.connect(weak_slot(self._answered, pass_signal_args=True))
-        self.card.cancelled.connect(self.reject)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(self.card)
-        # The parts the dialog is driven by (and tested through).
-        self.question_label = self.card.question_label
-        self.answer_edit = self.card.answer_edit
-        self.keys = self.card.keys
-        self.ok_button = self.card.ok_button
-        self.cancel_button = self.card.cancel_button
-        self.setFixedSize(620, 620)
-
-    def _answered(self, right: bool) -> None:
-        if right:
-            self.accept()
-        else:
-            self.reject()
-
-    def check(self) -> bool:
-        """Accept on the right answer; a wrong one closes the dialog, nothing opens."""
-        return self.card.check()
-
-
 DIM_ALPHA = 150  # how dark the overlay makes the child page beneath it (of 255)
 OVERLAY_HINT = "Zahl eingeben · Musik läuft weiter · Esc bricht ab"
 OVERLAY_MARGIN = 12  # least room between the card and the edge of the window
@@ -280,15 +240,10 @@ class GateOverlay(QWidget):
         self.setObjectName("gate_overlay")
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation, True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.question = question or new_question()
-        self.card = GateCard(self.question, self)
+        self.unlock_minutes = unlock_minutes
+        self.card = GateCard(question or new_question(), self)
         self.card.answered.connect(self.answered)
         self.card.cancelled.connect(self.cancelled)
-        self.question_label = self.card.question_label
-        self.answer_edit = self.card.answer_edit
-        self.keys = self.card.keys
-        self.ok_button = self.card.ok_button
-        self.cancel_button = self.card.cancel_button
 
         self.hint = QLabel(OVERLAY_HINT)
         self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -327,13 +282,14 @@ class GateOverlay(QWidget):
 
     @property
     def keep_unlocked(self) -> bool:
-        return self.keep_open.isVisible() and self.keep_open.isChecked()
+        """Is the lock to stay open after a right answer (the setting allows it and the switch is on)?"""
+        return self.unlock_minutes > 0 and self.keep_open.isChecked()
 
     def open(self) -> None:
         self._fit()
         self.show()
         self.raise_()
-        self.answer_edit.setFocus(Qt.FocusReason.OtherFocusReason)
+        self.card.answer_edit.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _fit(self) -> None:
         parent = self.parentWidget()

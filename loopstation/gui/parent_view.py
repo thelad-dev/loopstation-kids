@@ -24,9 +24,9 @@ from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
 from loopstation.gui.parent_nav import ACTIVE_FILL, CARD_BORDER, CARD_FILL, fitted_font, paint_icon
 from loopstation.gui.pulse_strip import DOT_OFF, DOT_ON
-from loopstation.gui.volume_slider import VolumeSlider
+from loopstation.gui.volume_slider import FILL, TRACK, VolumeSlider, volume_to_position
 from loopstation.gui.waveform import peak_columns
-from loopstation.gui.widgets import BACKGROUND, PAD_COLORS, TEXT, TEXT_DIM, weak_slot
+from loopstation.gui.widgets import BACKGROUND, PAD_COLORS, SURFACE, TEXT, TEXT_DIM, weak_slot
 
 if TYPE_CHECKING:
     from loopstation.controller import Controller, GridInfo
@@ -53,7 +53,8 @@ ACTION_GAP = 7
 VOLUME_WIDTH = (200, 480)  # least, most
 WAVE_COLUMNS = 240  # peaks kept per sample; a tile draws fewer bars from them
 WAVE_PITCH = 5.6  # pixels from one bar of the mini wave to the next (as the waveform of the parents' pages)
-WAVE_SHARE = 0.62  # share of the room between number and start field that the mini wave may fill
+WAVE_CENTER = 0.565  # the mini wave is centred a little below the middle of the tile (mockup)
+WAVE_SHARE = 0.3  # the loudest bar spans this share of the tile height
 WAVE_MOST = 110.0  # the mini wave never gets taller than this (large windows)
 WAVE_CACHE_SIZE = 256
 
@@ -97,9 +98,13 @@ def bar_lines(info: GridInfo | None) -> tuple[str, str]:
     return f"{bpm} BPM · {info.signature}", f"{source} · {decimal(info.seconds, 2)} s"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class TileWave:
-    """What a tile shows of one sample: peaks for the mini wave, its length and its loudest point."""
+    """What a tile shows of one sample: peaks for the mini wave, its length and its loudest point.
+
+    Compared by identity (``eq=False``): the cache hands out one object per sample, and the peaks
+    are an array, which has no single truth value for ``==``.
+    """
 
     peaks: np.ndarray
     frames: int
@@ -212,7 +217,7 @@ class ModeSwitch(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.kids_button = ModeSegment("person", "Kinder", self)
-        self.parents_button = ModeSegment("unlock", "Eltern", self)
+        self.parents_button = ModeSegment("padlock-open", "Eltern", self)
         self.parents_button.setChecked(True)
         # A tap on the lit half changes nothing.
         self.parents_button.clicked.connect(weak_slot(self._keep_parents_lit))
@@ -305,11 +310,70 @@ class SmallAction(QAbstractButton):
         painter.drawRoundedRect(rect.adjusted(0.75, 0.75, -0.75, -0.75), 12, 12)
         color = QColor(TEXT) if self.isEnabled() else QColor("#55555C")
         icon = 20.0
-        draw_icon(painter, self.icon_name, QRectF((rect.width() - icon) / 2, 9, icon, icon), color)
+        paint_icon(painter, self.icon_name, QRectF((rect.width() - icon) / 2, 9, icon, icon), color)
         font = fitted_font(self.text(), rect.width() - 6, 12, QFont.Weight.Bold, 10)
         painter.setFont(font)
         painter.setPen(color)
         painter.drawText(QRectF(0, 34, rect.width(), 18), Qt.AlignmentFlag.AlignCenter, self.text())
+        painter.end()
+
+
+class HeaderVolume(VolumeSlider):
+    """The volume of the parents' header (mockup L2-02): the same control as on the child page,
+    drawn for a 64 px high row: a thicker track, a larger handle, outlined speakers and the
+    ceiling as a line with a small lock above it.
+    """
+
+    def _track(self) -> QRectF:
+        h = self.height()
+        left = min(h * 1.02, max(h * 0.75, self.width() * 0.2))  # a narrow header keeps more track
+        return QRectF(left, h * 0.5 - h * 0.155, max(1.0, self.width() - 2 * left), h * 0.31)
+
+    def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        h = self.height()
+        track = self._track()
+        radius = track.height() / 2
+        handle_x = self._x_of(volume_to_position(self.volume))
+        reach_x = self._x_of(volume_to_position(self.limit))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(SURFACE)
+        painter.drawRoundedRect(QRectF(self.rect()), 16, 16)
+        painter.setBrush(TRACK)
+        painter.drawRoundedRect(track, radius, radius)
+        painter.save()
+        painter.setClipRect(QRectF(track.left(), track.top(), handle_x - track.left(), track.height()))
+        painter.setBrush(FILL)
+        painter.drawRoundedRect(track, radius, radius)
+        painter.restore()
+        if self.limit < 1.0:
+            # Above the ceiling: cross-hatched, out of reach.
+            blocked = QRectF(reach_x, track.top(), track.right() - reach_x, track.height())
+            painter.save()
+            painter.setClipRect(blocked)
+            painter.setBrush(QColor("#2E2E34"))
+            painter.drawRoundedRect(track, radius, radius)
+            painter.setPen(QPen(QColor("#45454C"), 2))
+            x = blocked.left() - track.height()
+            while x < blocked.right() + track.height():
+                painter.drawLine(QPointF(x, track.bottom()), QPointF(x + track.height(), track.top()))
+                painter.drawLine(QPointF(x, track.top()), QPointF(x + track.height(), track.bottom()))
+                x += 9
+            painter.restore()
+        line = QPen(QColor("#AEAEB2"), 2.5)
+        line.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(line)
+        painter.drawLine(QPointF(reach_x, h * 0.2), QPointF(reach_x, h * 0.9))
+        self._paint_lock(painter, QPointF(reach_x, h * 0.07), h * 0.17)
+        painter.setPen(QPen(FILL, 3.5))
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.drawEllipse(QPointF(handle_x, track.center().y()), h * 0.33, h * 0.33)
+        icon = h * 0.42
+        color = TEXT if self.isEnabled() else TEXT_DIM
+        paint_icon(painter, "speaker-low", QRectF(h * 0.27, (h - icon) / 2, icon, icon), color)
+        right = self.width() - h * 0.27 - icon
+        paint_icon(painter, "speaker-high", QRectF(right, (h - icon) / 2, icon, icon), color)
         painter.end()
 
 
@@ -320,10 +384,10 @@ class HeaderBar(QWidget):
         super().__init__(parent)
         self.mode_switch = ModeSwitch(self)
         self.bar_chip = BarChip(self)
-        self.undo_button = SmallAction("undo", "Zurück", self)
-        self.redo_button = SmallAction("redo", "Wieder", self)
+        self.undo_button = SmallAction("rotate-ccw", "Zurück", self)
+        self.redo_button = SmallAction("rotate-cw", "Wieder", self)
         self.stop_button = SmallAction("stop", "Still", self)
-        self.volume_slider = VolumeSlider(self)
+        self.volume_slider = HeaderVolume(self)
         self.volume_slider.setMinimumSize(VOLUME_WIDTH[0], HEADER_HEIGHT)
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt API
@@ -552,7 +616,7 @@ class ParentPadTile(QWidget):
             ring = body.adjusted(-RING + 2, -RING + 2, RING - 2, RING - 2)
             painter.drawRoundedRect(ring, radius + RING - 2, radius + RING - 2)
         ink = QColor("#8E8E93") if empty else QColor(0, 0, 0, 165)
-        wave_color = base.darker(175)
+        wave_color = base.darker(145)
         if look.free:
             self._paint_free(painter, body, ink, wave_color)
         else:
@@ -569,22 +633,26 @@ class ParentPadTile(QWidget):
                          Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, str(self.index + 1))
         field = self.start_field()
         if look.wave is not None:
-            top = body.top() + 10 + number_px * 1.6 + 6
-            bottom = field.top() - 8
-            area = QRectF(body.left() + 16, top, body.width() - 32, max(4.0, bottom - top))
+            height = min(body.height() * WAVE_SHARE, WAVE_MOST)
+            middle = body.top() + body.height() * WAVE_CENTER
+            area = QRectF(body.left() + 16, middle - height / 2, body.width() - 32, height)
             self._paint_wave(painter, area, wave_color)
         # Start field with the state symbol.
         painter.setPen(Qt.PenStyle.NoPen)
         if empty:
-            painter.setBrush(QColor("#C9C9CE") if self.start_held else QColor("#DCDCE0"))
+            painter.setBrush(QColor("#C4C4C4") if self.start_held else QColor("#D6D6D6"))
         else:
             painter.setBrush(QColor(0, 0, 0, 70 if self.start_held else 30))
         painter.drawRoundedRect(field, 7, 7)
         symbol = self.symbol()
-        size = field.height() * {"record": 0.5, "loop": 0.8}.get(symbol, 0.62)
-        color = QColor("#3A3A3F") if empty else QColor(0, 0, 0, 175)
+        size = field.height() * (0.75 if symbol == "loop" else 0.62)
+        color = QColor("#505050") if empty else QColor(0, 0, 0, 175)
         center = field.center()
-        draw_icon(painter, symbol, QRectF(center.x() - size / 2, center.y() - size / 2, size, size), color)
+        box = QRectF(center.x() - size / 2, center.y() - size / 2, size, size)
+        if symbol == "loop":
+            paint_icon(painter, "repeat", box, color)  # the loop sign of the parents' tiles (mockup)
+        else:
+            draw_icon(painter, symbol, box, color)
         if look.length or look.recording:
             text = "nimmt auf" if look.recording else look.length
             painter.setFont(_font(min(13.0, max(10.0, body.height() * 0.07))))
@@ -620,8 +688,8 @@ class ParentPadTile(QWidget):
         bars = max(1, int(area.width() / WAVE_PITCH))
         groups = np.array_split(wave.peaks, bars)
         middle = area.center().y()
-        half = min(area.height() * WAVE_SHARE, WAVE_MOST) / 2
-        pen = QPen(color, 2.4)
+        half = area.height() / 2
+        pen = QPen(color, 3.0)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(pen)
         for index, group in enumerate(groups):

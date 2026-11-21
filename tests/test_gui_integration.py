@@ -32,7 +32,7 @@ from loopstation.gui.advanced_page import AdvancedDialog
 from loopstation.gui.export_dialog import ExportDialog
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.main_window import MainWindow
-from loopstation.gui.parent_gate import ParentEntryButton, ParentGate
+from loopstation.gui.parent_gate import GateCard, ParentEntryButton, new_question
 from loopstation.gui.sets_page import SetsDialog
 from loopstation.gui.settings_page import SettingsDialog
 from loopstation.gui.volume_slider import VolumeSlider
@@ -229,7 +229,7 @@ def test_every_parents_page_fits_1024_px_without_a_sideways_scroll_bar(world, na
 
 
 def test_the_gate_fits_1024_px(world):
-    assert ParentGate(world.window).minimumSizeHint().width() <= MIN_WINDOW_WIDTH
+    assert GateCard(new_question()).minimumSizeHint().width() <= MIN_WINDOW_WIDTH
 
 
 # ------------------------------------------------- 4. dark scroll bars on every scrolling page
@@ -293,7 +293,7 @@ def test_widget_trees_are_freed_when_the_last_reference_goes(qapp, tmp_path, clo
         if name == "sets":
             dialog.open_tab.click()
         del dialog
-    gate = ParentGate()
+    gate = GateCard(new_question())
     watch("gate", gate)
     del gate
     gc.collect()
