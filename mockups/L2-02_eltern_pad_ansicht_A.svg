@@ -1,0 +1,341 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="970" viewBox="0 0 1280 970">
+<title>Loopstation 2 · L2-02 – Eltern-Pad-Ansicht (Variante A) – Raster oben, Detailfeld eingeklappt</title>
+<defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#2E2E34"/><line x1="0" y1="0" x2="0" y2="10" stroke="#4A4A52" stroke-width="4"/></pattern><filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter></defs>
+<rect width="1280" height="800" fill="#0E0E10"/>
+<rect x="6" y="6" width="1268" height="788" rx="26" fill="none" stroke="#7FA7FF" stroke-opacity="0.75" stroke-width="4"/>
+<rect x="20" y="20" width="76" height="760" rx="18" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<rect x="26" y="34" width="64" height="66" rx="14" fill="#2F3550" stroke="#7FA7FF" stroke-width="1.5" />
+<path transform="translate(46,44) scale(1.0000)" d="M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z" fill="none" stroke="#7FA7FF" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="58" y="88" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="700" fill="#F2F2F2" text-anchor="middle" >Pads</text>
+<path transform="translate(46,118) scale(1.0000)" d="M12 2a10 10 0 1 0 0.01 0 M12 6v6l4 2" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="58" y="162" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="500" fill="#C7C7CC" text-anchor="middle" >Verlauf</text>
+<path transform="translate(46,192) scale(1.0000)" d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z M17 21v-8H7v8 M7 3v5h8" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="58" y="236" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="500" fill="#C7C7CC" text-anchor="middle" >Sets</text>
+<path transform="translate(46,266) scale(1.0000)" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="58" y="310" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="500" fill="#C7C7CC" text-anchor="middle" >Export</text>
+<line x1="36" y1="334" x2="80" y2="334" stroke="#3A3A41" stroke-width="1.5"/>
+<path transform="translate(46,354) scale(1.0000)" d="M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="58" y="398" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="500" fill="#C7C7CC" text-anchor="middle" >Pegel</text>
+<path transform="translate(46,428) scale(1.0000)" d="M3 18v-6a9 9 0 0 1 18 0v6 M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="58" y="472" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="500" fill="#C7C7CC" text-anchor="middle" >Geräte</text>
+<path transform="translate(46,502) scale(1.0000)" d="M12 15a3 3 0 1 0 0.01 0 M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="58" y="546" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12" font-weight="500" fill="#C7C7CC" text-anchor="middle" >System</text>
+<path transform="translate(46,716) scale(1.0000)" d="M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z M6 10h.01 M10 10h.01 M14 10h.01 M18 10h.01 M7 14h10" fill="none" stroke="#6E6E75" stroke-width="2.00" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="58" y="756" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11" font-weight="600" fill="#6E6E75" text-anchor="middle" >Tasten ?</text>
+<rect x="108" y="28" width="220" height="56" rx="16" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<rect x="218.0" y="32" width="106.0" height="48" rx="12" fill="#7FA7FF" />
+<path transform="translate(126,45.0) scale(0.9167)" d="M12 7a3 3 0 1 0 0.01 0 M5 21v-2a7 7 0 0 1 14 0v2" fill="none" stroke="#C7C7CC" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="154" y="62.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#C7C7CC" text-anchor="start" >Kinder</text>
+<path transform="translate(232.0,45.0) scale(0.9167)" d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M7 11V7a5 5 0 0 1 9.9-1" fill="none" stroke="#111114" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="260.0" y="62.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="16" font-weight="700" fill="#111114" text-anchor="start" >Eltern</text>
+<rect x="340" y="28" width="290" height="56" rx="16" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<circle cx="362" cy="56.0" r="5" fill="#3A3A41"/>
+<circle cx="378" cy="56.0" r="6" fill="#5AC8FA"/>
+<circle cx="394" cy="56.0" r="5" fill="#3A3A41"/>
+<circle cx="410" cy="56.0" r="5" fill="#3A3A41"/>
+<text x="436" y="53" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="800" fill="#F2F2F2" text-anchor="start" >96 BPM · 4/4</text>
+<text x="436" y="72" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="500" fill="#8E8E93" text-anchor="start" >aus Klatschen · 2,50 s</text>
+<path transform="translate(596,46.0) scale(0.8333)" d="M6 9l6 6 6-6" fill="none" stroke="#8E8E93" stroke-width="2.20" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<rect x="644" y="28" width="64" height="56" rx="14" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<path transform="translate(665.0,36) scale(0.9167)" d="M1 4v6h6 M3.51 15a9 9 0 1 0 2.13-9.36L1 10" fill="none" stroke="#F2F2F2" stroke-width="2.30" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="676.0" y="75" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11" font-weight="600" fill="#F2F2F2" text-anchor="middle" >Zurück</text>
+<rect x="716" y="28" width="64" height="56" rx="14" fill="#1A1A1E" stroke="#2C2C31" stroke-width="1.5" />
+<path transform="translate(737.0,36) scale(0.9167)" d="M23 4v6h-6 M20.49 15a9 9 0 1 1-2.12-9.36L23 10" fill="none" stroke="#55555C" stroke-width="2.30" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="748.0" y="75" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11" font-weight="600" fill="#55555C" text-anchor="middle" >Wieder</text>
+<rect x="788" y="28" width="64" height="56" rx="14" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<path transform="translate(809.0,36) scale(0.9167)" d="M6 6 h12 v12 h-12 Z" fill="#F2F2F2"/>
+<text x="820.0" y="75" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="11" font-weight="600" fill="#F2F2F2" text-anchor="middle" >Still</text>
+<rect x="880" y="24" width="376" height="64" rx="20" fill="#26262B" />
+<path transform="translate(898,40.0) scale(1.3333)" d="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07" fill="none" stroke="#F2F2F2" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<path transform="translate(1204,40.0) scale(1.3333)" d="M11 5L6 9H2v6h4l5 4V5z M15.54 8.46a5 5 0 0 1 0 7.07 M19.07 4.93a10 10 0 0 1 0 14.14" fill="none" stroke="#F2F2F2" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<rect x="1129.0" y="45.0" width="61.0" height="22" rx="11" fill="url(#hatch)"/>
+<rect x="946" y="45.0" width="189.0" height="22" rx="11" fill="#3A3A41"/>
+<rect x="946" y="45.0" width="134.2" height="22" rx="11" fill="#5AC8FA"/>
+<line x1="1129.0" y1="36.0" x2="1129.0" y2="76.0" stroke="#AEAEB2" stroke-width="3" stroke-linecap="round"/>
+<path transform="translate(1121.0,16.0) scale(0.6667)" d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="#AEAEB2" stroke-width="2.00" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<circle cx="1080.2" cy="56.0" r="22" fill="#FFFFFF" stroke="#5AC8FA" stroke-width="5"/>
+<rect x="108.0" y="112.0" width="276.5" height="186.66666666666666" rx="14" fill="#32D74B" opacity="0.30" filter="url(#soft)"/>
+<rect x="108.0" y="112.0" width="276.5" height="186.66666666666666" rx="14" fill="#32D74B" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="122.0" y="138.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >1</text>
+<text x="148.0" y="138.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#000000" fill-opacity="0.69" text-anchor="start" >Klatschen</text>
+<line x1="125.1" y1="201.1" x2="125.1" y2="235.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="131.3" y1="201.0" x2="131.3" y2="235.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="137.5" y1="205.7" x2="137.5" y2="231.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="143.7" y1="205.9" x2="143.7" y2="230.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="150.0" y1="207.6" x2="150.0" y2="229.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="156.2" y1="212.2" x2="156.2" y2="224.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="162.4" y1="213.1" x2="162.4" y2="223.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="168.6" y1="209.6" x2="168.6" y2="227.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="174.8" y1="212.8" x2="174.8" y2="224.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="181.0" y1="213.2" x2="181.0" y2="223.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="187.2" y1="190.5" x2="187.2" y2="246.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="193.4" y1="201.8" x2="193.4" y2="235.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="199.7" y1="201.4" x2="199.7" y2="235.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="205.9" y1="206.9" x2="205.9" y2="229.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="212.1" y1="207.5" x2="212.1" y2="229.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="218.3" y1="211.7" x2="218.3" y2="225.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="224.5" y1="209.8" x2="224.5" y2="227.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="230.7" y1="209.5" x2="230.7" y2="227.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="236.9" y1="211.6" x2="236.9" y2="225.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="243.1" y1="211.1" x2="243.1" y2="225.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="249.4" y1="195.0" x2="249.4" y2="241.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="255.6" y1="206.4" x2="255.6" y2="230.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="261.8" y1="202.1" x2="261.8" y2="234.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="268.0" y1="206.0" x2="268.0" y2="230.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="274.2" y1="209.7" x2="274.2" y2="227.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="280.4" y1="212.4" x2="280.4" y2="224.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="286.6" y1="208.6" x2="286.6" y2="228.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="292.8" y1="211.4" x2="292.8" y2="225.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="299.1" y1="210.7" x2="299.1" y2="226.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="305.3" y1="210.5" x2="305.3" y2="226.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="311.5" y1="194.4" x2="311.5" y2="242.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="317.7" y1="196.7" x2="317.7" y2="240.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="323.9" y1="205.5" x2="323.9" y2="231.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="330.1" y1="204.4" x2="330.1" y2="232.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="336.3" y1="208.8" x2="336.3" y2="228.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="342.5" y1="207.1" x2="342.5" y2="229.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="348.8" y1="208.6" x2="348.8" y2="228.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="355.0" y1="213.1" x2="355.0" y2="223.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="361.2" y1="213.3" x2="361.2" y2="223.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="367.4" y1="213.3" x2="367.4" y2="223.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<text x="370.5" y="284.66666666666663" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#000000" fill-opacity="0.56" text-anchor="end" >1 Takt</text>
+<rect x="118.0" y="262.66666666666663" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(123.0,265.66666666666663) scale(0.9167)" d="M17 1l4 4-4 4 M3 11V9a4 4 0 0 1 4-4h14 M7 23l-4-4 4-4 M21 13v2a4 4 0 0 1-4 4H3" fill="none" stroke="#000000" stroke-opacity="0.63" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<rect x="398.5" y="112.0" width="276.5" height="186.66666666666666" rx="14" fill="#FFD60A" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="412.5" y="138.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >2</text>
+<text x="438.5" y="138.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#000000" fill-opacity="0.69" text-anchor="start" >Lied A</text>
+<line x1="415.6" y1="201.1" x2="415.6" y2="235.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="421.8" y1="206.0" x2="421.8" y2="230.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="428.0" y1="205.5" x2="428.0" y2="231.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="434.2" y1="209.4" x2="434.2" y2="227.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="440.5" y1="211.3" x2="440.5" y2="225.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="446.7" y1="210.2" x2="446.7" y2="226.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="452.9" y1="208.4" x2="452.9" y2="228.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="459.1" y1="209.8" x2="459.1" y2="227.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="465.3" y1="210.5" x2="465.3" y2="226.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="471.5" y1="213.3" x2="471.5" y2="223.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="477.7" y1="196.9" x2="477.7" y2="239.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="483.9" y1="204.0" x2="483.9" y2="232.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="490.2" y1="207.5" x2="490.2" y2="229.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="496.4" y1="209.8" x2="496.4" y2="227.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="502.6" y1="210.3" x2="502.6" y2="226.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="508.8" y1="207.1" x2="508.8" y2="229.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="515.0" y1="208.8" x2="515.0" y2="228.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="521.2" y1="209.8" x2="521.2" y2="227.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="527.4" y1="210.4" x2="527.4" y2="226.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="533.6" y1="213.4" x2="533.6" y2="223.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="539.9" y1="200.1" x2="539.9" y2="236.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="546.1" y1="200.1" x2="546.1" y2="236.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="552.3" y1="202.4" x2="552.3" y2="234.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="558.5" y1="204.0" x2="558.5" y2="232.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="564.7" y1="205.9" x2="564.7" y2="230.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="570.9" y1="212.1" x2="570.9" y2="224.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="577.1" y1="210.0" x2="577.1" y2="226.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="583.3" y1="210.4" x2="583.3" y2="226.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="589.6" y1="211.7" x2="589.6" y2="225.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="595.8" y1="213.4" x2="595.8" y2="223.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="602.0" y1="197.8" x2="602.0" y2="239.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="608.2" y1="206.1" x2="608.2" y2="230.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="614.4" y1="200.5" x2="614.4" y2="236.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="620.6" y1="203.9" x2="620.6" y2="232.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="626.8" y1="208.1" x2="626.8" y2="228.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="633.0" y1="210.8" x2="633.0" y2="226.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="639.3" y1="208.4" x2="639.3" y2="228.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="645.5" y1="210.9" x2="645.5" y2="225.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="651.7" y1="210.0" x2="651.7" y2="226.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="657.9" y1="210.6" x2="657.9" y2="226.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<text x="661.0" y="284.66666666666663" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#000000" fill-opacity="0.56" text-anchor="end" >2 Takte</text>
+<rect x="408.5" y="262.66666666666663" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(413.5,265.66666666666663) scale(0.9167)" d="M7 4 L20 12 L7 20 Z" fill="#000000" fill-opacity="0.63"/>
+<rect x="689.0" y="112.0" width="276.5" height="186.66666666666666" rx="14" fill="#F2F2F2" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="703.0" y="138.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >3</text>
+<rect x="699.0" y="262.66666666666663" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(704.0,265.66666666666663) scale(0.9167)" d="M12 5 a7 7 0 1 0 0.01 0 Z" fill="#000000" fill-opacity="0.63"/>
+<rect x="979.5" y="112.0" width="276.5" height="186.66666666666666" rx="14" fill="#F2F2F2" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="993.5" y="138.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >4</text>
+<rect x="989.5" y="262.66666666666663" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(994.5,265.66666666666663) scale(0.9167)" d="M12 5 a7 7 0 1 0 0.01 0 Z" fill="#000000" fill-opacity="0.63"/>
+<rect x="108.0" y="312.66666666666663" width="276.5" height="186.66666666666666" rx="14" fill="#32D74B" opacity="0.30" filter="url(#soft)"/>
+<rect x="101.0" y="305.66666666666663" width="290.5" height="200.66666666666666" rx="20" fill="none" stroke="#7FA7FF" stroke-width="4" />
+<rect x="108.0" y="312.66666666666663" width="276.5" height="186.66666666666666" rx="14" fill="#32D74B" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="122.0" y="338.66666666666663" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >5</text>
+<text x="148.0" y="338.66666666666663" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#000000" fill-opacity="0.69" text-anchor="start" >Trommel</text>
+<line x1="125.1" y1="400.5" x2="125.1" y2="437.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="131.3" y1="406.1" x2="131.3" y2="432.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="137.5" y1="403.8" x2="137.5" y2="434.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="143.7" y1="410.7" x2="143.7" y2="427.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="150.0" y1="408.8" x2="150.0" y2="429.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="156.2" y1="411.1" x2="156.2" y2="427.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="162.4" y1="413.5" x2="162.4" y2="424.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="168.6" y1="411.9" x2="168.6" y2="426.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="174.8" y1="414.4" x2="174.8" y2="423.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="181.0" y1="413.0" x2="181.0" y2="425.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="187.2" y1="404.1" x2="187.2" y2="434.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="193.4" y1="406.8" x2="193.4" y2="431.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="199.7" y1="405.9" x2="199.7" y2="432.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="205.9" y1="404.9" x2="205.9" y2="433.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="212.1" y1="411.6" x2="212.1" y2="426.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="218.3" y1="411.9" x2="218.3" y2="426.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="224.5" y1="410.5" x2="224.5" y2="427.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="230.7" y1="409.7" x2="230.7" y2="428.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="236.9" y1="412.0" x2="236.9" y2="426.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="243.1" y1="413.2" x2="243.1" y2="424.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="249.4" y1="391.4" x2="249.4" y2="446.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="255.6" y1="407.3" x2="255.6" y2="430.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="261.8" y1="401.9" x2="261.8" y2="436.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="268.0" y1="409.0" x2="268.0" y2="429.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="274.2" y1="411.4" x2="274.2" y2="426.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="280.4" y1="412.5" x2="280.4" y2="425.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="286.6" y1="412.2" x2="286.6" y2="425.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="292.8" y1="410.4" x2="292.8" y2="427.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="299.1" y1="413.8" x2="299.1" y2="424.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="305.3" y1="412.4" x2="305.3" y2="425.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="311.5" y1="396.1" x2="311.5" y2="442.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="317.7" y1="403.6" x2="317.7" y2="434.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="323.9" y1="404.7" x2="323.9" y2="433.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="330.1" y1="410.8" x2="330.1" y2="427.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="336.3" y1="412.0" x2="336.3" y2="426.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="342.5" y1="412.0" x2="342.5" y2="426.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="348.8" y1="410.3" x2="348.8" y2="427.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="355.0" y1="412.2" x2="355.0" y2="425.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="361.2" y1="413.2" x2="361.2" y2="424.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="367.4" y1="412.4" x2="367.4" y2="425.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<text x="370.5" y="485.33333333333326" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#000000" fill-opacity="0.56" text-anchor="end" >2 Takte</text>
+<rect x="118.0" y="463.33333333333326" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(123.0,466.33333333333326) scale(0.9167)" d="M17 1l4 4-4 4 M3 11V9a4 4 0 0 1 4-4h14 M7 23l-4-4 4-4 M21 13v2a4 4 0 0 1-4 4H3" fill="none" stroke="#000000" stroke-opacity="0.63" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<rect x="443.4166666666667" y="312.66666666666663" width="186.66666666666666" height="186.66666666666666" rx="93.33333333333333" fill="#FFD60A" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="536.75" y="368.66666666666663" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#000000" fill-opacity="0.69" text-anchor="middle" >6 · Summen</text>
+<path transform="translate(520.75,393.99999999999994) scale(1.3333)" d="M2 12c2.5-6 5-6 7 0s4.5 6 7 0 4.5-6 6 0" fill="none" stroke="#000000" stroke-opacity="0.44" stroke-width="2.60" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<text x="536.75" y="462.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#000000" fill-opacity="0.56" text-anchor="middle" >frei 3,1 s</text>
+<rect x="689.0" y="312.66666666666663" width="276.5" height="186.66666666666666" rx="14" fill="#FFD60A" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="703.0" y="338.66666666666663" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >7</text>
+<text x="729.0" y="338.66666666666663" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#000000" fill-opacity="0.69" text-anchor="start" >Pfeifen</text>
+<line x1="706.1" y1="398.6" x2="706.1" y2="439.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="712.3" y1="403.6" x2="712.3" y2="434.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="718.5" y1="408.5" x2="718.5" y2="429.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="724.7" y1="404.6" x2="724.7" y2="433.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="731.0" y1="412.4" x2="731.0" y2="425.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="737.2" y1="410.3" x2="737.2" y2="427.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="743.4" y1="409.1" x2="743.4" y2="429.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="749.6" y1="413.9" x2="749.6" y2="424.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="755.8" y1="412.1" x2="755.8" y2="426.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="762.0" y1="412.3" x2="762.0" y2="425.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="768.2" y1="404.5" x2="768.2" y2="433.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="774.4" y1="403.5" x2="774.4" y2="434.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="780.7" y1="403.3" x2="780.7" y2="434.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="786.9" y1="407.8" x2="786.9" y2="430.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="793.1" y1="407.6" x2="793.1" y2="430.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="799.3" y1="412.3" x2="799.3" y2="425.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="805.5" y1="412.6" x2="805.5" y2="425.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="811.7" y1="413.7" x2="811.7" y2="424.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="817.9" y1="412.4" x2="817.9" y2="425.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="824.1" y1="411.0" x2="824.1" y2="427.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="830.4" y1="396.8" x2="830.4" y2="441.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="836.6" y1="399.1" x2="836.6" y2="439.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="842.8" y1="406.3" x2="842.8" y2="431.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="849.0" y1="405.5" x2="849.0" y2="432.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="855.2" y1="411.7" x2="855.2" y2="426.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="861.4" y1="411.5" x2="861.4" y2="426.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="867.6" y1="410.3" x2="867.6" y2="427.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="873.8" y1="410.8" x2="873.8" y2="427.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="880.1" y1="412.7" x2="880.1" y2="425.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="886.3" y1="414.5" x2="886.3" y2="423.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="892.5" y1="401.3" x2="892.5" y2="436.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="898.7" y1="405.4" x2="898.7" y2="432.7" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="904.9" y1="407.2" x2="904.9" y2="430.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="911.1" y1="405.0" x2="911.1" y2="433.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="917.3" y1="411.1" x2="917.3" y2="427.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="923.5" y1="408.0" x2="923.5" y2="430.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="929.8" y1="409.2" x2="929.8" y2="428.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="936.0" y1="414.0" x2="936.0" y2="424.1" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="942.2" y1="412.9" x2="942.2" y2="425.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="948.4" y1="412.8" x2="948.4" y2="425.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<text x="951.5" y="485.33333333333326" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#000000" fill-opacity="0.56" text-anchor="end" >1 Takt</text>
+<rect x="699.0" y="463.33333333333326" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(704.0,466.33333333333326) scale(0.9167)" d="M7 4 L20 12 L7 20 Z" fill="#000000" fill-opacity="0.63"/>
+<rect x="979.5" y="312.66666666666663" width="276.5" height="186.66666666666666" rx="14" fill="#F2F2F2" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="993.5" y="338.66666666666663" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >8</text>
+<rect x="989.5" y="463.33333333333326" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(994.5,466.33333333333326) scale(0.9167)" d="M12 5 a7 7 0 1 0 0.01 0 Z" fill="#000000" fill-opacity="0.63"/>
+<rect x="108.0" y="513.3333333333333" width="276.5" height="186.66666666666666" rx="14" fill="#F2F2F2" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="122.0" y="539.3333333333333" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >9</text>
+<rect x="118.0" y="663.9999999999999" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(123.0,666.9999999999999) scale(0.9167)" d="M12 5 a7 7 0 1 0 0.01 0 Z" fill="#000000" fill-opacity="0.63"/>
+<rect x="398.5" y="513.3333333333333" width="276.5" height="186.66666666666666" rx="14" fill="#32D74B" opacity="0.30" filter="url(#soft)"/>
+<rect x="398.5" y="513.3333333333333" width="276.5" height="186.66666666666666" rx="14" fill="#32D74B" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="412.5" y="539.3333333333333" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >10</text>
+<text x="438.5" y="539.3333333333333" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="700" fill="#000000" fill-opacity="0.69" text-anchor="start" >Rassel</text>
+<line x1="415.6" y1="599.1" x2="415.6" y2="640.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="421.8" y1="601.0" x2="421.8" y2="638.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="428.0" y1="604.3" x2="428.0" y2="635.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="434.2" y1="610.9" x2="434.2" y2="628.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="440.5" y1="613.0" x2="440.5" y2="626.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="446.7" y1="611.7" x2="446.7" y2="627.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="452.9" y1="613.1" x2="452.9" y2="626.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="459.1" y1="611.1" x2="459.1" y2="628.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="465.3" y1="612.2" x2="465.3" y2="627.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="471.5" y1="613.0" x2="471.5" y2="626.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="477.7" y1="597.9" x2="477.7" y2="641.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="483.9" y1="601.0" x2="483.9" y2="638.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="490.2" y1="609.1" x2="490.2" y2="630.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="496.4" y1="608.5" x2="496.4" y2="630.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="502.6" y1="612.0" x2="502.6" y2="627.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="508.8" y1="608.6" x2="508.8" y2="630.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="515.0" y1="614.2" x2="515.0" y2="625.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="521.2" y1="611.0" x2="521.2" y2="628.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="527.4" y1="614.9" x2="527.4" y2="624.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="533.6" y1="612.6" x2="533.6" y2="626.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="539.9" y1="601.0" x2="539.9" y2="638.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="546.1" y1="603.9" x2="546.1" y2="635.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="552.3" y1="602.7" x2="552.3" y2="636.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="558.5" y1="611.8" x2="558.5" y2="627.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="564.7" y1="612.7" x2="564.7" y2="626.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="570.9" y1="608.5" x2="570.9" y2="630.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="577.1" y1="611.8" x2="577.1" y2="627.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="583.3" y1="614.5" x2="583.3" y2="625.0" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="589.6" y1="610.9" x2="589.6" y2="628.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="595.8" y1="611.5" x2="595.8" y2="627.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="602.0" y1="604.2" x2="602.0" y2="635.3" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="608.2" y1="603.7" x2="608.2" y2="635.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="614.4" y1="609.2" x2="614.4" y2="630.2" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="620.6" y1="609.5" x2="620.6" y2="629.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="626.8" y1="608.9" x2="626.8" y2="630.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="633.0" y1="612.9" x2="633.0" y2="626.5" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="639.3" y1="610.8" x2="639.3" y2="628.6" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="645.5" y1="614.7" x2="645.5" y2="624.8" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="651.7" y1="614.5" x2="651.7" y2="624.9" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<line x1="657.9" y1="612.1" x2="657.9" y2="627.4" stroke="#000000" stroke-opacity="0.31" stroke-width="3.4" stroke-linecap="round"/>
+<text x="661.0" y="685.9999999999999" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.5" font-weight="700" fill="#000000" fill-opacity="0.56" text-anchor="end" >1 Takt</text>
+<rect x="408.5" y="663.9999999999999" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(413.5,666.9999999999999) scale(0.9167)" d="M17 1l4 4-4 4 M3 11V9a4 4 0 0 1 4-4h14 M7 23l-4-4 4-4 M21 13v2a4 4 0 0 1-4 4H3" fill="none" stroke="#000000" stroke-opacity="0.63" stroke-width="2.40" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<rect x="689.0" y="513.3333333333333" width="276.5" height="186.66666666666666" rx="14" fill="#F2F2F2" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="703.0" y="539.3333333333333" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >11</text>
+<rect x="699.0" y="663.9999999999999" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(704.0,666.9999999999999) scale(0.9167)" d="M12 5 a7 7 0 1 0 0.01 0 Z" fill="#000000" fill-opacity="0.63"/>
+<rect x="979.5" y="513.3333333333333" width="276.5" height="186.66666666666666" rx="14" fill="#F2F2F2" stroke="#000000" stroke-opacity="0.18" stroke-width="2"/>
+<text x="993.5" y="539.3333333333333" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#000000" fill-opacity="0.50" text-anchor="start" >12</text>
+<rect x="989.5" y="663.9999999999999" width="32" height="28" rx="8" fill="#000000" fill-opacity="0.12" />
+<path transform="translate(994.5,666.9999999999999) scale(0.9167)" d="M12 5 a7 7 0 1 0 0.01 0 Z" fill="#000000" fill-opacity="0.63"/>
+<rect x="108" y="716" width="1148" height="64" rx="16" fill="#1B1B1F" stroke="#2C2C31" stroke-width="1.5" />
+<rect x="124" y="730" width="36" height="36" rx="10" fill="#32D74B" />
+<text x="142" y="754" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="800" fill="#111114" text-anchor="middle" >5</text>
+<text x="176" y="744" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="17" font-weight="800" fill="#F2F2F2" text-anchor="start" >Pad 5 · Trommel</text>
+<text x="176" y="766" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="500" fill="#8E8E93" text-anchor="start" >2 Takte · im Raster · Rubber Band · Spitze −9 dBFS</text>
+<rect x="640" y="729" width="65.69999999999999" height="38" rx="12" fill="none" />
+<text x="672.85" y="754" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="600" fill="#C7C7CC" text-anchor="middle" >Loop</text>
+<rect x="713.7" y="729" width="57.3" height="38" rx="12" fill="none" />
+<text x="742.35" y="754" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="600" fill="#C7C7CC" text-anchor="middle" >Pad</text>
+<rect x="779.0" y="729" width="101.39999999999999" height="38" rx="12" fill="none" />
+<text x="829.7" y="754" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="600" fill="#C7C7CC" text-anchor="middle" >Aufnahme</text>
+<rect x="888.4" y="729" width="155.70000000000005" height="38" rx="12" fill="none" />
+<text x="966.25" y="754" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="15" font-weight="600" fill="#55555C" text-anchor="middle" >Effekte (später)</text>
+<rect x="1196" y="728" width="44" height="40" rx="14" fill="#26262B" stroke="#3A3A41" stroke-width="1.5" />
+<path transform="translate(1206.0,736.0) scale(1.0000)" d="M18 15l-6-6-6 6" fill="none" stroke="#F2F2F2" stroke-width="2.30" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+<circle cx="116" cy="36" r="13" fill="#FFD60A" stroke="#111114" stroke-width="2"/><text x="116" y="41" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="800" fill="#111114" text-anchor="middle" >1</text>
+<circle cx="348" cy="36" r="13" fill="#FFD60A" stroke="#111114" stroke-width="2"/><text x="348" y="41" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="800" fill="#111114" text-anchor="middle" >2</text>
+<circle cx="652" cy="36" r="13" fill="#FFD60A" stroke="#111114" stroke-width="2"/><text x="652" y="41" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="800" fill="#111114" text-anchor="middle" >3</text>
+<circle cx="372" cy="124" r="13" fill="#FFD60A" stroke="#111114" stroke-width="2"/><text x="372" y="129" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="800" fill="#111114" text-anchor="middle" >4</text>
+<circle cx="30" cy="34" r="13" fill="#FFD60A" stroke="#111114" stroke-width="2"/><text x="30" y="39" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="800" fill="#111114" text-anchor="middle" >5</text>
+<circle cx="118" cy="724" r="13" fill="#FFD60A" stroke="#111114" stroke-width="2"/><text x="118" y="729" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="800" fill="#111114" text-anchor="middle" >6</text>
+<rect x="0" y="800" width="1280" height="170" fill="#F4F4F6"/><rect x="0" y="800" width="1280" height="4" fill="#7FA7FF"/><text x="24" y="832" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#111114" text-anchor="start" >Loopstation 2 · L2-02 · Eltern-Pad-Ansicht (Variante A) – Raster oben, Detailfeld eingeklappt</text><text x="24" y="852" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="600" fill="#55555C" text-anchor="start" >Konzept §2.2 · ersetzt Elternbereich-Dialog</text><text x="24" y="876.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.8" font-weight="400" fill="#3A3A41" text-anchor="start" >(1) Kinder|Eltern-Umschalter: Eltern -&gt; Kinder ein Tipp, Kinder -&gt; Eltern über das Schloss mit Sperre. (2) Takt immer sichtbar, Tipp öffnet Takt korrigieren + Metronom. (3)</text><text x="24" y="893.5" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.8" font-weight="400" fill="#3A3A41" text-anchor="start" >Zurück/Wiederholen/Alles still wie bei Kindern.</text><text x="24" y="911.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.8" font-weight="400" fill="#3A3A41" text-anchor="start" >(4) Dieselben 12 Pads, spielbar wie auf der Kinderseite, mit Name, Länge, Mini-Welle und Zustandssymbol; Tipp auf den Rand wählt, Tipp auf das Symbol startet/stoppt. (5) Werkzeugleiste links:</text><text x="24" y="928.5" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.8" font-weight="400" fill="#3A3A41" text-anchor="start" >Verlauf, Sets, Export, Pegel, Geräte, System öffnen eine Seitenleiste über dem Raster.</text><text x="24" y="946.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.8" font-weight="400" fill="#3A3A41" text-anchor="start" >(6) Detailfeld des gewählten Pads unten, eingeklappt nur eine Zeile (Tab, Doppelklick oder Taste Enter klappt auf). Tasten: Pfeile wählen, Leertaste spielt, R nimmt auf, Entf löscht (mit Zurück),</text><text x="24" y="963.5" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.8" font-weight="400" fill="#3A3A41" text-anchor="start" >Strg+Z/Y.</text>
+</svg>

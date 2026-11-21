@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="970" viewBox="0 0 1280 970">
+<title>Loopstation 2 · L2-08 – Launchpad-Spiegelung – Kindermodus und Elternmodus</title>
+<defs><pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="10" height="10" fill="#2E2E34"/><line x1="0" y1="0" x2="0" y2="10" stroke="#4A4A52" stroke-width="4"/></pattern><filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter></defs>
+<rect width="1280" height="800" fill="#0E0E10"/>
+<rect x="6" y="6" width="1268" height="788" rx="26" fill="none" stroke="#7FA7FF" stroke-opacity="0.75" stroke-width="4"/>
+<text x="60" y="60" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="22" font-weight="800" fill="#F2F2F2" text-anchor="start" >Kindermodus</text>
+<text x="60" y="86" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="500" fill="#8E8E93" text-anchor="start" >wie heute + optional Modus-Reihe</text>
+<rect x="60" y="110" width="520" height="520" rx="22" fill="#1A1A1E" stroke="#3A3A41" stroke-width="2" />
+<circle cx="106.7" cy="156.7" r="19.2" fill="#32D74B"/>
+<circle cx="160.0" cy="156.7" r="19.2" fill="#FF3B30"/>
+<circle cx="213.3" cy="156.7" r="19.2" fill="#40A9FF"/>
+<circle cx="266.7" cy="156.7" r="19.2" fill="#FF9F0A"/>
+<circle cx="320.0" cy="156.7" r="19.2" fill="#C77DFF"/>
+<circle cx="373.3" cy="156.7" r="19.2" fill="#26262B"/>
+<circle cx="426.7" cy="156.7" r="19.2" fill="#26262B"/>
+<circle cx="480.0" cy="156.7" r="19.2" fill="#26262B"/>
+<circle cx="533.3" cy="156.7" r="11.7" fill="#2A2A30"/>
+<rect x="83.7" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#32D74B"/>
+<rect x="137.1" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#FFD60A"/>
+<rect x="190.4" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="243.7" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="297.1" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="350.4" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="403.7" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="457.1" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="533.3" cy="210.0" r="19.2" fill="#26262B"/>
+<rect x="83.7" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#32D74B"/>
+<rect x="137.1" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#FFD60A"/>
+<rect x="190.4" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#FFD60A"/>
+<rect x="243.7" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="297.1" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="350.4" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="403.7" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="457.1" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="533.3" cy="263.3" r="19.2" fill="#26262B"/>
+<rect x="83.7" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="137.1" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#32D74B"/>
+<rect x="190.4" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="243.7" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="297.1" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="350.4" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="403.7" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="457.1" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="533.3" cy="316.7" r="19.2" fill="#26262B"/>
+<rect x="83.7" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="137.1" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="190.4" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="243.7" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="297.1" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="350.4" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="403.7" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="457.1" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="533.3" cy="370.0" r="19.2" fill="#26262B"/>
+<rect x="83.7" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="137.1" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="190.4" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="243.7" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="297.1" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="350.4" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="403.7" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="457.1" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="533.3" cy="423.3" r="19.2" fill="#26262B"/>
+<rect x="83.7" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="137.1" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="190.4" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="243.7" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="297.1" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="350.4" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="403.7" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="457.1" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="533.3" cy="476.7" r="19.2" fill="#26262B"/>
+<rect x="83.7" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="137.1" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="190.4" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="243.7" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="297.1" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="350.4" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="403.7" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="457.1" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="533.3" cy="530.0" r="19.2" fill="#26262B"/>
+<rect x="83.7" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="137.1" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="190.4" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="243.7" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="297.1" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="350.4" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="403.7" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="457.1" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="533.3" cy="583.3" r="19.2" fill="#26262B"/>
+<text x="700" y="60" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="22" font-weight="800" fill="#F2F2F2" text-anchor="start" >Elternmodus</text>
+<text x="700" y="86" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="14" font-weight="500" fill="#8E8E93" text-anchor="start" >gewähltes Pad atmet · Knöpfe bekommen Aufgaben</text>
+<rect x="700" y="110" width="520" height="520" rx="22" fill="#1A1A1E" stroke="#3A3A41" stroke-width="2" />
+<circle cx="746.7" cy="156.7" r="19.2" fill="#5A5A60"/>
+<circle cx="800.0" cy="156.7" r="19.2" fill="#5A5A60"/>
+<circle cx="853.3" cy="156.7" r="19.2" fill="#5A5A60"/>
+<circle cx="906.7" cy="156.7" r="19.2" fill="#5A5A60"/>
+<circle cx="960.0" cy="156.7" r="19.2" fill="#26262B"/>
+<circle cx="1013.3" cy="156.7" r="19.2" fill="#26262B"/>
+<circle cx="1066.7" cy="156.7" r="19.2" fill="#26262B"/>
+<circle cx="1120.0" cy="156.7" r="19.2" fill="#26262B"/>
+<circle cx="1173.3" cy="156.7" r="11.7" fill="#2A2A30"/>
+<rect x="723.7" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#32D74B"/>
+<rect x="777.1" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#FFD60A"/>
+<rect x="830.4" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="883.7" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="937.1" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="990.4" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1043.7" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1097.1" y="187.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="1173.3" cy="210.0" r="19.2" fill="#4A4A52"/>
+<rect x="723.7" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#32D74B"/>
+<rect x="719.7" y="236.4" width="53.9" height="53.9" rx="9.6" fill="none" stroke="#5AC8FA" stroke-width="3" stroke-dasharray="6 4"/>
+<rect x="777.1" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#FFD60A"/>
+<rect x="830.4" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#FFD60A"/>
+<rect x="883.7" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="937.1" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="990.4" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1043.7" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1097.1" y="240.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="1173.3" cy="263.3" r="19.2" fill="#32D74B"/>
+<rect x="723.7" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="777.1" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#32D74B"/>
+<rect x="830.4" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="883.7" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#E8E8EA"/>
+<rect x="937.1" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="990.4" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1043.7" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1097.1" y="293.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="1173.3" cy="316.7" r="19.2" fill="#4A4A52"/>
+<rect x="723.7" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="777.1" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="830.4" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="883.7" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="937.1" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="990.4" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1043.7" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1097.1" y="347.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="1173.3" cy="370.0" r="19.2" fill="#26262B"/>
+<rect x="723.7" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="777.1" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="830.4" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="883.7" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="937.1" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="990.4" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1043.7" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1097.1" y="400.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="1173.3" cy="423.3" r="19.2" fill="#26262B"/>
+<rect x="723.7" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="777.1" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="830.4" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="883.7" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="937.1" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="990.4" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1043.7" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1097.1" y="453.7" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="1173.3" cy="476.7" r="19.2" fill="#AEAEB2"/>
+<rect x="723.7" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="777.1" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="830.4" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="883.7" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="937.1" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="990.4" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1043.7" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1097.1" y="507.1" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="1173.3" cy="530.0" r="19.2" fill="#8E8E93"/>
+<rect x="723.7" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#7A2A28"/>
+<rect x="777.1" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#7A2A28"/>
+<rect x="830.4" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#7A2A28"/>
+<rect x="883.7" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#7A2A28"/>
+<rect x="937.1" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="990.4" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1043.7" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<rect x="1097.1" y="560.4" width="45.9" height="45.9" rx="7.5" fill="#232327"/>
+<circle cx="1173.3" cy="583.3" r="19.2" fill="#FF3B30"/>
+<text x="700" y="668" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="500" fill="#C7C7CC" text-anchor="start" >obere Reihe: ← → ↑ ↓ wählen das Pad</text>
+<text x="700" y="690" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="500" fill="#C7C7CC" text-anchor="start" >rechte Spalte: Szenen ▶ (Option S), Zurück, Wiederholen, Alles still</text>
+<text x="700" y="712" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="500" fill="#C7C7CC" text-anchor="start" >untere Pad-Reihe: Spur-Stopp (Option S) · gestrichelt: gewähltes Pad (LED-Puls)</text>
+<text x="60" y="668" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="500" fill="#C7C7CC" text-anchor="start" >oberste Reihe (optional): Spielen · Aufnehmen · Loop · Löschen · Verlauf</text>
+<text x="60" y="690" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="500" fill="#C7C7CC" text-anchor="start" >übrige 52 Pads dunkel: nichts lenkt ab</text>
+<rect x="0" y="800" width="1280" height="170" fill="#F4F4F6"/><rect x="0" y="800" width="1280" height="4" fill="#7FA7FF"/><text x="24" y="832" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="19" font-weight="700" fill="#111114" text-anchor="start" >Loopstation 2 · L2-08 · Launchpad-Spiegelung – Kindermodus und Elternmodus</text><text x="24" y="852" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="13" font-weight="600" fill="#55555C" text-anchor="start" >Konzept §2.6 · midi/launchpad.py (Programmer-Modus)</text><text x="24" y="876.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.8" font-weight="400" fill="#3A3A41" text-anchor="start" >Links Kindermodus wie heute: nur das 4 × 3-Feld oben links leuchtet in den Pad-Farben, alles andere bleibt dunkel (reizarm). Neu optional: oberste Reihe = die fünf Modi in ihren Farben.</text><text x="24" y="893.5" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.8" font-weight="400" fill="#3A3A41" text-anchor="start" >Rechts Elternmodus: gewähltes Pad atmet weich (LED-Puls, kein Blinken), rechte Knopfspalte = Szenen-▶ (Option S) bzw. Zurück/Wiederholen/Alles still, unterste Reihe = Spur-Stopp. Pfeiltasten oben</text><text x="24" y="911.0" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.8" font-weight="400" fill="#3A3A41" text-anchor="start" >wählen das Pad wie die Pfeiltasten am Rechner.</text><text x="24" y="928.5" font-family="Inter, 'Noto Sans', 'DejaVu Sans', Arial, sans-serif" font-size="12.8" font-weight="400" fill="#3A3A41" text-anchor="start" >Grundlage nur Novations öffentliches Programmer's Reference; die heutige Abbildung (note_for/pad_for) bleibt, sie wird nur um Knopf-Ereignisse erweitert. Test am echten Gerät steht weiter aus.</text>
+</svg>
