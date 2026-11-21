@@ -51,7 +51,15 @@ RUBBERBAND_BLOCK = 4096  # frames per study/process call (keeps Rubber Band's bu
 
 
 class WsolaEngine:
-    """Pitch-preserving WSOLA stretch (fallback engine, simple quality)."""
+    """Pitch-preserving WSOLA stretch (fallback engine, simple quality).
+
+    Detected attacks (claps, drum hits) land on their stretched position (position x ratio):
+    every window that reaches one is placed by it instead of by the similarity search. That holds
+    for attacks at least a window apart (2048 frames, about 46 ms at 44.1 kHz); with several in
+    reach of one window, only the one nearest its middle is placed exactly, the others can be off
+    by up to their distance x the stretch. Attacks too soft or slow to be detected (a swell, a
+    hit far under a loud held tone) only get the plain search and can be a few milliseconds off.
+    """
 
     def __init__(self, frame_size: int = 2048, search: int = 512) -> None:
         if frame_size < 8 or frame_size % 2:
@@ -86,27 +94,159 @@ class WsolaEngine:
         lead = np.zeros(search, np.float32)
         tail = np.zeros(frame + 2 * search, np.float32)
         padded = np.concatenate([lead, data, tail])
+        energy = np.concatenate([[0.0], np.cumsum(np.square(padded, dtype=np.float64))])
         frames = -(-target // hop) + 1
+        anchors = _anchors(_attacks(data, max(16, frame // 32)), frames, hop, ratio, frame, search,
+                           len(padded) - frame - search)
         out = np.zeros(frames * hop + frame, dtype=np.float32)
         previous_end = 0  # where the natural continuation of the last chosen segment starts
         for k in range(frames):
             ideal = int(round(k * hop / ratio))
-            if k == 0:
+            if anchors[k] is not None:
+                start = anchors[k]
+            elif k == 0:
                 start = ideal
             else:
-                template = padded[previous_end + search : previous_end + search + frame]
-                lo = max(0, ideal - search)
-                hi = min(len(padded) - frame, ideal + search)
-                if hi <= lo:
-                    start = min(lo, len(padded) - frame)
-                else:
-                    segment = padded[lo + search : hi + search + frame]
-                    scores = np.correlate(segment, template, mode="valid")
-                    start = lo + int(np.argmax(scores))
+                start = _best_match(padded, energy, previous_end, ideal, frame, search,
+                                    _guide(anchors, k, hop, ideal, search))
             chunk = padded[start + search : start + search + frame]
             out[k * hop : k * hop + frame] += chunk * (first_window if k == 0 else window)
             previous_end = start + hop
         return out
+
+
+# An attack is a short window at least three times as loud as the average of the stretch before it.
+ATTACK_RISE = 3.0
+ATTACK_FLOOR = 1e-4  # windows more than 40 dB below the loudest one never count
+ATTACK_LOOKBACK = 16  # windows of average before a window (about 23 ms at 44.1 kHz)
+ATTACK_GAP = 32  # windows after an attack in which no new one counts: one stretch window (46 ms)
+# Windows before an anchored one that share the phase step towards it, as far as the search reaches
+# (see ``_guide``).
+ANCHOR_LEAD = 8
+# Pulls a tie (silence: every candidate scores 0) to the ideal position; far too small to move a real match.
+TIE_BREAK = 1e-4
+
+
+def _attacks(data: np.ndarray, block: int) -> np.ndarray:
+    """Frame positions of the attacks (sudden rises in energy) in ``data``, in order.
+
+    Windows of ``block`` frames overlap by three quarters, so an attack is seen whole however it
+    falls on the grid; each is compared with the average level before it, so a clap over a held
+    tone still counts while the ups and downs of a low tone do not.
+    """
+    step = max(1, block // 4)
+    if len(data) < block:
+        return np.zeros(0, dtype=np.int64)
+    total = np.concatenate([[0.0], np.cumsum(np.square(data, dtype=np.float64))])
+    starts = np.arange(0, len(data) - block + 1, step)
+    level = total[starts + block] - total[starts]
+    floor = float(level.max()) * ATTACK_FLOOR
+    if floor <= 0:
+        return np.zeros(0, dtype=np.int64)
+    lookback = ATTACK_LOOKBACK * block
+    begin = np.maximum(starts - lookback, 0)
+    span = np.maximum(starts - begin, 1)
+    before = (total[starts] - total[begin]) / span * block
+    rising = starts[(level > floor) & (level > ATTACK_RISE * before)]
+    positions: list[int] = []
+    for start in rising:
+        if positions and start - positions[-1] < ATTACK_GAP * block:
+            continue  # the same attack seen again (or one too close to be placed on its own)
+        around = np.abs(data[start : start + 2 * block])
+        positions.append(int(start) + int(np.argmax(around >= 0.5 * around.max())))
+    return np.array(positions, dtype=np.int64)
+
+
+def _anchors(
+    attacks: np.ndarray, frames: int, hop: int, ratio: float, frame: int, search: int, last_start: int
+) -> list[int | None]:
+    """For every output window, the start that puts an attack it can reach on its stretched position.
+
+    ``None`` where no attack is in reach (the similarity search decides). Every window around one
+    attack gets its start this way, so they follow on seamlessly and the attack is neither smeared
+    nor moved. With two attacks in reach, the one nearer the window's middle wins.
+    """
+    anchors: list[int | None] = [None] * frames
+    for k in range(frames):
+        ideal = int(round(k * hop / ratio))
+        reach = np.searchsorted(attacks, [ideal - search, ideal + frame + search])
+        near = attacks[reach[0] : reach[1]]
+        if len(near):
+            attack = int(near[np.argmin(np.abs(near - (ideal + hop)))])
+            start = int(round(ideal + (attack - ideal) * (1 - ratio)))
+            anchors[k] = min(max(start, ideal - search), ideal + search, last_start)
+    return anchors
+
+
+def _guide(anchors: list[int | None], k: int, hop: int, ideal: int, search: int) -> tuple[int, float] | None:
+    """Where window ``k`` would start to lead seamlessly into the next anchored window, and its share.
+
+    The anchored window rarely fits the natural continuation; on held tones the whole mismatch
+    would land in one splice and the tone would dip there. The ``ANCHOR_LEAD`` windows before it
+    and the splice into it take an equal share each: window j before the anchor goes 1/(j+1) of
+    the remaining way.
+    """
+    for ahead in range(1, ANCHOR_LEAD + 1):
+        if k + ahead < len(anchors) and anchors[k + ahead] is not None:
+            lead_in = anchors[k + ahead] - ahead * hop
+            return (lead_in, 1.0 / (ahead + 1)) if abs(lead_in - ideal) <= search else None
+    return None
+
+
+def _similarity(
+    padded: np.ndarray,
+    energy: np.ndarray,
+    template_start: int,
+    lo: int,
+    segment: np.ndarray,
+    frame: int,
+    search: int,
+) -> np.ndarray:
+    """Normalised cross-correlation of the template at ``template_start`` with each candidate."""
+    template = padded[template_start + search : template_start + search + frame]
+    scores = np.correlate(segment, template, mode="valid").astype(np.float64)
+    count = len(scores)
+    template_energy = energy[template_start + search + frame] - energy[template_start + search]
+    first = lo + search
+    candidate_energy = energy[first + frame : first + frame + count] - energy[first : first + count]
+    norm = np.sqrt(np.maximum(template_energy * candidate_energy, 0.0))
+    quiet = norm <= 1e-9 * frame
+    return np.where(quiet, 0.0, scores / np.where(quiet, 1.0, norm))
+
+
+def _best_match(
+    padded: np.ndarray,
+    energy: np.ndarray,
+    previous_end: int,
+    ideal: int,
+    frame: int,
+    search: int,
+    guide: tuple[int, float] | None = None,
+) -> int:
+    """The start near ``ideal`` that continues the previous window best (normalised cross-correlation).
+
+    Normalising keeps loud candidates from winning on level alone; ``TIE_BREAK`` sends a tie
+    (silence) to the ideal position instead of the edge of the search, so nothing drifts.
+
+    With a ``guide`` (start, share) the candidate must also fit the window that leads into an
+    anchored one (``_guide``). The misfit to each is measured as an angle (arccos of the
+    correlation), and the candidate is chosen that keeps the larger of misfit/share and
+    misfit to the guide/(1 - share) smallest: it goes ``share`` of the way, never all of it.
+    """
+    lo = max(0, ideal - search)
+    hi = min(len(padded) - frame, ideal + search)
+    if hi <= lo:
+        return min(lo, len(padded) - frame)
+    segment = padded[lo + search : hi + search + frame]
+    scores = _similarity(padded, energy, previous_end, lo, segment, frame, search)
+    if guide is not None and 0 <= guide[0] + search <= len(padded) - frame:
+        ahead = _similarity(padded, energy, guide[0], lo, segment, frame, search)
+        share = guide[1]
+        misfit = np.maximum(np.arccos(np.clip(scores, -1.0, 1.0)) / share,
+                            np.arccos(np.clip(ahead, -1.0, 1.0)) / (1 - share))
+        scores = -misfit
+    scores -= TIE_BREAK * np.abs(np.arange(lo, lo + len(scores)) - ideal) / max(search, 1)
+    return lo + int(np.argmax(scores))
 
 
 class RubberBandEngine:
