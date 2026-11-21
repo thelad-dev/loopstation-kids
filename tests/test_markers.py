@@ -442,17 +442,25 @@ def test_a_stretched_take_without_its_chain_is_stretched_itself_as_before(tmp_pa
     again.shutdown()
 
 
-@needs_rubberband
 def test_a_piece_too_far_on_the_original_falls_back_to_stretching_the_take_as_before(
     tmp_path, clock, monkeypatch
 ):
     # clap 2 at 12440: from the original its last piece would change by 11 %, from the take by under 10 %
-    controller, _ = on_grid(tmp_path, clock, claps_pad1=(0.54, 1.555))
+    # the limit only holds for the parents' own tempo (a grid from the recording never overrules a marker)
+    controller, audio = build(tmp_path, clock, claps=[0.5, 1.0])
+    record(controller, clock, 0, 3.0)
+    assert controller.set_parent_grid(120, "4/4") is True
+    audio.clap_times = [0.54, 1.555]
+    record(controller, clock, 1, 2.0)
+    assert controller.grid_frames() == GRID
     original = controller.sample_audio(controller.pad(1).sample)
+    # a plain resampling engine for the first stretch too: the claps then move exactly in proportion, so
+    # the margin does not depend on how far a real engine shifts a clap (it differs between platforms)
+    spy = spy_on(controller, monkeypatch)
     controller.add_marker(1, 4320)
     assert controller.stretch_to_markers(1) is None
     current = controller.sample_audio(controller.pad(1).sample)
-    spy = spy_on(controller, monkeypatch)
+    spy.inputs.clear()
     controller.add_marker(1, onset(current, 10000))
     assert controller.stretch_to_markers(1) is None
     assert spy.inputs and all(is_slice_of(piece, current) for piece in spy.inputs)
