@@ -1,4 +1,7 @@
-PySide6>=6.6
+# PySide6 6.12 frees one reference to None too many on every void Qt call under Python 3.11
+# (None is immortal since 3.12): the app aborts after seconds there, so 3.11 stays below 6.12.
+PySide6>=6.6,<6.12; python_version < "3.12"
+PySide6>=6.6; python_version >= "3.12"
 numpy>=1.26
 sounddevice>=0.5.1
 soundfile>=0.12

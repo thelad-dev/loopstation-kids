@@ -1,5 +1,6 @@
 # Exact versions for the Windows build, so a tag always builds the same bundle.
 # Update deliberately: bump here, then let the windows-installer workflow prove it.
+# Built with Python 3.12 (windows-installer.yml): every pin here needs a cp312 (or abi3) wheel.
 PySide6==6.12.0
 PySide6-Essentials==6.12.0
 PySide6-Addons==6.12.0

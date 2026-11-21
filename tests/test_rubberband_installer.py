@@ -32,7 +32,7 @@ def test_download_constants_are_a_pinned_pypi_wheel_with_a_checksum():
     values = defines()
     url = values["RubberBandUrl"]
     assert url.startswith("https://files.pythonhosted.org/packages/")
-    assert url.endswith(f"pylibrb-{values['RubberBandVersion']}-cp311-cp311-win_amd64.whl")
+    assert url.endswith(f"pylibrb-{values['RubberBandVersion']}-cp312-abi3-win_amd64.whl")
     assert re.fullmatch(r"[0-9a-f]{64}", values["RubberBandSha256"])
     assert values["RubberBandSize"]
 
