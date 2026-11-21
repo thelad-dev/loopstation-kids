@@ -206,3 +206,94 @@ def test_main_window_offers_the_export_only_behind_the_gate(qapp, tmp_path, cloc
         win.close()
         store.close()
 
+
+
+# ------------------------------------------- scope chosen from what loops now
+
+
+def silent_session(qapp, tmp_path, clock):
+    """The session of ``make`` after "Alles still": three pads with a sample, none loops."""
+    dialog, controller = make(qapp, tmp_path, clock)
+    controller.stop_all()
+    return dialog, controller
+
+
+def test_when_nothing_loops_the_shown_page_takes_every_pad_as_a_loop(qapp, tmp_path, clock):
+    import numpy as np
+
+    from loopstation import export as ex
+
+    dialog, controller = silent_session(qapp, tmp_path, clock)
+    dialog.show()
+    try:
+        assert dialog.scope_all.isChecked() and not dialog.scope_running.isChecked()
+        assert dialog.running_count.text() == "0 Pads" and dialog.all_count.text() == "3 Pads"
+        assert dialog.preview.rows == [("Pad 1", 1.0, False), ("Pad 2", 2.0, False), ("Pad 3", 1.0, False)]
+        dialog.bar_chips[4].click()
+        path = dialog.export_sum()
+        assert path is not None
+        data, _rate = soundfile.read(str(path), dtype="float32")
+        grid = controller.grid_frames()
+        assert len(data) == 4 * grid
+        expected = ex.render_sum(ex.build_spec(controller, 4, all_pads=True))
+        assert np.abs(data - expected).max() < 1e-4
+        # Pad 1 (one bar) repeats: every bar sounds, not only the first.
+        assert all(np.abs(data[bar * grid:(bar + 1) * grid]).max() > 0.01 for bar in range(4))
+    finally:
+        dialog.close()
+
+
+def test_while_something_loops_the_shown_page_keeps_only_what_loops(qapp, tmp_path, clock):
+    dialog, _ = make(qapp, tmp_path, clock)
+    dialog.show()
+    try:
+        assert dialog.scope_running.isChecked() and not dialog.all_pads
+        assert [r[0] for r in dialog.preview.rows] == ["Pad 1", "Pad 3"]
+    finally:
+        dialog.close()
+
+
+def test_the_parents_choice_on_the_open_page_is_kept(qapp, tmp_path, clock):
+    dialog, _ = silent_session(qapp, tmp_path, clock)
+    dialog.show()
+    try:
+        dialog.scope_running.click()
+        dialog.bar_chips[16].click()
+        dialog.one_shots.setChecked(True)
+        assert dialog.scope_running.isChecked() and dialog.bars == 16
+    finally:
+        dialog.close()
+
+
+def test_every_visit_of_the_kept_export_area_chooses_from_what_loops_then(qapp, tmp_path, clock):
+    from loopstation.controller import Mode
+
+    controller, _audio = session(tmp_path, clock)
+    controller.stop_all()
+    built = []
+
+    def build():
+        built.append(ExportDialog(controller, None, export_dir=tmp_path / "out", clock=clock))
+        return built[-1]
+
+    page = ParentPage("export", "download", "Export", build)
+    dialog = SettingsDialog(tmp_path / "settings.toml", make_settings(tmp_path), lambda s: [],
+                            None, None, [page])
+    dialog.resize(1280, 800)
+    dialog.show()
+    try:
+        dialog.nav.buttons["export"].click()
+        assert built[0].scope_all.isChecked()
+        dialog.nav.buttons["levels"].click()
+        controller.set_mode(Mode.LOOP)
+        controller.press(0)
+        controller.set_mode(Mode.PLAY)
+        dialog.nav.buttons["export"].click()
+        assert len(built) == 1 and built[0].scope_running.isChecked()
+        assert built[0].running_count.text() == "1 Pad"
+        dialog.nav.buttons["levels"].click()
+        controller.stop_all()
+        dialog.nav.buttons["export"].click()
+        assert built[0].scope_all.isChecked() and built[0].running_count.text() == "0 Pads"
+    finally:
+        dialog.close()

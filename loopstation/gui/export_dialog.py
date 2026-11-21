@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, QStandardPaths, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QPaintEvent, QPen
+from PySide6.QtGui import QColor, QFont, QPainter, QPaintEvent, QPen, QShowEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -499,6 +499,24 @@ class ExportPage(QWidget):
     def selected_loop_pad(self) -> int | None:
         pad = self.pad_group.checkedId()
         return pad if pad >= 0 else None
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt API
+        """Each visit chooses the pads from what loops now; a choice on the open page stays.
+
+        The page is built on the first visit and kept. When nothing loops but pads have a sample,
+        "only what loops" would export nothing, so every pad with a sample is taken as a loop.
+        A window coming back (``spontaneous``) is no new visit.
+        """
+        super().showEvent(event)
+        if event.spontaneous():
+            return
+        loops, _shots = ex.selected_pads(self.controller, all_pads=False)
+        every, _none = ex.selected_pads(self.controller, all_pads=True)
+        take_all = not loops and bool(every)
+        if self.scope_all.isChecked() == take_all:
+            self.refresh()  # the session may have changed since the last visit
+        else:
+            (self.scope_all if take_all else self.scope_running).setChecked(True)  # refreshes
 
     def refresh(self) -> None:
         """Bring the texts, the length and the preview in line with the choices and the session."""
