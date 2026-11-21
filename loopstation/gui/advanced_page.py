@@ -34,6 +34,7 @@ from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
 from loopstation.gui.parent_nav import PAGE_STYLE, CardGrid, dim_label, scrolled
 from loopstation.gui.settings_page import ToggleSwitch
+from loopstation.gui.trim_card import TrimCard
 from loopstation.gui.waveform import WaveformWidget
 from loopstation.gui.widgets import TEXT_DIM, BigButton, weak_slot
 
@@ -94,6 +95,8 @@ class AdvancedPage(QWidget):
         inner_layout.setSpacing(14)
         inner_layout.addLayout(self._picker())
         inner_layout.addWidget(self._wave_card())
+        self.trim_card = TrimCard(controller, self.waveform, lambda: self.pad, on_done=self.refresh)
+        inner_layout.addWidget(self.trim_card)
         inner_layout.addWidget(self._export_card())
         inner_layout.addStretch(1)
         layout = QVBoxLayout(self)
@@ -335,6 +338,7 @@ class AdvancedPage(QWidget):
         self.pad = pad
         self.waveform.clear_selection()
         self._hint_marker()
+        self.trim_card.say("")
         self.refresh()
 
     # ------------------------------------------------------------- refresh
@@ -358,6 +362,7 @@ class AdvancedPage(QWidget):
                 f"border: {border}; border-radius: 10px; font-size: 16px; font-weight: 800; }}")
         self._show_loop()
         self._update_marker_buttons()
+        self.trim_card.refresh()
         stamp = self._stamp()
         self.target_label.setText(f"Ziel: {self.export_dir / f'pad{self.pad + 1:02d}_{stamp}.wav'}")
         self.save_button.setEnabled(controller.pad(self.pad).sample is not None)
@@ -378,7 +383,7 @@ class AdvancedPage(QWidget):
             self.waveform.set_markers([])
             self.wave_title.setText(loop_title(self.pad, None, None, grid, controller.sample_rate))
             return
-        played = controller.loop_audio(sample)
+        played = controller.loop_audio(sample, self.pad)
         recorded = controller.sample_audio(sample)
         if played is None or recorded is None:
             self.waveform.set_loop(None, grid, 4)

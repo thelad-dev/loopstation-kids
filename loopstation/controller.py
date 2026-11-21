@@ -39,6 +39,7 @@ from loopstation.clips import ClipEvent, ClipLog
 from loopstation.config import SIGNATURES, Settings, restart_keys_changed
 from loopstation.state import MAX_MARKERS, PadState, find_entry, master_source
 from loopstation.store import EventStore
+from loopstation.trim import ORDER, SAME, SHORT, TrimPlan, plan_trim, trim_audio
 
 log = logging.getLogger(__name__)
 
@@ -79,6 +80,20 @@ MARKER_STRETCH_REFUSALS = {
     "too_far": "Ein Marker liegt zu weit neben seinem Schlag (mehr als 10 %). Es wurde nichts verändert.",
     "already": "Die Marker liegen schon auf den Schlägen: Da gibt es nichts zu strecken.",
     "save": "Der gestreckte Loop konnte nicht gespeichert werden.",
+}
+
+# What the parents are told when a loop cannot be shortened (keyed by ``TrimPlan.problem``
+# plus the cases before it).
+TRIM_REFUSALS = {
+    "no_pad": "Auf diesem Pad ist noch kein Loop.",
+    "recording": "Es läuft gerade eine Aufnahme.",
+    "unreadable": "Die Aufnahme fehlt oder ist nicht lesbar.",
+    ORDER: "Der Anfang muss vor dem Ende liegen.",
+    SHORT: "Der Loop wäre zu kurz.",
+    SAME: "Da ist nichts zu kürzen.",
+    "founder": "Dieser Loop gibt den Takt vor: Lege fest, was mit dem Takt geschieht.",
+    "grid": "Als neuer Takt wäre die Länge unbrauchbar (Tempo außerhalb des erlaubten Bereichs).",
+    "save": "Der gekürzte Loop konnte nicht gespeichert werden.",
 }
 
 WHITE, YELLOW, GREEN, RED = "white", "yellow", "green", "red"
@@ -163,6 +178,25 @@ class GridInfo:
     seconds: float  # length of one bar
     source: str  # onset, duration, parent_bpm or free_pad
     pad: int | None  # the pad that set it, None if the log did not say
+
+
+@dataclass(frozen=True)
+class TrimCheck:
+    """What shortening a loop would do, for the parents' page (``Controller.check_trim``)."""
+
+    plan: TrimPlan | None  # None when there is nothing to plan (no loop, no recording)
+    refusal: str | None  # why it cannot be done (also set for ``decide``)
+    decide: bool  # the loop gives the bar and would no longer fit it: the parents have to choose
+    grid_frames: int | None  # the bar in frames now, None without a grid
+    rate: int
+
+    @property
+    def seconds(self) -> float:
+        return 0.0 if self.plan is None else self.plan.frames / self.rate
+
+    @property
+    def ok(self) -> bool:
+        return self.refusal is None
 
 
 @dataclass(frozen=True)
@@ -559,7 +593,7 @@ class Controller:
         except OSError:
             return
         for line in lines:
-            if '"record_stop"' not in line:
+            if '"record_stop"' not in line and '"loop_trim"' not in line:
                 continue
             try:
                 data = json.loads(line).get("data", {})
@@ -1360,6 +1394,118 @@ class Controller:
         if frame not in current:
             return False
         return self.set_markers(pad, [f for f in current if f != frame])
+
+    # ----------------------------------------------------------- shortening
+
+    def _founder(self, pad: int, length: int) -> bool:
+        """Does ``pad`` give the session its bar (the length of its loop is the grid)?
+
+        The parents' tempo gives it to nobody; a free pad keeps its own length either way. A
+        master without the pad it came from (older logs) belongs to the pad whose sound has
+        exactly the length of the bar.
+        """
+        master = self.store.state.master
+        if master is None or master_source(master) == PARENT_BPM or self.pad(pad).free:
+            return False
+        if "pad" in master:
+            return master["pad"] == pad
+        return length == self._grid()
+
+    def check_trim(self, pad: int, start: int, end: int, snap: bool = True) -> TrimCheck:
+        """What shortening the loop on ``pad`` to ``start`` .. ``end`` (frames of the loop as it plays)
+        would make of it, and whether it is allowed; nothing is changed.
+
+        With ``snap`` (and a grid) the length becomes whole bars. A loop that gives the bar
+        and would not be whole bars afterwards needs a decision (``decide``): the grid is set
+        anew (``trim_loop(..., regrid=True)``) or the length snaps.
+        """
+        rate = self.audio.sample_rate
+        grid = self._grid()
+        sample = self.pad(pad).sample
+        if sample is None:
+            return TrimCheck(None, TRIM_REFUSALS["no_pad"], False, grid, rate)
+        source = self._loop_data(sample, pad)
+        if self._recording is not None:
+            return TrimCheck(None, TRIM_REFUSALS["recording"], False, grid, rate)
+        if source is None:
+            return TrimCheck(None, TRIM_REFUSALS["unreadable"], False, grid, rate)
+        grid = None if self.pad(pad).free else grid
+        plan = plan_trim(len(source), start, end, grid=grid,
+                         min_frames=self._grid_limits(rate)["min_frames"], snap=snap, rate=rate)
+        if plan.problem is not None:
+            return TrimCheck(plan, TRIM_REFUSALS[plan.problem], False, grid, rate)
+        decide = (grid is not None and not plan.snapped and plan.frames % grid != 0
+                  and self._founder(pad, len(source)))
+        return TrimCheck(plan, TRIM_REFUSALS["founder"] if decide else None, decide, grid, rate)
+
+    def trim_preview(self, pad: int, start: int, end: int, snap: bool = True) -> str | None:
+        """Play the shortened loop once, as it would be; None, or why not. Nothing is changed."""
+        check = self.check_trim(pad, start, end, snap)
+        if check.plan is None or check.plan.problem not in (None, SAME):
+            return check.refusal
+        source = self._loop_data(self.pad(pad).sample, pad)
+        if source is None:
+            return TRIM_REFUSALS["unreadable"]
+        self.audio.play(PREVIEW_VOICE, trim_audio(source, check.plan), loop=False)
+        return None
+
+    def trim_loop(
+        self, pad: int, start: int, end: int, snap: bool = True, regrid: bool = False
+    ) -> str | None:
+        """Shorten the loop on ``pad`` to ``start`` .. ``end``; None when done, else why not.
+
+        The result is a new sample (the original stays in the history and Zurück brings it
+        back), logged as ``loop_trim``; the markers move with the cut. A loop that gives the
+        bar is only shortened to a length off the grid when ``regrid`` says the new length
+        is the new bar (a ``master`` in the same event, so Zurück restores the old bar and
+        the other loops are fitted to the new one without their files changing).
+        """
+        check = self.check_trim(pad, start, end, snap)
+        plan = check.plan
+        if plan is None or (check.refusal is not None and not (check.decide and regrid)):
+            return check.refusal
+        sample = self.pad(pad).sample
+        source = self._loop_data(sample, pad) if sample is not None else None
+        if sample is None or source is None:
+            return TRIM_REFUSALS["unreadable"]
+        rate = self.audio.sample_rate
+        master: dict[str, Any] | None = None
+        if check.decide:
+            old = self.store.state.master or {}
+            master = {"frames": plan.frames, "rate": rate, "source": "duration"}
+            if "signature" in old:
+                master["signature"] = old["signature"]
+            master["pad"] = pad
+            beats = SIGNATURES.get(master.get("signature", ""), self.settings.beats_per_bar)
+            bpm = beats * 60.0 * rate / plan.frames
+            if not self.settings.grid_bpm_min <= bpm <= self.settings.grid_bpm_max:
+                return TRIM_REFUSALS["grid"]
+        result = trim_audio(source, plan)
+        stamp = int(self._clock() * 1000)
+        while (self.samples_dir / sample_filename(pad, stamp)).exists():
+            stamp += 1
+        name = sample_filename(pad, stamp)
+        try:
+            save_wav(self.samples_dir / name, result, rate)
+        except OSError as exc:
+            log.error("saving %s failed: %s", name, exc)
+            return TRIM_REFUSALS["save"]
+        self._cache[name] = result
+        data: dict[str, Any] = {
+            "sample": name, "from": sample, "start_frames": plan.start, "end_frames": plan.end,
+            "frames": plan.frames, "rate": rate,
+        }
+        if sample in self._sample_grid:
+            data["grid"] = self._sample_grid[sample]
+            self._sample_grid[name] = self._sample_grid[sample]
+        if master is not None:
+            data["master"] = master
+        self._stop_pad(pad)
+        self.store.append(ev.LOOP_TRIM, pad, data)
+        if master is not None:
+            self._refit_loops()
+        self._changed()
+        return None
 
     def stretch_to_markers(self, pad: int) -> str | None:
         """Stretch the loop on ``pad`` so its markers sit on the beat lines; None, or why not.

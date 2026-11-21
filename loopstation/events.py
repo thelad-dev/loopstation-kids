@@ -54,6 +54,14 @@ PAD_FREE = "pad_free"
 # redo and the history bring the right ones back. They are an annotation of the
 # parents and not on the undo stack. Logs without ``marker_set`` read as before.
 MARKER_SET = "marker_set"
+# A loop the parents shortened (Erweitert): ``loop_trim {pad, data: {sample, from,
+# start_frames, end_frames, frames, rate}}`` puts a new sample (the part ``start_frames`` ..
+# ``end_frames`` of the sample ``from`` as it played, cut or padded to ``frames``) on the pad.
+# The original stays in the history, so it is a content change like a new recording: undo, redo
+# and the history take it back. The markers of ``from`` move with it. It may carry ``master``
+# (the new bar, when the parents let a loop that set the grid define a new one) and ``grid``
+# (what the onset analysis decided for ``from``, passed on to the new sample).
+LOOP_TRIM = "loop_trim"
 
 EVENT_TYPES = frozenset(
     {
@@ -72,12 +80,13 @@ EVENT_TYPES = frozenset(
         SESSION_START,
         PAD_FREE,
         MARKER_SET,
+        LOOP_TRIM,
     }
 )
 
 # Events that change pad content and can therefore be undone. Playback and
 # flow events (play, loops, record_start) are skipped by undo on purpose.
-CONTENT_TYPES = frozenset({RECORD_STOP, DELETE_PAD, DELETE_ALL, RESTORE_PAD, PAD_FREE})
+CONTENT_TYPES = frozenset({RECORD_STOP, DELETE_PAD, DELETE_ALL, RESTORE_PAD, PAD_FREE, LOOP_TRIM})
 
 
 class EventFormatError(ValueError):

@@ -27,6 +27,8 @@ MARKER_COLOR = "#FF9F0A"
 CURSOR_COLOR = "#F2F2F2"
 FLAG_ROOM = 22  # space above the panel for the marker flags
 GRAB_PIXELS = 14  # a click this close to a marker's line selects it
+TRIM_COLOR = "#7FA7FF"  # the parents' accent: the handles that shorten the loop
+TRIM_DIM = QColor(14, 14, 16, 170)  # what a trim would cut off
 
 
 def peak_columns(data: np.ndarray, columns: int) -> np.ndarray:
@@ -74,23 +76,68 @@ class WaveformWidget(QWidget):
 
     # The cursor or the selected marker changed by a click (the page enables its buttons).
     selection_changed = Signal()
+    # A trim handle moved (``trim_range`` has the new frames).
+    trim_changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMinimumHeight(180 + FLAG_ROOM)
         self.setObjectName("waveform")
+        self.setMouseTracking(True)
         self._data: np.ndarray | None = None
         self._bar_frames: int | None = None
         self._beats = 4
         self._markers: list[int] = []
         self.cursor_frame: int | None = None
         self.selected_marker: int | None = None  # index into the markers
+        # Handles that shorten the loop: ``(start, end)`` in frames, the whole loop when untouched.
+        self._trim: tuple[int, int] = (0, 0)
+        self._drag: str | None = None  # "start" or "end" while a handle is held
         self.empty_text = "Auf diesem Pad ist noch kein Loop."
 
     def set_loop(self, data: np.ndarray | None, bar_frames: int | None, beats: int) -> None:
         """Show ``data`` (None = empty pad) with beat lines every ``bar_frames / beats`` frames."""
         self._data, self._bar_frames, self._beats = data, bar_frames, beats
+        self._trim, self._drag = (0, 0 if data is None else len(data)), None
         self.update()
+
+    @property
+    def trim_range(self) -> tuple[int, int]:
+        """The part of the loop between the handles, ``(start, end)`` in frames."""
+        return self._trim
+
+    @property
+    def loop_frames(self) -> int:
+        """Length of the loop that is shown, 0 without one."""
+        return 0 if self._data is None else len(self._data)
+
+    @property
+    def trimmed(self) -> bool:
+        """Has a handle been moved off the loop's ends?"""
+        return self._data is not None and self._trim != (0, len(self._data))
+
+    def set_trim_range(self, start: int, end: int) -> None:
+        """Put the handles at ``start`` and ``end`` (clamped to the loop, the start before the end)."""
+        size = 0 if self._data is None else len(self._data)
+        start = min(max(0, int(start)), max(0, size - 1))
+        end = min(max(start + 1, int(end)), size)
+        if (start, end) != self._trim:
+            self._trim = (start, end)
+            self.update()
+            self.trim_changed.emit()
+
+    def reset_trim(self) -> None:
+        """Handles back to the ends of the loop."""
+        self.set_trim_range(0, 0 if self._data is None else len(self._data))
+
+    def handle_at(self, x: float) -> str | None:
+        """``"start"`` or ``"end"`` if pixel ``x`` is on a handle (the nearer one), else None."""
+        if self._data is None:
+            return None
+        handles = zip(("start", "end"), self._trim, strict=True)
+        near = [(abs(self._x_of(frame) - x), name) for name, frame in handles]
+        near = [item for item in near if item[0] <= GRAB_PIXELS]
+        return min(near)[1] if near else None
 
     def set_markers(self, frames: list[int]) -> None:
         """Show markers at ``frames`` (positions in the loop); the selection moves with the list."""
@@ -129,7 +176,29 @@ class WaveformWidget(QWidget):
         frame = self.frame_at(event.position().x())
         if frame is None:
             return
+        handle = self.handle_at(event.position().x())
+        if handle is not None:
+            self._drag = handle
+            return
         self.pick(event.position().x(), frame)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt API
+        x = event.position().x()
+        if self._drag is None:
+            self.setCursor(Qt.CursorShape.SizeHorCursor if self.handle_at(x) else Qt.CursorShape.ArrowCursor)
+            return
+        panel = self._panel()
+        size = 0 if self._data is None else len(self._data)
+        frame = round((x - panel.left()) / max(1.0, panel.width()) * size)
+        start, end = self._trim
+        if self._drag == "start":
+            self.set_trim_range(frame, end)
+        else:
+            self.set_trim_range(start, frame)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt API
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag = None
 
     def pick(self, x: float, frame: int) -> None:
         """A click at pixel ``x`` (loop frame ``frame``): select the marker there, else move the cursor."""
@@ -183,7 +252,38 @@ class WaveformWidget(QWidget):
             reach = max(MIN_HALF_HEIGHT, float(peak) * half)
             painter.drawLine(QPointF(x, middle - reach), QPointF(x, middle + reach))
         self._paint_markers(painter, panel, bottom)
+        self._paint_trim(painter, panel, bottom)
         painter.end()
+
+    def _paint_trim(self, painter: QPainter, panel: QRectF, bottom: float) -> None:
+        """What a trim cuts off is dimmed; the two handles are accent lines with a grip."""
+        start_x, end_x = (self._x_of(frame) for frame in self._trim)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(TRIM_DIM)
+        if start_x > panel.left():
+            painter.drawRect(QRectF(panel.left(), panel.top(), start_x - panel.left(), bottom - panel.top()))
+        if end_x < panel.right():
+            painter.drawRect(QRectF(end_x, panel.top(), panel.right() - end_x, bottom - panel.top()))
+        bold = QFont()
+        bold.setPointSizeF(8.5)
+        bold.setBold(True)
+        painter.setFont(bold)
+        for x, name, left in ((start_x, "Anfang", True), (end_x, "Ende", False)):
+            painter.setPen(QPen(QColor(TRIM_COLOR), 3))
+            painter.drawLine(QPointF(x, panel.top()), QPointF(x, bottom))
+            grip = QRectF(x - 7, panel.top() + (bottom - panel.top()) / 2 - 18, 14, 36)
+            painter.setBrush(QColor(TRIM_COLOR))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(grip, 6, 6)
+            painter.setPen(QPen(QColor(PANEL_COLOR), 2))
+            for dx in (-2, 2):
+                painter.drawLine(QPointF(x + dx, grip.top() + 9), QPointF(x + dx, grip.bottom() - 9))
+            if not (self.trimmed or self._drag):
+                continue  # untouched: only the grips, so the picture stays as in the mockup
+            painter.setPen(QColor(TRIM_COLOR))
+            label = QRectF(x + 8, bottom - 22, 70, 18) if left else QRectF(x - 78, bottom - 22, 70, 18)
+            align = Qt.AlignmentFlag.AlignLeft if left else Qt.AlignmentFlag.AlignRight
+            painter.drawText(label, align | Qt.AlignmentFlag.AlignVCenter, name)
 
     def _paint_markers(self, painter: QPainter, panel: QRectF, bottom: float) -> None:
         if self.cursor_frame is not None:
