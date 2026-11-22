@@ -10,6 +10,7 @@ nothing from it (plan 3.3).
 from __future__ import annotations
 
 import time
+import weakref
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -33,7 +34,7 @@ from loopstation.gui.export_dialog import CUE_TITLE, default_export_dir, save_lo
 from loopstation.gui.grid_panel import format_seconds
 from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
-from loopstation.gui.parent_nav import PAGE_STYLE, CardGrid, dim_label, scrolled
+from loopstation.gui.parent_nav import PAGE_STYLE, CardGrid, breakable, dim_label, scrolled
 from loopstation.gui.settings_panels import ToggleSwitch
 from loopstation.gui.trim_card import TrimCard
 from loopstation.gui.waveform import WaveformWidget
@@ -59,6 +60,12 @@ def loop_title(pad: int, recorded: int | None, played: int | None, grid: int | N
         parts.append("1 Takt" if bars == 1 else f"{bars} Takte")
         parts.append("im Raster" if recorded == played else "wird ans Raster angepasst")
     return " · ".join(parts)
+
+
+def _pad_of(page: weakref.ref[AdvancedPage]) -> int:
+    """The pad the page shows, 0 once the page is gone."""
+    shown = page()
+    return shown.pad if shown is not None else 0
 
 
 class AdvancedPage(QWidget):
@@ -96,7 +103,11 @@ class AdvancedPage(QWidget):
         inner_layout.setSpacing(14)
         inner_layout.addLayout(self._picker())
         inner_layout.addWidget(self._wave_card())
-        self.trim_card = TrimCard(controller, self.waveform, lambda: self.pad, on_done=self.refresh)
+        # The card and the signals hold the page weakly: a cycle through this page makes PySide6 before 6.12
+        # crash when the garbage collector clears it.
+        page = weakref.ref(self)
+        self.trim_card = TrimCard(controller, self.waveform, lambda: _pad_of(page),
+                                  on_done=weak_slot(self.refresh))
         inner_layout.addWidget(self.trim_card)
         inner_layout.addWidget(self._export_card())
         inner_layout.addStretch(1)
@@ -105,7 +116,7 @@ class AdvancedPage(QWidget):
         layout.addWidget(scrolled(inner))
 
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self.refresh)
+        self._timer.timeout.connect(weak_slot(self.refresh))
         self.refresh()
 
     # ----------------------------------------------------------- building
@@ -155,7 +166,7 @@ class AdvancedPage(QWidget):
         layout.addWidget(self.wave_title)
         self.waveform = WaveformWidget()
         layout.addWidget(self.waveform)
-        self.waveform.selection_changed.connect(self._update_marker_buttons)
+        self.waveform.selection_changed.connect(weak_slot(self._update_marker_buttons))
         layout.addWidget(self._marker_row())
         layout.addWidget(self._snap_row())
         self.marker_status = self._dim(STRETCH_HINT, 13.5)
@@ -401,7 +412,8 @@ class AdvancedPage(QWidget):
         self._update_marker_buttons()
         self.trim_card.refresh()
         stamp = self._stamp()
-        self.target_label.setText(f"Ziel: {self.export_dir / f'pad{self.pad + 1:02d}_{stamp}.wav'}")
+        target = self.export_dir / f"pad{self.pad + 1:02d}_{stamp}.wav"
+        self.target_label.setText(f"Ziel: {breakable(target)}")
         self.save_button.setEnabled(controller.pad(self.pad).sample is not None)
 
     def _show_loop(self) -> None:

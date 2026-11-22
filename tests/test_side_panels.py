@@ -26,7 +26,7 @@ from loopstation.gui.advanced_page import AdvancedPage
 from loopstation.gui.changes_page import ChangesPage
 from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.main_window import TOOL_HEADS, MainWindow
-from loopstation.gui.parent_nav import WIDE_PAGE, CardGrid
+from loopstation.gui.parent_nav import WIDE_PAGE, CardGrid, breakable, dim_label
 from loopstation.gui.sets_page import SetsPage
 from loopstation.gui.settings_panels import FIELDS, SETTINGS_PANELS, SettingsPanels, panel_of
 from loopstation.gui.side_panel import SAVED_LINE
@@ -407,6 +407,17 @@ def test_the_scroll_bars_of_the_panels_are_the_dark_ones(parts):
     areas = [a for key in TOOLS for a in parts.open(key).findChildren(QScrollArea)]
     areas += [parts.open(key) for key in SETTINGS_PANELS]
     assert len(areas) >= 8 and all(isinstance(a, QScrollArea) for a in areas)
+
+
+@pytest.mark.parametrize("path", [r"C:\Users\runneradmin\AppData\Local\Temp\pytest-of-runneradmin\live",
+                                  "/home/kind/Dokumente/Loopstation/Exporte/live"])
+def test_a_folder_path_in_a_wrapped_label_breaks_at_the_folders(qapp, path):
+    """Qt does not break inside a Windows path: unbroken it would make the panel scroll sideways."""
+    plain, wrapped = dim_label(f"Ziel: {path}"), dim_label(f"Ziel: {breakable(path)}")
+    assert wrapped.minimumSizeHint().width() < 150
+    assert wrapped.text().replace("\u200b", "") == plain.text()  # only invisible break points are added
+    if "\\" in path:
+        assert plain.minimumSizeHint().width() > 2 * wrapped.minimumSizeHint().width()
 
 
 def test_two_columns_on_a_wide_page_and_one_on_a_narrow_page(qapp):

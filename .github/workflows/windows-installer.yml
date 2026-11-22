@@ -30,7 +30,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          # 3.12, not 3.11: PySide6 6.12 frees one reference to None too many on every void Qt call
+          # under 3.11 and the app aborts after seconds; since 3.12 None is immortal.
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: |
             requirements-dev.txt

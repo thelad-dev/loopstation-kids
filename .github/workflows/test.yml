@@ -8,15 +8,19 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is the oldest supported version and gets PySide6 < 6.12 (requirements.txt); 3.12 runs
+        # the newest PySide6, the one the Windows installer bundles.
+        python-version: ["3.11", "3.12"]
     env:
       QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          # Not 3.11: PySide6 6.12.0 drops a reference to None on every void Qt call there (immortal since
-          # 3.12), which aborts the interpreter at exit once a test run makes enough of them.
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - name: Qt runtime libraries

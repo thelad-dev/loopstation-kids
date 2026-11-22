@@ -11,6 +11,8 @@ the parts they share:
 
 from __future__ import annotations
 
+import re
+
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import (
     QColor,
@@ -136,6 +138,11 @@ class IconLabel(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         paint_icon(painter, self._icon, QRectF(self.rect()), self._color)
         painter.end()
+
+
+def breakable(path: object) -> str:
+    """``path`` as text a wrapped label can break after each folder (Qt keeps a Windows path in one piece)."""
+    return re.sub(r"([\\/])", "\\1\u200b", str(path))
 
 
 def dim_label(text: str, size: float = 13, color: str | None = None) -> QLabel:

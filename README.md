@@ -33,7 +33,7 @@ Für Windows gibt es einen Installer (`Loopstation-Setup-<Version>.exe`), der al
 - Der Installer bringt beide PortAudio-DLLs von sounddevice (ab 0.5.1) mit, die Standard-DLL und die mit ASIO-Unterstützung. Die App nutzt die Standard-DLL; die ASIO-DLL wird nur geladen, wenn Eltern in den Einstellungen „ASIO zulassen“ einschalten (`asio = true`, wirkt nach einem Neustart).
 - Windows fragt beim ersten Aufnehmen eventuell nach dem Mikrofon-Zugriff. Falls die Aufnahme stumm bleibt: Einstellungen → Datenschutz → Mikrofon → „Desktop-Apps den Zugriff auf das Mikrofon erlauben“ einschalten.
 
-Selbst bauen (unter Windows, mit Python 3.11 und [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
+Selbst bauen (unter Windows, mit Python 3.12 und [Inno Setup 6](https://jrsoftware.org/isinfo.php)):
 
 ```powershell
 pip install -c packaging/windows/constraints.txt -r requirements.txt -r packaging/windows/requirements-build.txt
