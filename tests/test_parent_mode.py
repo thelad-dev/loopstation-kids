@@ -160,8 +160,7 @@ def test_holding_the_lock_lays_the_sum_over_the_window(lock_world):
     assert overlay is not None and overlay.isVisible()
     assert overlay.geometry() == window.view_host.rect()  # it covers the whole window
     assert window.findChildren(QDialog) == []  # no modal dialog
-    assert overlay.keep_open.isVisible() and overlay.keep_open.text() == "Sperre 5 Minuten offen lassen"
-    assert not overlay.keep_open.isChecked()  # off unless the parents turn it on
+    assert overlay.hint.isVisible()
 
 
 def test_a_wrong_answer_goes_back_to_the_child_page(world):
@@ -441,64 +440,106 @@ def test_the_child_page_is_as_before_after_a_visit(world):
 # -------------------------------------------------------------------- lock time
 
 
-def test_the_default_asks_the_sum_again_after_leaving(world):
+def test_the_default_keeps_the_lock_open_after_leaving(world):
     window = world.window
-    assert world.settings.parent_unlock_minutes == 0
+    assert world.settings.parent_unlock_minutes == 15
     open_parents(window)
     window.leave_parent_mode()
     hold_the_lock(window)
-    assert window.gate_overlay is not None and not window.parent_mode
-    assert not window.gate_overlay.keep_open.isVisible()
-
-
-def test_without_the_switch_the_sum_comes_back_even_with_minutes(lock_world):
-    window = lock_world.window
-    hold_the_lock(window)
-    type_answer(window, right=True)  # the switch stays off
-    assert window.parent_mode
-    window.leave_parent_mode()
-    hold_the_lock(window)
-    assert window.gate_overlay is not None and not window.parent_mode
+    assert window.parent_mode and window.gate_overlay is None  # no sum within fifteen minutes
 
 
 def test_the_lock_stays_open_for_the_set_minutes(lock_world):
     window, clock = lock_world.window, lock_world.clock
-    hold_the_lock(window)
-    window.gate_overlay.keep_open.click()  # the parents turn it on
-    type_answer(window, right=True)
+    open_parents(window)
     assert window.parent_mode
     window.leave_parent_mode()
     clock.advance(4 * 60)
     hold_the_lock(window)
     assert window.parent_mode and window.gate_overlay is None  # no sum within five minutes
     window.leave_parent_mode()
-    clock.advance(61)
+    clock.advance(5 * 60 + 1)  # past the window that re-entry slid forward
     hold_the_lock(window)
     assert window.gate_overlay is not None and not window.parent_mode  # asked again
 
 
-def test_the_lock_can_be_closed_at_once(lock_world):
+def test_parent_input_extends_the_unlock_window(lock_world):
+    window, clock = lock_world.window, lock_world.clock
+    open_parents(window)
+    clock.advance(4 * 60)
+    QTest.keyClick(window, Qt.Key.Key_Right)  # slides the five minutes forward
+    window.leave_parent_mode()
+    clock.advance(4 * 60)
+    hold_the_lock(window)
+    assert window.parent_mode and window.gate_overlay is None
+
+
+def test_the_lock_button_and_shortcut_close_the_unlock_window(lock_world):
     window = lock_world.window
-    hold_the_lock(window)
-    window.gate_overlay.keep_open.click()  # "Sperre 5 Minuten offen lassen" on
-    window.gate_overlay.keep_open.click()  # and off again
-    type_answer(window, right=True)
-    window.leave_parent_mode()
+    view = open_parents(window)
+    assert "noch" in view.unlock_label.text()
+    view.lock_button.click()
+    assert not window.parent_mode and not window._is_unlocked()
+    open_parents(window)
+    mods = Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+    QTest.keyClick(window, Qt.Key.Key_L, mods)
+    assert not window.parent_mode and not window._is_unlocked()
     hold_the_lock(window)
     assert window.gate_overlay is not None
 
 
-def test_zero_minutes_always_asks_and_the_setting_acts_at_once(lock_world):
+def test_zero_minutes_means_until_the_program_ends(lock_world):
     world = lock_world
-    window = world.window
-    hold_the_lock(window)
-    window.gate_overlay.keep_open.click()
-    type_answer(window, right=True)
-    window.leave_parent_mode()
+    window, clock = world.window, world.clock
     window.apply_settings(replace(world.controller.settings, parent_unlock_minutes=0))
+    open_parents(window)
+    assert window.parent_view.unlock_label.text() == "offen"
+    window.leave_parent_mode()
+    clock.advance(24 * 60 * 60)
+    hold_the_lock(window)
+    assert window.parent_mode and window.gate_overlay is None
+    window.lock_parent_area()
     hold_the_lock(window)
     assert window.gate_overlay is not None
-    assert not window.gate_overlay.keep_open.isVisible()
+
+
+def test_a_fresh_instance_asks_the_sum_again(qapp, tmp_path, clock):
+    first = World(tmp_path, clock, parent_unlock_minutes=15)
+    try:
+        open_parents(first.window)
+        first.window.leave_parent_mode()
+        assert first.window._is_unlocked()
+    finally:
+        first.close()
+    second = World(tmp_path, clock, parent_unlock_minutes=15)
+    try:
+        hold_the_lock(second.window)
+        assert second.window.gate_overlay is not None and not second.window.parent_mode
+    finally:
+        second.close()
+
+
+def test_kids_cannot_reach_parent_tools_while_locked(world):
+    window = world.window
+    assert not window._is_unlocked()
+    QTest.keyClick(window, Qt.Key.Key_F1)
+    assert not window.parent_mode and window.gate_overlay is None
+    mods = Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+    QTest.keyClick(window, Qt.Key.Key_L, mods)
+    assert not window.parent_mode
+    hold_the_lock(window)
+    assert window.gate_overlay is not None  # the sum is the only way in
+
+
+def test_switching_within_the_window_skips_the_sum(lock_world):
+    window = lock_world.window
+    open_parents(window)
+    window.leave_parent_mode()
+    hold_the_lock(window)
+    assert window.parent_mode and window.gate_overlay is None
+    window.leave_parent_mode()
+    hold_the_lock(window)
+    assert window.parent_mode and window.gate_overlay is None
 
 
 def test_the_parents_view_goes_back_after_the_idle_time(world):
@@ -538,18 +579,25 @@ def test_zero_idle_minutes_means_never(world):
     assert window.parent_mode
 
 
-def test_the_idle_return_ends_the_lock_time_the_switch_does_not(lock_world):
+def test_kids_idle_ends_the_unlock_window_parent_idle_does_not(lock_world):
     window, clock = lock_world.window, lock_world.clock
-    hold_the_lock(window)
-    window.gate_overlay.keep_open.click()  # the parents turn the lock time on
-    type_answer(window, right=True)
+    # Until program end, so only kids idle (not the minute timer) can shut the lock.
+    window.apply_settings(replace(lock_world.controller.settings, parent_unlock_minutes=0))
+    open_parents(window)
     view = window.parent_view
-    view.mode_switch.kids_button.click()  # the parents leave on purpose: the lock time stays
+    view.mode_switch.kids_button.click()  # leave on purpose: the unlock window stays
     hold_the_lock(window)
     assert window.parent_mode and window.gate_overlay is None
+    window.leave_parent_mode()
+    clock.advance(9 * 60)
+    window._tick()
+    assert window._is_unlocked()  # still open on the child page
+    hold_the_lock(window)
+    assert window.parent_mode and window.gate_overlay is None
+    window.leave_parent_mode()
     clock.advance(10 * 60)
-    window._tick()  # idle: back to the children, and the lock is shut again
-    assert not window.parent_mode
+    window._tick()  # kids idle without parent input: lock shut
+    assert not window._is_unlocked()
     hold_the_lock(window)
     assert window.gate_overlay is not None and not window.parent_mode
 
@@ -603,15 +651,6 @@ def test_the_launchpad_does_not_record_under_the_sum_but_the_music_goes_on(world
     world.window.press(4)
     assert world.controller.recording_pad is None
     assert 1 in world.audio.voices
-
-
-def test_keep_open_follows_the_setting_and_the_switch(world):
-    window = world.window
-    overlay = GateOverlay(window.view_host, 5)  # never shown
-    assert not overlay.keep_unlocked  # off by default
-    overlay.keep_open.setChecked(True)
-    assert overlay.keep_unlocked
-    assert not GateOverlay(window.view_host, 0).keep_unlocked
 
 
 # -------------------------------------------------------------------------- keys
@@ -731,11 +770,19 @@ def test_every_key_the_help_names_does_what_it_says(world):
         assert controller.mode == Mode.PLAY and window.parent_mode
 
     def f1():
+        open_parents(window)
         _key(window, Qt.Key.Key_F1)
         assert not window.parent_mode
 
+    def lock_now():
+        open_parents(window)
+        assert window._is_unlocked()
+        _key(window, Qt.Key.Key_L, ctrl | Qt.KeyboardModifier.ShiftModifier)
+        assert not window.parent_mode and not window._is_unlocked()
+
     checks = {"Pfeile": arrows, "Leertaste": space, "L": loop, "R": record, "Entf": delete,
-              "Enter": enter, "M": marker, "Esc": escape, "Strg+Z": undo, "Strg+Y": redo, "F1": f1}
+              "Enter": enter, "M": marker, "Esc": escape, "Strg+Z": undo, "Strg+Y": redo, "F1": f1,
+              "Strg+Umschalt+L": lock_now}
     assert sorted(entries) == sorted(checks)  # nothing in the help without a check, nothing missing
     for entry in entries:  # in the order of the help
         checks[entry]()
@@ -892,13 +939,15 @@ def test_the_sets_tool_is_there_only_with_a_session(qapp, tmp_path, clock):
 
 
 def test_the_two_new_settings_are_checked():
-    assert (Settings().parent_unlock_minutes, Settings().parent_idle_minutes) == (0, 10)
-    parsed = parse_settings({"parent_unlock_minutes": 15, "parent_idle_minutes": 30})
-    assert (parsed.parent_unlock_minutes, parsed.parent_idle_minutes) == (15, 30)
+    assert (Settings().parent_unlock_minutes, Settings().parent_idle_minutes) == (15, 10)
+    parsed = parse_settings({"parent_unlock_minutes": 120, "parent_idle_minutes": 30})
+    assert (parsed.parent_unlock_minutes, parsed.parent_idle_minutes) == (120, 30)
+    assert parse_settings({"parent_unlock_minutes": 0}).parent_unlock_minutes == 0
+    assert parse_settings({"parent_unlock_minutes": 1}).parent_unlock_minutes == 1
     for bad in (-1, 241, 2.5, "5", True):
         with pytest.raises(ConfigError):
             parse_settings({"parent_idle_minutes": bad})
-    for bad in (-1, 16, 240, 2.5, "5", True):
+    for bad in (-1, 121, 240, 2.5, "5", True):
         with pytest.raises(ConfigError):
             parse_settings({"parent_unlock_minutes": bad})
 
@@ -974,10 +1023,12 @@ def test_nothing_overlaps_at_any_size(qapp, tmp_path, clock, size):
             for b in boxes[i + 1:]:
                 assert not a.intersects(b), (size, a, b)
         assert view.volume_slider.width() >= 200
-        tools = [b for b in view.toolbar.buttons.values() if not b.isHidden()] + [view.toolbar.keys_button]
+        tools = ([b for b in view.toolbar.buttons.values() if not b.isHidden()]
+                 + [view.lock_button, view.toolbar.keys_button])
         tool_boxes = [_box(b, root) for b in tools]
         for i, a in enumerate(tool_boxes):
-            assert a.height() >= 50, (size, tools[i].text())
+            least = 40 if tools[i] is view.lock_button else 50
+            assert a.height() >= least, (size, tools[i].text())
             for b in tool_boxes[i + 1:]:
                 assert not a.intersects(b), (size, a, b)
         header_box, detail_box = _box(view.header, root), _box(view.detail, root)

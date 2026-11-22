@@ -169,11 +169,11 @@ stretch_engine = "auto"
 
 # --- Elternansicht ---
 
-# Minuten, die das Schloss nach der Rechenaufgabe offen bleiben darf (0 bis 15):
-# so lange öffnet erneutes Halten des Schlosses die Elternansicht ohne Aufgabe,
-# aber nur, wenn die Eltern es in der Aufgabe einschalten.
-# 0 (Standard) = immer fragen. Wirkt sofort.
-parent_unlock_minutes = 0
+# Minuten, die das Schloss nach der Rechenaufgabe offen bleiben darf (0 bis 120):
+# so lange öffnet erneutes Halten des Schlosses die Elternansicht ohne Aufgabe.
+# Jede Eingabe im Elternbereich verlängert die Frist.
+# 0 = bis zum Programmende. Standard 15. Wirkt sofort.
+parent_unlock_minutes = 15
 
 # Minuten ohne Eingabe, nach denen die Elternansicht von selbst zur Kinderseite
 # zurückkehrt (0 bis 240). 0 = nie. Wirkt sofort.

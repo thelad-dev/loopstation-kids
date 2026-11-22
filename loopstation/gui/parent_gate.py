@@ -12,7 +12,7 @@ import random
 from dataclasses import dataclass
 
 from PySide6.QtCore import QEvent, QObject, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QIntValidator, QKeyEvent, QMouseEvent, QPainter, QPaintEvent, QPixmap
+from PySide6.QtGui import QColor, QIntValidator, QKeyEvent, QMouseEvent, QPainter, QPaintEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
     QFrame,
@@ -217,30 +217,23 @@ OVERLAY_HINT = "Zahl eingeben · Musik läuft weiter · Esc bricht ab"
 OVERLAY_MARGIN = 12  # least room between the card and the edge of the window
 
 
-def keep_open_text(minutes: int) -> str:
-    unit = "Minute" if minutes == 1 else "Minuten"
-    return f"Sperre {minutes} {unit} offen lassen"
-
-
 class GateOverlay(QWidget):
     """The sum as a layer over the whole window (mockup L2-09): no modal dialog, the music goes on.
 
     It covers its parent completely and takes every click and key, so nothing reaches the pads
     below. ``answered(bool)`` reports the answer (right or wrong), ``cancelled`` the way back
-    (the "Abbrechen" button or Esc). ``keep_open`` is the switch "Sperre N Minuten offen lassen";
-    it is only shown when ``unlock_minutes`` is above 0.
+    (the "Abbrechen" button or Esc). After a right answer the main window keeps the lock open
+    for ``parent_unlock_minutes`` (see settings).
     """
 
     answered = Signal(bool)
     cancelled = Signal()
 
-    def __init__(self, parent: QWidget, unlock_minutes: int = 0,
-                 question: GateQuestion | None = None) -> None:
+    def __init__(self, parent: QWidget, question: GateQuestion | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("gate_overlay")
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation, True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.unlock_minutes = unlock_minutes
         self.card = GateCard(question or new_question(), self)
         self.card.answered.connect(self.answered)
         self.card.cancelled.connect(self.cancelled)
@@ -248,42 +241,12 @@ class GateOverlay(QWidget):
         self.hint = QLabel(OVERLAY_HINT)
         self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hint.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 14px; background: transparent;")
-        self.keep_open = QPushButton(keep_open_text(unlock_minutes))
-        self.keep_open.setCheckable(True)
-        self.keep_open.setChecked(False)
-        self.keep_open.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.keep_open.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.keep_open.setStyleSheet(
-            f"QPushButton {{ color: {TEXT_DIM.name()}; background: {KEY_SURFACE}; "
-            "border: 1.5px solid #3A3A41; border-radius: 12px; font-size: 15px; font-weight: bold; "
-            "min-height: 40px; padding: 0 18px; } "
-            f"QPushButton:checked {{ color: {TEXT.name()}; border-color: {PARENT_ACCENT}; }}")
-        self.keep_open.setVisible(unlock_minutes > 0)
-        self.keep_open.toggled.connect(weak_slot(self._show_keep_open, pass_signal_args=True))
-        self._show_keep_open(False)
-        # Hint and switch sit between the number pad and "Abbrechen".
+        # Hint sits between the number pad and "Abbrechen".
         body = self.card.body
         at = body.indexOf(self.card.cancel_button)
         body.insertWidget(at, self.hint)
-        body.insertWidget(at + 1, self.keep_open)
         parent.installEventFilter(self)
         self._fit()
-
-    def _show_keep_open(self, on: bool) -> None:
-        """A tick in front of the words while the lock is to stay open."""
-        pixmap = QPixmap(26, 18)  # the tick on the left, the rest keeps it apart from the words
-        pixmap.fill(Qt.GlobalColor.transparent)
-        if on:
-            painter = QPainter(pixmap)
-            draw_icon(painter, "check", QRectF(0, 0, 18, 18), QColor(PARENT_ACCENT))
-            painter.end()
-        self.keep_open.setIconSize(pixmap.size())
-        self.keep_open.setIcon(QIcon(pixmap))
-
-    @property
-    def keep_unlocked(self) -> bool:
-        """Does the lock stay open after a right answer (setting above 0 and the switch turned on)?"""
-        return self.unlock_minutes > 0 and self.keep_open.isChecked()
 
     def open(self) -> None:
         self._fit()

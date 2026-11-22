@@ -6,7 +6,8 @@ Launchpad); it contains no audio, MIDI or event-store logic of its own.
 It has two states: the child page (``frame``) and the parents' pad view
 (``parent_view``, Loopstation 2 variant A). The way from the children to the
 parents is the held lock plus a sum that lies over the window (``GateOverlay``);
-the way back is one tap on "Kinder" or F1. The music goes on throughout.
+within ``parent_unlock_minutes`` after a right answer the sum is skipped. The way
+back is one tap on "Kinder" or F1. The music goes on throughout.
 
 The tools of the parents' view open as side panels next to the pads, in this window; nothing of
 them is modal, so the pads and the Launchpad keep working while one is open.
@@ -14,6 +15,7 @@ them is modal, so the pads and the Launchpad keep working while one is open.
 
 from __future__ import annotations
 
+import math
 import time
 import weakref
 from collections.abc import Callable
@@ -229,6 +231,8 @@ class MainWindow(QMainWindow):
         self.clock: Callable[[], float] = time.monotonic
         self._unlocked_until = 0.0  # ``clock`` time until which the lock opens without a sum
         self._last_input = 0.0  # ``clock`` time of the last screen or keyboard input in the parents' view
+        # Last parent-side input (also ends the unlock window on the child page).
+        self._last_parent_input = 0.0
         self._unlock_minutes = controller.settings.parent_unlock_minutes
         self._idle_minutes = controller.settings.parent_idle_minutes
         self._waves = WaveCache()  # mini waves of the tiles, kept across visits
@@ -331,6 +335,9 @@ class MainWindow(QMainWindow):
         # F1 leads from the parents' view back to the children, never the other way.
         self.kids_shortcut = QShortcut(QKeySequence(Qt.Key.Key_F1), self)
         self.kids_shortcut.activated.connect(self.leave_parent_mode)
+        # Strg+Umschalt+L locks the parents' area at once (same as the "Sperren" button).
+        self.lock_shortcut = QShortcut(QKeySequence("Ctrl+Shift+L"), self)
+        self.lock_shortcut.activated.connect(self.lock_parent_area)
 
         controller.add_listener(weak_slot(self.refresh))
         controller.add_history_listener(weak_slot(self._history_requested, pass_signal_args=True))
@@ -461,27 +468,25 @@ class MainWindow(QMainWindow):
     def open_parent_area(self) -> None:
         """The lock was held: the sum over the window, then the parents' view.
 
-        Within ``parent_unlock_minutes`` after a right answer the sum is skipped. Nothing happens while
+        Within the unlock window after a right answer the sum is skipped. Nothing happens while
         the sum, the parents' view or a dialog is already open.
         """
         if self._dialog_open or self.parent_view is not None or self.gate_overlay is not None:
             return
-        if self._unlock_minutes > 0 and self.clock() < self._unlocked_until:
+        if self._is_unlocked():
             self.enter_parent_mode()
             return
         self._release_screen_holds()
-        overlay = GateOverlay(self.view_host, self._unlock_minutes)
+        overlay = GateOverlay(self.view_host)
         overlay.answered.connect(weak_slot(self._gate_answered, pass_signal_args=True))
         overlay.cancelled.connect(weak_slot(self._close_gate))
         self.gate_overlay = overlay
         overlay.open()
 
     def _gate_answered(self, right: bool) -> None:
-        overlay = self.gate_overlay
-        keep = overlay is not None and overlay.keep_unlocked
         self._close_gate()
         if right:
-            self._unlocked_until = self.clock() + 60 * self._unlock_minutes if keep else 0.0
+            self._grant_unlock()
             self.enter_parent_mode()
 
     def _close_gate(self) -> None:
@@ -494,6 +499,42 @@ class MainWindow(QMainWindow):
         overlay.hide()
         overlay.deleteLater()
         self.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _is_unlocked(self) -> bool:
+        """May the lock open the parents' view without a new sum?"""
+        return self.clock() < self._unlocked_until
+
+    def _unlock_deadline(self) -> float:
+        """``clock`` time until which the lock stays open (``inf`` = until the program ends)."""
+        if self._unlock_minutes <= 0:
+            return float("inf")
+        return self.clock() + 60 * self._unlock_minutes
+
+    def _grant_unlock(self) -> None:
+        """Right answer: open the unlock window from now (and note parent input)."""
+        self._unlocked_until = self._unlock_deadline()
+        self._note_parent_input()
+
+    def _extend_unlock(self) -> None:
+        """Parent input slides the unlock window forward while it is still open."""
+        if not self._is_unlocked():
+            return
+        self._unlocked_until = self._unlock_deadline()
+
+    def _clear_unlock(self) -> None:
+        self._unlocked_until = 0.0
+
+    def _note_parent_input(self) -> None:
+        now = self.clock()
+        self._last_input = now
+        self._last_parent_input = now
+
+    def lock_parent_area(self) -> None:
+        """Close the unlock window at once and leave the parents' view (button or shortcut)."""
+        if self.parent_view is None and not self._is_unlocked():
+            return
+        self._clear_unlock()
+        self.leave_parent_mode()
 
     def enter_parent_mode(self) -> None:
         """Show the parents' view in this window. The children's mode becomes "Spielen"."""
@@ -509,6 +550,7 @@ class MainWindow(QMainWindow):
         panels = weakref.WeakMethod(self._settings_panels)
         view.detail.settings_source = lambda: (method() if (method := panels()) is not None else None)
         view.kids_requested.connect(weak_slot(self.leave_parent_mode))
+        view.lock_requested.connect(weak_slot(self.lock_parent_area))
         view.tool_requested.connect(weak_slot(self.open_tool, pass_signal_args=True))
         view.pads_touched.connect(weak_slot(self._keys_to_the_view))
         view.pad_down.connect(weak_slot(self._tile_down, pass_signal_args=True))
@@ -520,14 +562,16 @@ class MainWindow(QMainWindow):
         self.parent_view = view
         self.view_stack.addWidget(view)
         self.view_stack.setCurrentWidget(view)
-        self._last_input = self.clock()
+        self._note_parent_input()
+        if self._is_unlocked():
+            self._extend_unlock()
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self)
         self.refresh()
 
     def leave_parent_mode(self) -> None:
-        """Back to the child page (the switch, F1 or the idle time)."""
+        """Back to the child page (the switch, F1 or the idle time). The unlock window stays."""
         view = self.parent_view
         if view is None:
             return
@@ -551,14 +595,17 @@ class MainWindow(QMainWindow):
 
         That saves what still waits in a panel and takes the input watch off the application. Left on, it
         would outlive the window: the application would hand every later event to a window that is gone.
+        The unlock window dies with the process; a fresh start asks the sum again.
         """
         self.leave_parent_mode()
         super().closeEvent(event)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt API
-        # Installed on the application only while the parents' view is shown: any input keeps it open.
+        # Installed on the application only while the parents' view is shown: any input keeps it open
+        # and slides the unlock window forward.
         if self.parent_view is not None and event.type() in INPUT_EVENTS:
-            self._last_input = self.clock()
+            self._note_parent_input()
+            self._extend_unlock()
         return super().eventFilter(watched, event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt API
@@ -738,17 +785,21 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def _check_idle(self) -> None:
-        """No screen or keyboard input for ``parent_idle_minutes``: back to the child page.
+        """Idle handling for the parents' view and for an open unlock window on the child page.
 
-        An open side panel goes with the view (input in it counts as input), and the lock time
-        ends: whoever comes next has to answer the sum again.
+        No screen or keyboard input in the parents' view for ``parent_idle_minutes``: back to the
+        child page (an open side panel goes with it). The unlock window stays until it expires, the
+        parents lock it, or the child page sits without parent input for the same idle time.
         """
-        if self.parent_view is None or self._idle_minutes <= 0:
+        if self._idle_minutes <= 0:
             return
-        if self.clock() - self._last_input < 60 * self._idle_minutes:
+        idle_after = 60 * self._idle_minutes
+        if self.parent_view is not None:
+            if self.clock() - self._last_input >= idle_after:
+                self.leave_parent_mode()
             return
-        self._unlocked_until = 0.0
-        self.leave_parent_mode()
+        if self._is_unlocked() and self.clock() - self._last_parent_input >= idle_after:
+            self._clear_unlock()
 
     def _release_launchpad_holds(self) -> None:
         """No note off will come for keys that were down when the Launchpad went away."""
@@ -841,6 +892,20 @@ class MainWindow(QMainWindow):
         levels = self._update_pulse(colors, waiting)
         if self.parent_view is not None:
             self.parent_view.refresh(colors, levels)
+            self.parent_view.set_unlock_remaining(self._unlock_remaining_text())
 
         if self.launchpad is not None:
             self.launchpad.set_colors(colors)
+
+    def _unlock_remaining_text(self) -> str:
+        """Short remaining-time label for the parents' view (empty when the lock is shut)."""
+        if not self._is_unlocked():
+            return ""
+        if self._unlock_minutes <= 0 or not math.isfinite(self._unlocked_until):
+            return "offen"
+        seconds = max(0, int(self._unlocked_until - self.clock()))
+        minutes = (seconds + 59) // 60  # round up to whole minutes still open
+        if minutes <= 0:
+            return ""
+        unit = "Min" if minutes == 1 else "Min"
+        return f"noch {minutes} {unit}"
