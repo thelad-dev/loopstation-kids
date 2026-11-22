@@ -22,8 +22,8 @@ from PySide6.QtWidgets import QAbstractButton, QLabel, QScrollArea, QWidget
 from loopstation.config import Settings, load_settings
 from loopstation.controller import Controller
 from loopstation.gui import settings_panels
-from loopstation.gui.advanced_page import AdvancedPage
 from loopstation.gui.changes_page import ChangesPage
+from loopstation.gui.detail_panel import DetailPanel, LoopTab, PadTab, RecordTab
 from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.main_window import TOOL_HEADS, MainWindow
 from loopstation.gui.parent_nav import WIDE_PAGE, CardGrid, breakable, dim_label
@@ -35,7 +35,8 @@ from loopstation.gui.widgets import DARK_SCROLLBAR_QSS
 from loopstation.session import SetSession
 from loopstation.store import EventStore
 
-TOOLS = ("changes", "sets", "export", "levels", "devices", "system", "tempo", "loop")
+TOOLS = ("changes", "sets", "export", "levels", "devices", "system", "tempo")
+DETAIL_TABS = ("loop", "pad", "record")  # the tabs of the detail panel under the pads
 SIZES = [(1024, 640), (1280, 800), (1920, 1080)]
 INTERNAL_KEYS = ("sample_rate", "data_dir", "max_level_db", "input_gain_db", "latency_ms", "audio_hostapi",
                  "stretch_engine", "rubberband", "time_signature", "parent_idle_minutes", "duration")
@@ -66,17 +67,23 @@ class Parts:
         self.controller.press(pad)
 
     def open(self, key: str) -> QWidget:
-        """Open the tool ``key`` the way the parents do (its button, the bar chip, the detail line)."""
+        """Open the tool ``key`` the way the parents do (its button, the bar chip)."""
         view = self.view
         if key == "tempo":
             view.bar_chip.click()
-        elif key == "loop":
-            QTest.mouseClick(view.detail, Qt.MouseButton.LeftButton)
         else:
             view.toolbar.buttons[key].click()
         QTest.qWait(20)
         assert view.panel_key == key
         return view.side_panel.current_page()
+
+    def open_tab(self, key: str) -> QWidget:
+        """Unfold the detail panel on its tab ``key`` (a tap on the tab)."""
+        detail = self.view.detail
+        detail.tab_buttons[key].click()
+        QTest.qWait(20)
+        assert detail.is_open and detail.tab == key and self.view.panel_key is None
+        return detail.pages[key]
 
     def close(self) -> None:
         self.window.leave_parent_mode()
@@ -116,8 +123,8 @@ def test_every_tool_opens_its_panel_right_of_the_pads(parts, key):
     for tile in view.tiles:
         body = tile.body().translated(tile.mapTo(root, QPoint(0, 0)).toPointF())
         assert body.right() < box.left() and body.width() > 60 and tile.isVisible()
-    assert view.detail.geometry().right() < box.left()
-    # The lit tool is the open one ("Takt" and "Loop" have no button of their own).
+    assert view.detail.geometry().right() < box.left() and not view.detail.is_open
+    # The lit tool is the open one ("Takt" has no button of its own).
     lit = [name for name, button in view.toolbar.buttons.items() if button.isChecked()]
     assert lit == ([key] if key in view.toolbar.buttons else [])
     assert page.isVisible() and panel.isAncestorOf(page)
@@ -153,21 +160,21 @@ def test_another_tool_takes_the_place_and_a_page_is_built_once(parts):
     assert parts.open("changes") is first  # kept while the parents' view is shown
 
 
-def test_enter_opens_the_loop_of_the_chosen_pad_and_follows_the_choice(parts):
+def test_enter_opens_the_detail_panel_of_the_chosen_pad_and_follows_the_choice(parts):
     parts.record(0, 2.0)
     parts.record(2, 2.0)
     window, view = parts.window, parts.view
     window.setFocus()
     QTest.keyClick(window, Qt.Key.Key_Return)
-    page = view.side_panel.current_page()
-    assert view.panel_key == "loop" and isinstance(page, AdvancedPage) and page.pad == 0
-    assert view.side_panel.line.text().startswith("Pad 1")
-    assert not any(chip.isVisible() for chip in page.pad_chips)  # the pad is the one chosen in the view
+    detail = view.detail
+    page = detail.loop_tab
+    assert detail.is_open and detail.tab == "loop" and page.isVisible() and page.pad == 0
+    assert detail.title == "Pad 1"
     QTest.keyClick(window, Qt.Key.Key_Right)
     QTest.keyClick(window, Qt.Key.Key_Right)
-    assert page.pad == 2 and view.side_panel.line.text().startswith("Pad 3")
+    assert page.pad == 2 and detail.title == "Pad 3"
     QTest.keyClick(window, Qt.Key.Key_Return)
-    assert view.panel_key is None
+    assert not detail.is_open
 
 
 def test_keys_typed_into_a_panel_stay_in_the_panel(parts):
@@ -180,7 +187,7 @@ def test_keys_typed_into_a_panel_stay_in_the_panel(parts):
     QTest.keyClick(edit, Qt.Key.Key_Right)
     assert view.selected == 0 and parts.audio.calls.count(("play", 0, False)) == 0
     assert edit.text().endswith(" ")
-    # Enter in a text field is not the key of the view ("Loop" of the pad): the field keeps it.
+    # Enter in a text field is not the key of the view (the detail panel): the field keeps it.
     QTest.keyClick(edit, Qt.Key.Key_Return)
     assert view.panel_key == "system"
 
@@ -258,7 +265,7 @@ def test_the_switches_sit_where_the_mockup_has_them(parts):
 def test_the_tempo_correction_is_the_one_card_of_the_tempo_panel(parts):
     panels = panels_of_all(parts)
     assert panels.page("tempo").findChildren(TempoCard) == [panels.tempo_card]
-    assert not parts.open("loop").findChildren(TempoCard)
+    assert not any(parts.open_tab(key).findChildren(TempoCard) for key in DETAIL_TABS)
 
 
 def test_the_level_panel_keeps_the_must_say_text_about_dbfs_and_who(parts):
@@ -308,6 +315,11 @@ def test_no_internal_key_in_any_text_of_the_panels(parts):
         texts += [label.text() for label in page.findChildren(QLabel)]
         texts += [button.text() for button in page.findChildren(QAbstractButton)]
         texts.append(parts.view.side_panel.line.text())
+    for key in DETAIL_TABS:
+        page = parts.open_tab(key)
+        texts += [w.text() for w in page.findChildren(QLabel) + page.findChildren(QAbstractButton)]
+        texts += [w.toolTip() for w in page.findChildren(QWidget)]
+        texts.append(parts.view.detail.open_info)
     joined = " | ".join(texts)
     for key in INTERNAL_KEYS:
         assert key not in joined, key
@@ -371,6 +383,13 @@ def test_every_panel_fits_without_a_sideways_scroll_bar_or_a_cut_text(qapp, tmp_
                     page.show_tab(tab)
                 QTest.qWait(30)
                 problems += fit_problems(key, page)
+        p.window.close_tool()
+        for key in DETAIL_TABS:
+            page = p.open_tab(key)
+            problems += fit_problems(key, page)
+            tiles = min(tile.body().height() for tile in p.view.tiles)
+            if tiles < 70:  # the pads stay playable under the unfolded panel
+                problems.append((key, "tiles", tiles))
         assert not problems, (size, problems)
     finally:
         p.close()
@@ -402,9 +421,11 @@ def fit_problems(key: str, page: QWidget) -> list[tuple]:
 
 def test_the_scroll_bars_of_the_panels_are_the_dark_ones(parts):
     assert DARK_SCROLLBAR_QSS in parts.view.side_panel.styleSheet()
-    for key in ("loop", "sets", "export"):  # the pages also bring the style when they stand alone
+    for key in ("sets", "export"):  # the pages also bring the style when they stand alone
         assert DARK_SCROLLBAR_QSS in parts.open(key).styleSheet(), key
+    assert DARK_SCROLLBAR_QSS in DetailPanel(parts.controller).styleSheet()
     areas = [a for key in TOOLS for a in parts.open(key).findChildren(QScrollArea)]
+    areas += [a for key in DETAIL_TABS for a in parts.open_tab(key).findChildren(QScrollArea)]
     areas += [parts.open(key) for key in SETTINGS_PANELS]
     assert len(areas) >= 8 and all(isinstance(a, QScrollArea) for a in areas)
 
@@ -438,16 +459,22 @@ def test_two_columns_on_a_wide_page_and_one_on_a_narrow_page(qapp):
 
 
 def test_the_window_hands_in_the_real_pages(parts):
-    kinds = {"changes": ChangesPage, "sets": SetsPage, "export": ExportPage, "loop": AdvancedPage}
+    kinds = {"changes": ChangesPage, "sets": SetsPage, "export": ExportPage}
     for key, kind in kinds.items():
         page = parts.open(key)
         assert isinstance(page, kind) and not page.isWindow(), key
+    tabs = {"loop": LoopTab, "pad": PadTab, "record": RecordTab}
+    for key, kind in tabs.items():
+        page = parts.open_tab(key)
+        assert isinstance(page, kind) and not page.isWindow() and parts.view.isAncestorOf(page), key
 
 
 def test_the_panels_go_with_the_view_and_the_window_is_not_kept_alive(qapp, tmp_path, clock):
     """No reference cycle (the window's ``apply`` method, a connection) keeps a page or the window alive."""
     p = Parts(tmp_path, clock)
     pages = [weakref.ref(p.open(key)) for key in TOOLS]
+    pages += [weakref.ref(p.open_tab(key)) for key in DETAIL_TABS]
+    pages.append(weakref.ref(p.view.detail))
     panels = weakref.ref(panels_of(p))
     view = weakref.ref(p.view)
     p.window.leave_parent_mode()
@@ -459,6 +486,8 @@ def test_the_panels_go_with_the_view_and_the_window_is_not_kept_alive(qapp, tmp_
     p.view = p.window.parent_view
     for key in TOOLS:
         p.open(key)  # the window ends with every panel built
+    for key in DETAIL_TABS:
+        p.open_tab(key)
     window = weakref.ref(p.window)
     p.window.close()
     p.window.deleteLater()

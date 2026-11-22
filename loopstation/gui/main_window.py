@@ -15,6 +15,7 @@ them is modal, so the pads and the Launchpad keep working while one is open.
 from __future__ import annotations
 
 import time
+import weakref
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -43,14 +44,13 @@ from PySide6.QtWidgets import (
 
 from loopstation.config import DEFAULT_CONFIG_NAME, Settings
 from loopstation.controller import Controller, Mode
-from loopstation.gui.advanced_page import AdvancedPage
 from loopstation.gui.changes_page import ChangesPage
 from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.pad_button import MIN_PAD_SIZE, PadButton
 from loopstation.gui.parent_gate import GateOverlay
 from loopstation.gui.parent_tile import ParentTile
-from loopstation.gui.parent_view import ParentView, WaveCache, loop_line
+from loopstation.gui.parent_view import ParentView, WaveCache
 from loopstation.gui.pulse_strip import PulseStrip, glow_levels
 from loopstation.gui.sets_page import SetsPage
 from loopstation.gui.settings_panels import SETTINGS_PANELS, SettingsPanels
@@ -114,8 +114,9 @@ ARROWS = {
     Qt.Key.Key_Up: (-1, 0),
     Qt.Key.Key_Down: (1, 0),
 }
-ENTER_KEYS = (Qt.Key.Key_Return, Qt.Key.Key_Enter)  # the panel "Loop" of the chosen pad
-# Head of each side panel: (icon, title, line under the title); "loop" gets its line per pad.
+ENTER_KEYS = (Qt.Key.Key_Return, Qt.Key.Key_Enter)  # unfold or fold the detail panel of the chosen pad
+MARKER_KEY = Qt.Key.Key_M  # a marker at the cursor of the wave in the detail panel
+# Head of each side panel: (icon, title, line under the title).
 TOOL_HEADS = {
     "changes": ("history", "Verlauf", "Zurück und Wieder, die Änderungen aller Pads"),
     "sets": ("save", "Sets", "Die Sitzung sichern oder ein Set öffnen"),
@@ -124,7 +125,6 @@ TOOL_HEADS = {
     "devices": ("headphones", "Geräte", SAVED_LINE),
     "tempo": ("pulse", "Takt", SAVED_LINE),
     "system": ("gear", "System", SAVED_LINE),
-    "loop": ("layers", "Loop", ""),
 }
 PAD_KEYS = {
     Qt.Key.Key_Space: Mode.PLAY,
@@ -239,7 +239,6 @@ class MainWindow(QMainWindow):
         # The pages of the side panels of the parents' view (widgets, built on their first visit).
         self.export_factory: Callable[[Controller, QWidget | None], QWidget] = ExportPage
         self.sets_factory: Callable[..., QWidget] = SetsPage
-        self.advanced_factory: Callable[[Controller, QWidget | None], QWidget] = AdvancedPage
         self.changes_factory: Callable[[Controller, QWidget | None], QWidget] = ChangesPage
 
         self.setWindowTitle("Loopstation")
@@ -429,6 +428,10 @@ class MainWindow(QMainWindow):
         if self.parent_view is not None and self.parent_view.panel_key is not None:
             self.close_tool()  # Esc closes the side panel (the top layer)
             return
+        if self.parent_view is not None and self.parent_view.detail.is_open:
+            self.parent_view.detail.set_open(False)  # then the unfolded detail panel
+            self.setFocus(Qt.FocusReason.OtherFocusReason)
+            return
         self.controller.escape()
 
     def stop_all(self) -> None:
@@ -500,6 +503,10 @@ class MainWindow(QMainWindow):
         if controller.mode != Mode.PLAY:
             controller.set_mode(Mode.PLAY)
         view = ParentView(controller, self._waves, self.set_session is not None, self._parent_selected)
+        # The detail panel shows two settings with the inputs of the settings panels (one way of saving).
+        # It holds the window weakly: the view must not keep it alive through a cycle (see ``weak_slot``).
+        panels = weakref.WeakMethod(self._settings_panels)
+        view.detail.settings_source = lambda: (method() if (method := panels()) is not None else None)
         view.kids_requested.connect(weak_slot(self.leave_parent_mode))
         view.tool_requested.connect(weak_slot(self.open_tool, pass_signal_args=True))
         view.pads_touched.connect(weak_slot(self._keys_to_the_view))
@@ -508,6 +515,7 @@ class MainWindow(QMainWindow):
         view.undo_requested.connect(weak_slot(self.undo))
         view.redo_requested.connect(weak_slot(self.redo))
         view.stop_requested.connect(weak_slot(self.stop_all))
+        view.detail.fold_changed.connect(weak_slot(self._detail_folded))
         self.parent_view = view
         self.view_stack.addWidget(view)
         self.view_stack.setCurrentWidget(view)
@@ -550,18 +558,27 @@ class MainWindow(QMainWindow):
         focus = QApplication.focusWidget()
         if (view is None or self._dialog_open or self.gate_overlay is not None
                 or event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier)
-                or (focus is not None and view.side_panel.isAncestorOf(focus))  # typing in a panel
-                or (key not in ARROWS and key not in PAD_KEYS and key not in ENTER_KEYS)):
+                or (focus is not None and self._in_a_panel(focus))  # typing in a panel
+                or key not in (*ARROWS, *PAD_KEYS, *ENTER_KEYS, MARKER_KEY)):
             super().keyPressEvent(event)
             return
         if key in ENTER_KEYS:
             if not event.isAutoRepeat():
-                self.open_tool("loop")
+                view.toggle_detail()
+                self.setFocus(Qt.FocusReason.OtherFocusReason)
+        elif key == MARKER_KEY:
+            if not event.isAutoRepeat():
+                view.detail.place_marker()
         elif key in ARROWS:
             view.move_selection(*ARROWS[Qt.Key(key)])
         elif not event.isAutoRepeat():
             self.press_as(view.selected, PAD_KEYS[Qt.Key(key)])
         event.accept()
+
+    def _in_a_panel(self, widget: QWidget) -> bool:
+        """Is ``widget`` part of the side panel or the detail panel (keys typed there stay there)?"""
+        view = self.parent_view
+        return view is not None and (view.side_panel.isAncestorOf(widget) or view.detail.isAncestorOf(widget))
 
     def changeEvent(self, event: QEvent) -> None:  # noqa: N802 - Qt API
         super().changeEvent(event)
@@ -585,11 +602,6 @@ class MainWindow(QMainWindow):
             widget = self._build_tool(key)
             flatten_cards(widget)  # sections of the panel, as on the settings panels (mockup L2-05)
         icon, title, line = TOOL_HEADS[key]
-        if key == "loop":
-            line = loop_line(view.selected)
-            choose = getattr(widget, "choose_pad", None)
-            if choose is not None and getattr(widget, "pad", None) != view.selected:
-                choose(view.selected)
         view.open_panel(key, icon, title, line, widget)
         self.setFocus(Qt.FocusReason.OtherFocusReason)  # the keys stay with the view until a field is tapped
         panels = self.settings_panels
@@ -604,7 +616,7 @@ class MainWindow(QMainWindow):
         """
         view = self.parent_view
         focus = QApplication.focusWidget()
-        if view is not None and focus is not None and view.side_panel.isAncestorOf(focus):
+        if view is not None and focus is not None and self._in_a_panel(focus):
             self.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def close_tool(self) -> None:
@@ -626,16 +638,10 @@ class MainWindow(QMainWindow):
             return self.changes_factory(controller, None)
         if key == "export":
             return self.export_factory(controller, None)
-        if key == "sets":
-            page = self.sets_factory(self.set_session, self.on_open_set, None)
-            done = getattr(page, "done", None)
-            if done is not None:
-                done.connect(weak_slot(self._sets_done, pass_signal_args=True))
-            return page
-        page = self.advanced_factory(controller, None)  # "loop"
-        hide_picker = getattr(page, "set_picker_visible", None)
-        if hide_picker is not None:
-            hide_picker(False)  # the pad is the one chosen in the view
+        page = self.sets_factory(self.set_session, self.on_open_set, None)  # "sets"
+        done = getattr(page, "done", None)
+        if done is not None:
+            done.connect(weak_slot(self._sets_done, pass_signal_args=True))
         return page
 
     def _settings_panels(self) -> SettingsPanels:
@@ -650,8 +656,17 @@ class MainWindow(QMainWindow):
 
     def _panels_said(self, text: str, level: str) -> None:
         view = self.parent_view
-        if view is not None and view.panel_key in SETTINGS_PANELS:
+        if view is None:
+            return
+        if view.panel_key in SETTINGS_PANELS:
             view.side_panel.say(text, level)
+        elif view.detail.is_open or not text:
+            view.detail.say(text, level)  # a setting of the tabs "Pad" and "Aufnahme"
+
+    def _detail_folded(self) -> None:
+        """The detail panel folded or unfolded (a side panel may have closed for it): the keys go to the
+        pads again, not to a field that is no longer in sight."""
+        self.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _sets_done(self, _opened: bool) -> None:
         """The sets page is done: close the panel.

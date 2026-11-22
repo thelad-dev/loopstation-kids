@@ -385,12 +385,14 @@ def test_the_cue_switch_title_does_not_break_inside_cue_punkte(qapp, tmp_path, c
     assert not any(part.rstrip().endswith("Cue-") for part in lines), lines
 
 
-def test_the_erweitert_page_names_the_cue_switch_the_same_way(qapp, tmp_path, clock):
+def test_the_system_panel_names_the_cue_switch_the_same_way(qapp, tmp_path, clock):
     from PySide6.QtWidgets import QLabel
 
-    from loopstation.gui.advanced_page import AdvancedPage
+    from loopstation.gui.settings_panels import SettingsPanels
 
     controller, _ = session(tmp_path, clock)
-    page = AdvancedPage(controller, export_dir=tmp_path / "out")
+    panels = SettingsPanels(tmp_path / "settings.toml", controller.settings, controller.apply_settings,
+                            controller=controller)
+    page = panels.page("system")
     titles = [w.text() for w in page.findChildren(QLabel) if "mitschreiben" in w.text()]
     assert titles == [f"Marker als Cue-{WORD_JOINER}Punkte mitschreiben"]

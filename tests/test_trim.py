@@ -1,4 +1,5 @@
-"""Shortening a loop (Erweitert): arithmetic, event, undo/redo, grid cases, replay, set, export."""
+"""Shortening a loop (detail panel, tab "Loop"): arithmetic, event, undo/redo, grid cases, replay, sets,
+export."""
 
 from __future__ import annotations
 
@@ -430,23 +431,25 @@ def test_the_exports_use_the_trimmed_loop(tmp_path, clock):
 
 @pytest.fixture
 def page(qapp, tmp_path, clock):
-    from loopstation.gui.advanced_page import AdvancedPage
+    """The tab "Loop" of the detail panel, showing pad 2."""
+    from loopstation.gui.detail_panel import DetailPanel
 
     controller, audio = two_pads(tmp_path, clock)
-    dialog = AdvancedPage(controller, export_dir=tmp_path / "out")
-    dialog.choose_pad(1)
-    dialog.resize(1200, 1100)
-    yield dialog, controller, audio
-    dialog.close()
+    panel = DetailPanel(controller, export_dir=tmp_path / "out")
+    panel.resize(1200, 400)
+    panel.set_open(True)
+    panel.show_pad(1)
+    yield panel.loop_tab, controller, audio
+    panel.close()
     controller.store.close()
 
 
-def drag(dialog, handle: str, frame: int) -> None:
+def drag(loop, handle: str, frame: int) -> None:
     """Press on a handle, move it to ``frame``, let go (the mouse events the widget gets)."""
     from PySide6.QtCore import QEvent, QPointF, Qt
     from PySide6.QtGui import QMouseEvent
 
-    wave = dialog.waveform
+    wave = loop.waveform
     start, end = wave.trim_range
     x0 = wave._x_of(start if handle == "start" else end)
     x1 = wave._x_of(frame)
@@ -462,94 +465,98 @@ def drag(dialog, handle: str, frame: int) -> None:
 
 
 def test_the_handles_start_at_the_ends_and_move_by_dragging(page):
-    dialog, _controller, _audio = page
-    wave = dialog.waveform
-    assert wave.trim_range == (0, GRID) and not wave.trimmed and not dialog.trim_card.apply_button.isEnabled()
+    loop, _controller, _audio = page
+    wave = loop.waveform
+    assert wave.trim_range == (0, GRID) and not wave.trimmed and not loop.trim.apply_button.isEnabled()
+    assert loop.trim.apply_button.toolTip()  # a locked button says why
     assert wave.handle_at(wave._x_of(0)) == "start" and wave.handle_at(wave._x_of(GRID)) == "end"
     assert wave.handle_at(wave._x_of(GRID // 2)) is None
-    drag(dialog, "start", 3000)
+    drag(loop, "start", 3000)
     assert wave.trim_range[0] in range(2990, 3011) and wave.trimmed
-    drag(dialog, "end", 9000)
+    drag(loop, "end", 9000)
     assert wave.trim_range[1] in range(8990, 9011)
-    drag(dialog, "start", GRID)  # cannot pass the other handle
+    drag(loop, "start", GRID)  # cannot pass the other handle
     assert wave.trim_range[0] < wave.trim_range[1]
     wave.reset_trim()
     assert wave.trim_range == (0, GRID) and not wave.trimmed
 
 
-def test_the_card_reads_the_new_length_in_seconds_and_bars(page):
-    dialog, _controller, _audio = page
-    card = dialog.trim_card
-    assert "2,00 s" in card.readout.text() and "1 Takt" in card.readout.text()
-    dialog.waveform.set_trim_range(0, 3000)
-    assert not card.snap_switch.isChecked() or "1 Takt" in card.readout.text()
-    card.snap_switch.setChecked(False)
-    assert "0,38 s" in card.readout.text() and "0,19 Takte" in card.readout.text()
-    assert "Stille" in card.note.text()
-    dialog.waveform.set_trim_range(0, 100)
-    assert card.readout.text().startswith("Neu: 0,01 s") and not card.apply_button.isEnabled()
-    assert "zu kurz" in card.note.text()
+def test_the_line_under_the_wave_reads_the_new_length_in_seconds_and_bars(page):
+    loop, controller, _audio = page
+    trim = loop.trim
+    assert "2,00 s" in trim.readout.text() and "1 Takt" in trim.readout.text()
+    drag(loop, "end", 3000)  # the handles give the same balance as the controller's check
+    start, end = loop.waveform.trim_range
+    check = controller.check_trim(1, start, end, True)
+    new = f"neu {check.seconds:.2f}".replace(".", ",")
+    assert new in trim.readout.text() and "1 Takt" in trim.readout.text()
+    trim.snap_switch.setChecked(False)
+    assert "0,38 s" in trim.readout.text() and "0,19 Takte" in trim.readout.text()
+    assert "Stille" in trim.note.text()
+    loop.waveform.set_trim_range(0, 100)
+    assert trim.readout.text().startswith("Kürzen: neu 0,01 s") and not trim.apply_button.isEnabled()
+    assert "zu kurz" in trim.note.text() and not trim.note.isHidden()
 
 
 def test_listening_plays_the_short_version_and_changes_nothing(page):
-    dialog, controller, audio = page
+    loop, controller, audio = page
     sample = controller.pad(1).sample
-    dialog.trim_card.snap_switch.setChecked(False)
-    dialog.waveform.set_trim_range(1000, 5000)
-    dialog.trim_card.listen()
+    loop.trim.snap_switch.setChecked(False)
+    loop.waveform.set_trim_range(1000, 5000)
+    loop.listen_button.click()
     assert len(next(iter(audio.voices.values()))[0]) == 4000
     assert controller.pad(1).sample == sample and events_of(controller, "loop_trim") == []
 
 
 def test_apply_shortens_the_loop_and_the_page_follows(page):
-    dialog, controller, _audio = page
+    loop, controller, _audio = page
     original = controller.pad(1).sample
-    dialog.trim_card.snap_switch.setChecked(False)
-    dialog.waveform.set_trim_range(1000, 5000)
-    assert dialog.trim_card.apply_button.isEnabled() and dialog.trim_card.discard_button.isEnabled()
-    assert dialog.trim_card.apply() is True
+    loop.trim.snap_switch.setChecked(False)
+    loop.waveform.set_trim_range(1000, 5000)
+    assert loop.trim.apply_button.isEnabled() and loop.trim.discard_button.isEnabled()
+    loop.trim.apply_button.click()
     sample = controller.pad(1).sample
     assert sample != original and len(controller.sample_audio(sample)) == 4000
-    assert "Zurück" in dialog.trim_card.message.text()
-    assert not dialog.waveform.trimmed  # the handles are on the ends of the new loop
-    assert dialog.waveform.trim_range == (0, dialog.waveform.loop_frames)
-    controller.undo(1)
+    assert "Zurück" in loop.trim.message.text()
+    assert not loop.waveform.trimmed  # the handles are on the ends of the new loop
+    assert loop.waveform.trim_range == (0, loop.waveform.loop_frames)
+    controller.undo(1)  # one step back
     assert controller.pad(1).sample == original
 
 
 def test_discard_puts_the_handles_back_and_changes_nothing(page):
-    dialog, controller, _audio = page
-    dialog.waveform.set_trim_range(1000, 5000)
-    dialog.trim_card.discard()
-    assert not dialog.waveform.trimmed and events_of(controller, "loop_trim") == []
-    assert not dialog.trim_card.discard_button.isEnabled()
+    loop, controller, _audio = page
+    loop.waveform.set_trim_range(1000, 5000)
+    loop.trim.discard_button.click()
+    assert not loop.waveform.trimmed and events_of(controller, "loop_trim") == []
+    assert not loop.trim.discard_button.isEnabled()
 
 
 def test_the_loop_that_gives_the_bar_asks_before_it_leaves_the_grid(page):
     from loopstation.gui.trim_card import REGRID, SNAP
 
-    dialog, controller, _audio = page
-    dialog.choose_pad(0)
-    card = dialog.trim_card
-    card.snap_switch.setChecked(False)
-    dialog.waveform.set_trim_range(0, round(1.5 * SR))
-    assert "Takt vor" in card.note.text() and card.apply_button.isEnabled()
+    loop, controller, _audio = page
+    loop.show_pad(0)
+    trim = loop.trim
+    trim.snap_switch.setChecked(False)
+    loop.waveform.set_trim_range(0, round(1.5 * SR))
+    assert "Takt vor" in trim.note.text() and trim.apply_button.isEnabled()
     asked = []
-    card.ask_grid = lambda check: asked.append(check) or None
-    assert card.apply() is False and len(asked) == 1 and events_of(controller, "loop_trim") == []
+    trim.ask_grid = lambda check: asked.append(check) or None
+    assert trim.apply() is False and len(asked) == 1 and events_of(controller, "loop_trim") == []
     assert controller.grid_frames() == GRID  # cancelled: nothing changed
-    card.ask_grid = lambda check: SNAP
-    assert card.apply() is False  # snapping 1.5 s gives the bar: nothing to cut
+    trim.ask_grid = lambda check: SNAP
+    assert trim.apply() is False  # snapping 1.5 s gives the bar: nothing to cut
     assert controller.grid_frames() == GRID and events_of(controller, "loop_trim") == []
-    card.ask_grid = lambda check: REGRID
-    assert card.apply() is True
+    trim.ask_grid = lambda check: REGRID
+    assert trim.apply() is True
     assert controller.grid_frames() == round(1.5 * SR)
 
 
 def test_the_choice_dialog_has_its_three_buttons(qapp, page):
     from loopstation.gui.trim_card import REGRID, SNAP, GridChoiceDialog
 
-    dialog, controller, _audio = page
+    _loop, controller, _audio = page
     check = controller.check_trim(0, 0, round(1.5 * SR), snap=False)
     choice = GridChoiceDialog(check)
     choice.regrid_button.click()

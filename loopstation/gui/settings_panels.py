@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from loopstation.audio.devices import default_hostapi
 from loopstation.audio.effects import beep
@@ -269,6 +270,8 @@ class ToggleSwitch(QAbstractButton):
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        if not self.isEnabled():
+            painter.setOpacity(0.4)  # greyed out: it cannot be switched now
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(ACCENT_GREEN) if self.isChecked() else QColor("#48484E"))
         painter.drawRoundedRect(QRectF(self.rect()), 18, 18)
@@ -493,10 +496,13 @@ class SettingsPanels(QObject):
         self.controller = controller
         self._source = source
         self.editors: dict[str, Any] = {}
+        # Second inputs of a setting shown outside the four panels (the detail panel of the pads); they
+        # save the same way and follow every saved change, as the panels' own inputs do.
+        self.mirrors: dict[str, _Editor] = {}
         self.restart_notes: dict[str, QLabel] = {}
         self._pages: dict[str, QWidget] = {}
         self._refused: dict[str, str] = {}  # key -> why its shown value was not saved
-        self._pauses: dict[str, QTimer] = {}
+        self._pauses: dict[tuple[str, bool], QTimer] = {}
         self._labels = field_labels()
         self.message = ""  # what the head of the panel says now ("" = its normal line)
         self.level = ""
@@ -528,6 +534,24 @@ class SettingsPanels(QObject):
             flatten_cards(widget)
             self._pages[key] = widget
         return widget
+
+    def mirror(self, key: str) -> QWidget:
+        """A second input of the setting ``key`` (a plain field) for a page outside the panels.
+
+        It is saved like the input on its panel (at once, a number after its pause) and shows what the
+        other one saves. One mirror per key: a new one replaces the one before.
+        """
+        field = next(f for f in FIELDS if f.key == key)
+        pause = self._pauses.pop((key, True), None)
+        if pause is not None:  # the mirror before goes: its number is not saved later as the new one's
+            pause.stop()
+            pause.deleteLater()
+        editor = _Editor(field, self._values[key])
+        if isinstance(editor.widget, QAbstractButton):
+            editor.widget.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # a switch leaves the keys to the pads
+        self.mirrors[key] = editor
+        self._wire(key, editor, mirror=True)
+        return editor.widget
 
     def build_all(self) -> None:
         for key in SETTINGS_PANELS:
@@ -839,26 +863,27 @@ class SettingsPanels(QObject):
 
     # ------------------------------------------------------------ saving
 
-    def _wire(self, key: str, editor: _Editor) -> None:
+    def _wire(self, key: str, editor: _Editor, mirror: bool = False) -> None:
         """Save ``key`` when its input changes: at once, after a pause, or when the field is left."""
         kind = editor.field.kind
+        commit = weak_slot(self._commit_editor, key, mirror)
         if kind == "bool":
-            editor._box.toggled.connect(weak_slot(self._commit_editor, key))
+            editor._box.toggled.connect(commit)
         elif kind == "choice":
-            editor._combo.currentIndexChanged.connect(weak_slot(self._commit_editor, key))
+            editor._combo.currentIndexChanged.connect(commit)
             if key == "stretch_engine":
                 editor._combo.currentIndexChanged.connect(weak_slot(self._update_engine_hint))
         elif kind == "text":
-            editor._edit.editingFinished.connect(weak_slot(self._commit_editor, key))
+            editor._edit.editingFinished.connect(commit)
         else:
             spin = editor._spin if kind == "int" else editor._dspin
             pause = QTimer(self)
             pause.setSingleShot(True)
             pause.setInterval(NUMBER_PAUSE_MS)
-            pause.timeout.connect(weak_slot(self._commit_editor, key))
-            self._pauses[key] = pause
+            pause.timeout.connect(commit)
+            self._pauses[(key, mirror)] = pause
             spin.valueChanged.connect(pause.start)
-            spin.editingFinished.connect(weak_slot(self._commit_editor, key))
+            spin.editingFinished.connect(commit)
             if kind == "auto_float" and editor._auto is not None:
                 editor._auto.toggled.connect(weak_slot(self._auto_toggled, key, pass_signal_args=True))
 
@@ -880,19 +905,28 @@ class SettingsPanels(QObject):
 
     def flush(self) -> None:
         """Save what is waiting: a number in its pause, the text of a field that still has the focus."""
-        for key, pause in self._pauses.items():
+        for (key, mirror), pause in list(self._pauses.items()):
             if pause.isActive():
-                self._commit_editor(key)
+                self._commit_editor(key, mirror)
         for key, editor in self.editors.items():
             edit = getattr(editor, "_edit", None)
             if edit is not None and edit.hasFocus():
                 self._commit_editor(key)
 
-    def _commit_editor(self, key: str) -> None:
-        pause = self._pauses.get(key)
+    def _commit_editor(self, key: str, mirror: bool = False) -> None:
+        pause = self._pauses.get((key, mirror))
         if pause is not None:
             pause.stop()
-        self.commit({key: self.editors[key].value()})
+        editor = self.mirrors[key] if mirror else self.editors[key]
+        self.commit({key: editor.value()})
+
+    def _show_saved(self, keys: Iterable[str]) -> None:
+        """Every input of ``keys`` (on its panel and its mirror) shows the saved value."""
+        for key in keys:
+            value = self._values.get(key)
+            for editor in (self.editors.get(key), self.mirrors.get(key)):
+                if isinstance(editor, _Editor) and isValid(editor.widget) and editor.value() != value:
+                    editor.set_value(value)
 
     def _update_engine_hint(self) -> None:
         """Which stretch engine runs for the choice, and why (Rubber Band missing or not)."""
@@ -931,6 +965,7 @@ class SettingsPanels(QObject):
             new = parse_settings(raw, str(self.config_path))
             if self.config_path.exists() and all(getattr(new, k) == getattr(base, k) for k in changes):
                 self._accepted(changes)
+                self._show_saved(changes)
                 return True
             write_settings(self.config_path, new, self._template)
         except (ConfigError, OSError) as exc:
@@ -944,6 +979,7 @@ class SettingsPanels(QObject):
                        for key in ("input_device", "output_device", "audio_hostapi"))
         self._applied = new
         self._values = settings_values(new)
+        self._show_saved(changes)
         for key in self.restart_notes:
             self._update_restart_note(key)
         self._accepted(changes)
@@ -1070,7 +1106,7 @@ register_field(Field("free_pad_on_grid", "Freie Pads am Takt-Punkt starten", "bo
 
 
 # --- Markers (W4-MARKER) ---
-register_field(Field("export_cue_points", "Marker als Cue-Punkte mitschreiben", "bool",
+register_field(Field("export_cue_points", "Marker als Cue-\u2060Punkte mitschreiben", "bool",
                      hint="Beim Sichern eines einzelnen Loops: Marker in die WAV-Datei schreiben, sonst "
                           "als Begleitdatei daneben. Das Sichern scheitert daran nie."),
                before="latency_ms")

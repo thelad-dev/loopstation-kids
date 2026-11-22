@@ -206,7 +206,7 @@ def draw_icon(painter: QPainter, name: str, rect: QRectF, color: QColor) -> None
         painter.drawPath(tab)
 
     elif name == "layers":
-        # Three stacked diamonds (Feather "layers"), the sign of the Erweitert page.
+        # Three stacked diamonds (Feather "layers").
         painter.setPen(_pen(color, s * 0.09))
         top = QPolygonF([QPointF(c.x(), r.top() + s * 0.1), QPointF(r.left() + s * 0.1, r.top() + s * 0.32),
                          QPointF(c.x(), r.top() + s * 0.54), QPointF(r.left() + s * 0.9, r.top() + s * 0.32)])

@@ -12,7 +12,8 @@ from loopstation.audio.onset import detect_onsets, nearest_transient
 from loopstation.audio.stretch import MarkerStretchError, stretch_between_markers
 from loopstation.config import ConfigError, Settings, parse_settings
 from loopstation.controller import LIVE_SETTINGS
-from loopstation.gui.advanced_page import AdvancedDialog
+from loopstation.gui.detail_panel import DetailPanel
+from loopstation.gui.settings_panels import SettingsPanels
 
 RATE = 48000
 HITS = [0.5, 1.37, 2.31, 3.12]  # a child's hits: none of them on a quarter of the 4 s loop
@@ -151,15 +152,37 @@ def test_the_snap_setting_is_a_live_bool_that_is_off_by_default():
         parse_settings({"snap_markers": "ja"})
 
 
+class SnapPage:
+    """The tab "Loop" of the detail panel on pad 2 and the switch "Marker auf Schläge einrasten" of the
+    panel "System" (the one place of that setting)."""
+
+    def __init__(self, controller, config):
+        self.panel = DetailPanel(controller)
+        self.panel.resize(1200, 400)
+        self.panel.set_open(True)
+        self.panel.show_pad(1)
+        self.loop = self.panel.loop_tab
+        self.waveform = self.loop.waveform
+        self.panels = SettingsPanels(config, controller.settings, controller.apply_settings,
+                                     controller=controller)
+        self.system = self.panels.page("system")
+        self.snap_switch = self.panels.editors["snap_markers"]._box
+
+    def place_marker(self) -> bool:
+        return self.loop.place_marker()
+
+    def close(self) -> None:
+        self.panel.close()
+        self.system.close()
+
+
 @pytest.fixture
 def snap_page(qapp, tmp_path, clock):
     controller, _ = on_grid(tmp_path, clock, claps_pad1=(0.37, 1.31))
-    dialog = AdvancedDialog(controller)
-    dialog.choose_pad(1)
-    dialog.resize(1200, 900)
-    assert not dialog.snap_switch.isChecked()
-    yield dialog, controller
-    dialog.close()
+    page = SnapPage(controller, tmp_path / "settings.toml")
+    assert not page.snap_switch.isChecked()
+    yield page, controller
+    page.close()
     controller.store.close()
 
 

@@ -24,7 +24,7 @@ from loopstation.audio.stretch import (
 )
 from loopstation.config import ConfigError, Settings, parse_settings
 from loopstation.controller import LIVE_SETTINGS, MARKER_STRETCH_REFUSALS, Controller, Mode
-from loopstation.gui.advanced_page import STRETCH_HINT, AdvancedDialog
+from loopstation.gui.detail_panel import DetailPanel, LoopTab
 from loopstation.gui.export_dialog import ExportDialog
 from loopstation.gui.waveform import MARKER_COLOR, WaveformWidget, marker_name
 from loopstation.state import MAX_MARKERS, AppState, apply, parse_markers, replay
@@ -722,66 +722,72 @@ def test_a_click_puts_the_cursor_or_selects_the_marker_it_hits(qapp):
 
 @pytest.fixture
 def page(qapp, tmp_path, clock):
+    """The tab "Loop" of the detail panel on pad 2."""
     controller, _ = on_grid(tmp_path, clock, snap_markers=False)  # exact clicks; snapping has its own tests
-    dialog = AdvancedDialog(controller)
-    dialog.choose_pad(1)
-    dialog.resize(1200, 900)
-    yield dialog, controller
-    dialog.close()
+    panel = DetailPanel(controller)
+    panel.resize(1200, 400)
+    panel.set_open(True)
+    panel.show_pad(1)
+    yield panel.loop_tab, controller
+    panel.close()
     controller.store.close()
 
 
-def click_frame(dialog: AdvancedDialog, frame: int) -> None:
-    wave = dialog.waveform
+def click_frame(loop: LoopTab, frame: int) -> None:
+    wave = loop.waveform
     wave.pick(wave._x_of(frame), frame)
 
 
 def test_the_page_sets_and_deletes_markers_with_the_buttons(page):
-    dialog, controller = page
-    assert not dialog.marker_add.isEnabled() and not dialog.marker_delete.isEnabled()
-    assert not dialog.stretch_button.isEnabled() and dialog.listen_button.isEnabled()
-    click_frame(dialog, 4320)
-    assert dialog.marker_add.isEnabled()
-    assert dialog.place_marker() and controller.markers(1) == [4320]
-    assert dialog.waveform.markers == [4320] and dialog.stretch_button.isEnabled()
-    click_frame(dialog, 4320)
-    assert dialog.marker_delete.isEnabled() and not dialog.marker_add.isEnabled()
-    assert dialog.delete_marker() and controller.markers(1) == []
-    assert not dialog.place_marker() and not dialog.delete_marker()  # nothing chosen: nothing happens
+    loop, controller = page
+    assert not loop.marker_button.isEnabled() and "Erst in die Welle tippen" in loop.marker_button.toolTip()
+    assert not loop.stretch_button.isEnabled() and loop.listen_button.isEnabled()
+    assert "Marker" in loop.stretch_button.toolTip()  # a locked button says why
+    click_frame(loop, 4320)
+    assert loop.marker_button.isEnabled() and loop.marker_button.text() == "Marker"
+    loop.marker_button.click()
+    assert controller.markers(1) == [4320]
+    assert loop.waveform.markers == [4320] and loop.stretch_button.isEnabled()
+    click_frame(loop, 4320)
+    assert loop.marker_button.isEnabled() and loop.marker_button.text() == "Marker löschen"
+    loop.marker_button.click()
+    assert controller.markers(1) == []
+    assert not loop.place_marker() and not loop.delete_marker()  # nothing chosen: nothing happens
 
 
 def test_the_page_stretches_between_markers_and_says_what_happened(page):
-    dialog, controller = page
+    loop, controller = page
     for frame in (4320, 8480):
-        click_frame(dialog, frame)
-        dialog.place_marker()
+        click_frame(loop, frame)
+        loop.place_marker()
     old = controller.pad(1).sample
-    assert dialog.stretch_markers()
+    loop.stretch_button.click()
     assert controller.pad(1).sample != old and controller.markers(1) == [4000, 8000]
-    assert dialog.waveform.markers == [4000, 8000]
-    assert "Zurück" in dialog.marker_status.text()
-    assert not dialog.stretch_markers()  # on the beats already
-    assert dialog.marker_status.text() == MARKER_STRETCH_REFUSALS["already"]
+    assert loop.waveform.markers == [4000, 8000]
+    assert "Zurück" in loop.trim.message.text()
+    assert not loop.stretch_markers()  # on the beats already
+    assert loop.trim.message.text() == MARKER_STRETCH_REFUSALS["already"]
     controller.undo(1)
-    dialog.refresh()
-    assert dialog.waveform.markers == [4320, 8480]
+    loop.refresh()
+    assert loop.waveform.markers == [4320, 8480]
 
 
 def test_the_page_says_why_a_stretch_does_not_happen(page):
-    dialog, controller = page
+    loop, controller = page
     assert controller.set_parent_grid(120, "4/4")  # the parents' own tempo: exact lines, the limit holds
-    click_frame(dialog, 6000)
-    dialog.place_marker()
-    assert not dialog.stretch_markers() and "zu weit" in dialog.marker_status.text()
-    dialog.choose_pad(1)  # showing a pad again forgets the message and the selection
-    assert dialog.marker_status.text() == STRETCH_HINT and dialog.waveform.cursor_frame is None
-    dialog.listen()
+    click_frame(loop, 6000)
+    loop.place_marker()
+    assert not loop.stretch_markers() and "zu weit" in loop.trim.message.text()
+    loop.show_pad(1)  # showing a pad again forgets the message and the selection
+    assert loop.trim.message.isHidden() and loop.waveform.cursor_frame is None
+    assert "Strecken" in loop.trim.note.text()  # the line under the wave says what to do again
+    loop.listen()
     assert controller.audio.voices  # the loop plays once
 
 
 def test_markers_exist_only_on_the_parents_page(page):
-    dialog, _ = page
+    loop, _ = page
     from loopstation.gui.main_window import MainWindow
 
-    assert "Marker" in dialog.marker_add.text()
+    assert "Marker" in loop.marker_button.text()
     assert not hasattr(MainWindow, "place_marker")

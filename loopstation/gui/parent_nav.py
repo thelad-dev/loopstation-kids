@@ -73,6 +73,9 @@ _SVG_ICONS = {
                      "M7 11V7a5 5 0 0 1 9.9-1"],
     "rotate-ccw": ["M1 4v6h6", "M3.51 15a9 9 0 1 0 2.13-9.36L1 10"],
     "rotate-cw": ["M23 4v6h-6", "M20.49 15a9 9 0 1 1-2.12-9.36L23 10"],
+    # The action row of the detail panel (mockup L2-03): a marker flag and the stretch arrows.
+    "flag": ["M5 21V4", "M5 4h12l-2.5 4.5L17 13H5"],
+    "stretch": ["M3 12h18", "M7 8l-4 4 4 4", "M17 8l4 4-4 4"],
     "repeat": ["M17 2l4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "M7 22l-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"],
 }
 _renderers: dict[tuple[str, str], QSvgRenderer] = {}
@@ -107,6 +110,15 @@ def fitted_font(text: str, room: float, pixels: int, weight: QFont.Weight, least
         if QFontMetrics(font).horizontalAdvance(text) <= room:
             break
     return font
+
+
+def draw_line(painter: QPainter, rect: QRectF, text: str, font: QFont, color: QColor,
+              align: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter) -> None:
+    """One line of text in ``rect``, cut with "..." when it does not fit."""
+    painter.setFont(font)
+    painter.setPen(color)
+    shown = QFontMetrics(font).elidedText(text, Qt.TextElideMode.ElideRight, int(rect.width()))
+    painter.drawText(rect, align, shown)
 
 
 def qicon(name: str, color: QColor | str, size: int = 28) -> QIcon:

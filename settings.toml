@@ -125,7 +125,7 @@ asio = false
 # Wirkt sofort.
 stretch_to_grid = true
 
-# --- Metronom (Erweitert) ---
+# --- Metronom ---
 
 # true = leiser Ton auf jedem Schlag des Takts, durch Lautstärke und Obergrenze.
 # Das Kind sieht nur den Puls. Während einer Aufnahme schweigt er, damit er nie
@@ -144,7 +144,7 @@ metronome_level_db = -20
 # gezogen. false = er beginnt sofort. Wirkt sofort.
 free_pad_on_grid = false
 
-# --- Marker (Erweitert) ---
+# --- Marker ---
 
 # true = ein einzeln gesicherter Loop bekommt seine Marker als Cue-Punkte in die
 # WAV-Datei. Klappt das nicht, liegt eine Begleitdatei (.markers.json) daneben;
