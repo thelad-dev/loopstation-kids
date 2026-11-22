@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from conftest import FakeAudio, make_settings
 from PySide6.QtCore import QObject
+from PySide6.QtGui import QColor
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QAbstractButton,
@@ -28,15 +29,15 @@ from PySide6.QtWidgets import (
 
 from loopstation.controller import Controller, Mode
 from loopstation.gui.detail_panel import DetailPanel
-from loopstation.gui.export_dialog import ExportDialog
+from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.main_window import MainWindow
 from loopstation.gui.parent_gate import GateCard, ParentEntryButton, new_question
 from loopstation.gui.parent_view import PANEL_WIDTH
-from loopstation.gui.sets_page import SetsDialog
+from loopstation.gui.sets_page import SetsPage
 from loopstation.gui.settings_panels import SETTINGS_PANELS, SettingsPanels
 from loopstation.gui.side_panel import SidePanelHost
-from loopstation.gui.volume_slider import VolumeSlider
+from loopstation.gui.volume_slider import VolumeSlider, volume_to_position
 from loopstation.gui.widgets import DARK_SCROLLBAR_QSS
 from loopstation.session import SetSession
 from loopstation.store import EventStore
@@ -80,8 +81,8 @@ class World:
             **hosts,
             # The other pages of the side panels; on their own they are top level windows here.
             "detail": self.detail_panel(),
-            "sets": SetsDialog(self.session, None, None),
-            "export": ExportDialog(self.controller, None, export_dir=self.config.parent / "out",
+            "sets": SetsPage(self.session, None, None),
+            "export": ExportPage(self.controller, None, export_dir=self.config.parent / "out",
                                    clock=self.clock),
             "history": HistoryDialog(self.controller, 0, self.window),
         }
@@ -195,12 +196,28 @@ def test_the_child_page_shows_no_parent_vocabulary_in_any_state(world):
 def test_the_child_volume_control_names_no_units(world):
     slider = world.window.volume_slider
     assert slider.findChildren(QLabel) == []  # captions (percent, dBFS limit) are for the parents
-    assert not slider._captions  # no percent, no dBFS limit text: those are for the parents' copy
+    # Nothing is written above the track either (the parents' copy once wrote "Lautstärke 62 %" there):
+    # the band above the track looks the same at two volumes, away from the two handle positions.
+    world.window.resize(1280, 800)
+    world.window.show()  # the slider at its size in the mode bar
+    QTest.qWaitForWindowExposed(world.window)
+    volumes = (0.1, 0.8)
+    handles = [slider._x_of(volume_to_position(v)) for v in volumes]
+    reach = slider.height() * 0.32
+    bands = []
+    for volume in volumes:
+        slider.set_state(volume, 0.9)
+        image = slider.grab().toImage()
+        h = image.height()
+        bands.append([QColor(image.pixel(x, y)).lightness() for y in range(int(h * 0.12), int(h * 0.37))
+                      for x in range(image.width()) if all(abs(x - hx) > reach for hx in handles)])
+    changed = sum(abs(a - b) > 40 for a, b in zip(*bands, strict=True))
+    assert changed == 0, changed  # a number written there would change dozens of pixels
 
 
 def test_the_parents_pages_are_not_reachable_without_the_gate(world):
     window = world.window
-    pages = (DetailPanel, SetsDialog, ExportDialog, SidePanelHost)
+    pages = (DetailPanel, SetsPage, ExportPage, SidePanelHost)
     assert [d for d in window.findChildren(QWidget) if isinstance(d, pages)] == []
     assert window.settings_panels is None and window.parent_view is None
     window.open_tool("levels")  # no way to a panel from the child page

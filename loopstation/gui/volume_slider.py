@@ -15,10 +15,9 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPaintEvent, QPen, QPolygonF, QWheelEvent
+from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPaintEvent, QPen, QPolygonF, QWheelEvent
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from loopstation.audio.dynamics import gain_to_db
 from loopstation.gui.widgets import SURFACE, TEXT, TEXT_DIM
 
 WHEEL_STEP = 0.05  # position per wheel notch
@@ -37,19 +36,14 @@ def volume_to_position(volume: float) -> float:
 
 
 class VolumeSlider(QWidget):
-    """Big horizontal slider with a speaker icon; ``volumeChanged(gain)`` while it is dragged.
-
-    ``captions`` (the parents' area, mockup 09) writes the volume and the
-    ceiling above the track and moves the lock below it.
-    """
+    """Big horizontal slider with a speaker icon; ``volumeChanged(gain)`` while it is dragged."""
 
     volumeChanged = Signal(float)  # noqa: N815 - Qt API
 
     HEIGHT = 104
 
-    def __init__(self, parent: QWidget | None = None, captions: bool = False) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._captions = captions
         self._volume = 0.0
         self._limit = 1.0
         self._dragging = False
@@ -86,7 +80,7 @@ class VolumeSlider(QWidget):
         """The bar the handle runs on (between the two speaker icons)."""
         h = self.height()
         left = h * 0.63
-        middle = h * (0.577 if self._captions else 0.5)
+        middle = h * 0.5
         return QRectF(left, middle - h * 0.105, max(1.0, self.width() - 2 * left), h * 0.21)
 
     def _x_of(self, position: float) -> float:
@@ -167,13 +161,10 @@ class VolumeSlider(QWidget):
         painter.setPen(line)
         middle = track.center().y()
         painter.drawLine(QPointF(reach_x, middle - h * 0.19), QPointF(reach_x, middle + h * 0.19))
-        lock_y = h * 0.83 if self._captions else middle - h * 0.30
-        self._paint_lock(painter, QPointF(reach_x, lock_y), h * 0.15)
+        self._paint_lock(painter, QPointF(reach_x, middle - h * 0.30), h * 0.15)
 
         # Handle: white disc with a sky-blue rim.
         r = h * 0.26
-        if self._captions:
-            self._paint_captions(painter, track)
         painter.setPen(QPen(FILL, max(3.0, h * 0.048)))
         painter.setBrush(QColor("#FFFFFF"))
         painter.drawEllipse(QPointF(handle_x, track.center().y()), r, r)
@@ -181,27 +172,6 @@ class VolumeSlider(QWidget):
         self._paint_speaker(painter, QRectF(h * 0.18, h * 0.36, h * 0.27, h * 0.28), 1)
         self._paint_speaker(painter, QRectF(self.width() - h * 0.47, h * 0.34, h * 0.30, h * 0.32), 3)
         painter.end()
-
-    def _paint_captions(self, painter: QPainter, track: QRectF) -> None:
-        """"Lautstärke 62 %" over the left end of the track, "Grenze -6 dBFS" over the right end."""
-        font = QFont()
-        font.setPixelSize(14)
-        font.setBold(True)
-        painter.setFont(font)
-        top = self.height() * 0.17
-        box_height = 20.0
-        percent = round(100 * volume_to_position(self._volume))
-        painter.setPen(QColor(TEXT))
-        edge = self.height() * 0.18  # as far out as the speaker icons, so both captions fit
-        painter.drawText(QRectF(edge, top, self.width() / 2 - edge, box_height),
-                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                         f"Lautstärke {percent} %")
-        ceiling = gain_to_db(self._limit)
-        text = "Grenze −∞ dBFS" if ceiling == float("-inf") else f"Grenze {ceiling:.0f} dBFS"
-        text = text.replace("-", "−")
-        painter.setPen(QColor("#AEAEB2"))
-        painter.drawText(QRectF(self.width() / 2, top, self.width() / 2 - edge, box_height),
-                         Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, text)
 
     @staticmethod
     def _paint_lock(painter: QPainter, center: QPointF, size: float) -> None:

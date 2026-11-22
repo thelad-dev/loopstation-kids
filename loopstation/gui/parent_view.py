@@ -25,6 +25,7 @@ from PySide6.QtWidgets import QAbstractButton, QWidget
 
 from loopstation.gui.detail_panel import DetailPanel
 from loopstation.gui.icons import draw_icon
+from loopstation.gui.level_panel import format_db
 from loopstation.gui.parent_gate import PARENT_ACCENT
 from loopstation.gui.parent_nav import ACTIVE_FILL, CARD_BORDER, CARD_FILL, draw_line, fitted_font, paint_icon
 from loopstation.gui.pulse_strip import DOT_OFF, DOT_ON
@@ -50,14 +51,30 @@ DETAIL_HEIGHT = 64
 DETAIL_GAP = 16
 DETAIL_SHARE = 0.44  # of the window height for the unfolded detail panel (352 px at 1280 x 800, mockup L2-03)
 DETAIL_LEAST = 200  # the unfolded detail panel is never lower than this
-MIN_TILE = 72  # an unfolded detail panel leaves the tiles at least this high (playable)
+MIN_TILE = 72  # an unfolded detail panel leaves the tiles this high if the window allows it
+TILE_FLOOR = 64  # and never less: with many rows in a low window the detail panel scrolls instead
 TILE_GAP = 14
 RING = TILE_GAP // 2  # room around a tile for the ring of the chosen pad
 WIDE_HEADER = 1100  # from this header width on the switch and the bar chip have their full size
-SWITCH_WIDTH = (190, 220)  # narrow, full
-CHIP_WIDTH = (236, 290)
-ACTION_WIDTH = 65
-ACTION_GAP = 7
+
+
+@dataclass(frozen=True)
+class HeaderSizes:
+    """Widths of the header parts: the full ones of the mockup, and the narrow ones of a 1024 px window.
+
+    The narrow ones leave the volume as much track, measured against the width of the content, as the
+    full ones at 1280 px (mockup L2-02).
+    """
+
+    switch: int
+    chip: int
+    action: int
+    action_gap: int
+    chip_gap: int  # between the bar chip and "Zurück"
+    volume_gap: int  # between "Still" and the volume
+
+
+HEADER_SIZES = (HeaderSizes(176, 200, 56, 6, 10, 14), HeaderSizes(220, 290, 65, 7, 13, 27))  # narrow, full
 VOLUME_WIDTH = (200, 480)  # least, most
 WAVE_COLUMNS = 240  # peaks kept per sample; a tile draws fewer bars from them
 WAVE_PITCH = 5.6  # pixels from one bar of the mini wave to the next (as the waveform of the parents' pages)
@@ -81,10 +98,11 @@ SOURCE_WORDS = {
     "parent_bpm": "von Hand eingestellt",
     "free_pad": "aus freiem Pad",
 }
+# The keys of the parents' view (the main window handles them), shown behind "Tasten ?".
 KEYS_HELP = ("Pfeile wählen · Leertaste spielt · L Loop · R nimmt auf · Entf löscht · Enter Detailfeld · "
-             "M Marker · Esc schließt · F1 Kinderseite")
+             "M Marker · Esc schließt · Strg+Z zurück · Strg+Y wieder · F1 Kinderseite")
 
-# (tool key, icon, word) of the tool bar; the gap falls after the first four.
+# (tool key, icon, word) of the tool bar; the separator falls before "Pegel".
 TOOLS = (
     ("pads", "pads", "Pads"),
     ("changes", "history", "Verlauf"),
@@ -94,7 +112,6 @@ TOOLS = (
     ("devices", "headphones", "Geräte"),
     ("system", "gear", "System"),
 )
-TOOL_GROUP = 4
 
 
 def decimal(value: float, places: int) -> str:
@@ -109,6 +126,13 @@ def bar_lines(info: GridInfo | None) -> tuple[str, str]:
     bpm = decimal(info.bpm, 0 if abs(info.bpm - round(info.bpm)) < 0.05 else 1)
     source = SOURCE_WORDS.get(info.source, info.source)
     return f"{bpm} BPM · {info.signature}", f"{source} · {decimal(info.seconds, 2)} s"
+
+
+def short_bar_line(info: GridInfo | None) -> str:
+    """The second line of the bar chip for a narrow chip: where the bar came from, without its length."""
+    if info is None:
+        return "erste Aufnahme setzt ihn"
+    return SOURCE_WORDS.get(info.source, info.source)
 
 
 @dataclass(frozen=True, eq=False)
@@ -185,6 +209,14 @@ class ModeSegment(QAbstractButton):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setAccessibleName(word)
 
+    ICON = 20  # the icon in front of the word, and the gap after it
+    ICON_GAP = 7
+
+    def label_font(self) -> QFont:
+        """The font of the word: 18 px, smaller if icon and word would not fit with 5 px on each side."""
+        room = self.width() - self.ICON - self.ICON_GAP - 10
+        return fitted_font(self.text(), room, 18, QFont.Weight.Bold, 13)
+
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -200,14 +232,14 @@ class ModeSegment(QAbstractButton):
                 painter.setBrush(QColor("#2A2A30"))
                 painter.drawRoundedRect(rect, 11, 11)
             color = LABEL
-        icon = 20.0
-        font = fitted_font(self.text(), rect.width() - icon - 22, 18, QFont.Weight.Bold, 13)
+        icon, gap = float(self.ICON), self.ICON_GAP
+        font = self.label_font()
         text_width = QFontMetrics(font).horizontalAdvance(self.text())
-        left = (rect.width() - icon - 7 - text_width) / 2
+        left = (rect.width() - icon - gap - text_width) / 2
         paint_icon(painter, self.icon_name, QRectF(left, (rect.height() - icon) / 2 - 1, icon, icon), color)
         painter.setFont(font)
         painter.setPen(color)
-        painter.drawText(QRectF(left + icon + 7, 0, text_width + 2, rect.height()),
+        painter.drawText(QRectF(left + icon + gap, 0, text_width + 2, rect.height()),
                          Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.text())
         painter.end()
 
@@ -252,12 +284,35 @@ class BarChip(QAbstractButton):
         self.setAccessibleName("Takt")
         self.levels: tuple[float, ...] = (0.0, 0.0, 0.0, 0.0)
         self.lines = ("", "")
+        self.short_line = ""  # the second line when the full one does not fit
 
-    def set_state(self, levels: tuple[float, ...], lines: tuple[str, str]) -> None:
-        if (levels, lines) != (self.levels, self.lines):
-            self.levels, self.lines = levels, lines
+    def set_state(self, levels: tuple[float, ...], lines: tuple[str, str], short_line: str = "") -> None:
+        if (levels, lines, short_line) != (self.levels, self.lines, self.short_line):
+            self.levels, self.lines, self.short_line = levels, lines, short_line
             self.setText(lines[0])
+            self.setToolTip(f"{lines[0]} · {lines[1]} · Tippen öffnet „Takt“")
             self.update()
+
+    def _metrics(self) -> tuple[bool, float, float, float]:
+        """Full size or not, the gap of the beat dots, the first dot and where the text starts."""
+        wide = self.width() >= HEADER_SIZES[1].chip
+        spacing = 16.0 if wide else 10.0
+        first = 22.0 if wide else 15.0
+        return wide, spacing, first, first + 3 * spacing + (26 if wide else 13)
+
+    def shown_lines(self) -> tuple[tuple[str, QFont], tuple[str, QFont]]:
+        """The two lines as they are drawn, each with its font: the second one shortened if need be."""
+        wide, _spacing, _first, text_left = self._metrics()
+        room = self.width() - text_left - (34.0 if wide else 24.0)
+        top_font = fitted_font(self.lines[0], room, 18, QFont.Weight.Bold, 12)
+        low = self.lines[1]
+        low_font = fitted_font(low, room, 13, QFont.Weight.Medium, 11)
+        if self.short_line and QFontMetrics(low_font).horizontalAdvance(low) > room:
+            low = self.short_line
+            low_font = fitted_font(low, room, 13, QFont.Weight.Medium, 11)
+        top = QFontMetrics(top_font).elidedText(self.lines[0], Qt.TextElideMode.ElideRight, int(room))
+        low = QFontMetrics(low_font).elidedText(low, Qt.TextElideMode.ElideRight, int(room))
+        return (top, top_font), (low, low_font)
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)
@@ -266,9 +321,7 @@ class BarChip(QAbstractButton):
         painter.setPen(QPen(BORDER, 1.5))
         painter.setBrush(QColor("#2A2A30") if self.isDown() else PANEL)
         painter.drawRoundedRect(rect.adjusted(0.75, 0.75, -0.75, -0.75), 14, 14)
-        wide = self.width() >= CHIP_WIDTH[1]
-        spacing = 16.0 if wide else 11.0
-        first = 22.0 if wide else 16.0
+        wide, spacing, first, text_left = self._metrics()
         middle = rect.height() / 2
         painter.setPen(Qt.PenStyle.NoPen)
         for beat, level in enumerate(self.levels):
@@ -280,13 +333,11 @@ class BarChip(QAbstractButton):
             radius = 4.0 + 1.5 * level
             painter.setBrush(color)
             painter.drawEllipse(QPointF(first + beat * spacing, middle), radius, radius)
-        text_left = first + 3 * spacing + (26 if wide else 16)
-        chevron = 34.0 if wide else 26.0
+        chevron = 34.0 if wide else 24.0
         room = rect.width() - text_left - chevron
-        top_font = fitted_font(self.lines[0], room, 18, QFont.Weight.Bold, 12)
-        draw_line(painter, QRectF(text_left, 9, room, 24), self.lines[0], top_font, TEXT)
-        low_font = fitted_font(self.lines[1], room, 13, QFont.Weight.Medium, 11)
-        draw_line(painter, QRectF(text_left, 33, room, 20), self.lines[1], low_font, TEXT_DIM)
+        (top, top_font), (low, low_font) = self.shown_lines()
+        draw_line(painter, QRectF(text_left, 9, room, 24), top, top_font, TEXT)
+        draw_line(painter, QRectF(text_left, 33, room, 20), low, low_font, TEXT_DIM)
         paint_icon(painter, "chevron", QRectF(rect.width() - chevron + 1, middle - 9, 18, 18), TEXT_DIM)
         painter.end()
 
@@ -322,12 +373,23 @@ class SmallAction(QAbstractButton):
 class HeaderVolume(VolumeSlider):
     """The volume of the parents' header (mockup L2-02): the same control as on the child page,
     drawn for a 64 px high row: a thicker track, a larger handle, outlined speakers and the
-    ceiling as a line with a small lock above it.
+    ceiling as a line with a small lock above it. ``compact`` (a narrow header): smaller speakers
+    and handle, so the track keeps its share of the window.
     """
+
+    compact = False
+
+    def _shape(self) -> tuple[float, float, float]:
+        """Margin and size of the speakers and the radius of the handle (as shares of the height)."""
+        return (0.19, 0.34, 0.28) if self.compact else (0.27, 0.42, 0.33)
 
     def _track(self) -> QRectF:
         h = self.height()
-        left = min(h * 1.02, max(h * 0.75, self.width() * 0.2))  # a narrow header keeps more track
+        if self.compact:
+            margin, icon, handle = self._shape()
+            left = h * (margin + icon + handle) + 2  # the handle at the ends just clears the speakers
+        else:
+            left = min(h * 1.02, max(h * 0.75, self.width() * 0.2))
         return QRectF(left, h * 0.5 - h * 0.155, max(1.0, self.width() - 2 * left), h * 0.31)
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
@@ -367,13 +429,14 @@ class HeaderVolume(VolumeSlider):
         painter.setPen(line)
         painter.drawLine(QPointF(reach_x, h * 0.2), QPointF(reach_x, h * 0.9))
         self._paint_lock(painter, QPointF(reach_x, h * 0.07), h * 0.17)
+        margin, icon_share, handle = self._shape()
         painter.setPen(QPen(FILL, 3.5))
         painter.setBrush(QColor("#FFFFFF"))
-        painter.drawEllipse(QPointF(handle_x, track.center().y()), h * 0.33, h * 0.33)
-        icon = h * 0.42
+        painter.drawEllipse(QPointF(handle_x, track.center().y()), h * handle, h * handle)
+        icon = h * icon_share
         color = TEXT if self.isEnabled() else TEXT_DIM
-        paint_icon(painter, "speaker-low", QRectF(h * 0.27, (h - icon) / 2, icon, icon), color)
-        right = self.width() - h * 0.27 - icon
+        paint_icon(painter, "speaker-low", QRectF(h * margin, (h - icon) / 2, icon, icon), color)
+        right = self.width() - h * margin - icon
         paint_icon(painter, "speaker-high", QRectF(right, (h - icon) / 2, icon, icon), color)
         painter.end()
 
@@ -388,6 +451,9 @@ class HeaderBar(QWidget):
         self.undo_button = SmallAction("rotate-ccw", "Zurück", self)
         self.redo_button = SmallAction("rotate-cw", "Wieder", self)
         self.stop_button = SmallAction("stop", "Still", self)
+        self.undo_button.setToolTip("Zurück (Strg+Z)")
+        self.redo_button.setToolTip("Wiederholen (Strg+Y)")
+        self.stop_button.setToolTip("Alles still")
         self.volume_slider = HeaderVolume(self)
         self.volume_slider.setMinimumSize(VOLUME_WIDTH[0], HEADER_HEIGHT)
 
@@ -395,17 +461,18 @@ class HeaderBar(QWidget):
         super().resizeEvent(event)
         width = self.width()
         wide = width >= WIDE_HEADER
-        switch = SWITCH_WIDTH[1] if wide else SWITCH_WIDTH[0]
-        chip = CHIP_WIDTH[1] if wide else CHIP_WIDTH[0]
-        self.mode_switch.setGeometry(0, 4, switch, 56)
-        x = switch + 12
-        self.bar_chip.setGeometry(x, 4, chip, 56)
-        x += chip + 13
+        sizes = HEADER_SIZES[1 if wide else 0]
+        self.mode_switch.setGeometry(0, 4, sizes.switch, 56)
+        x = sizes.switch + 12
+        self.bar_chip.setGeometry(x, 4, sizes.chip, 56)
+        x += sizes.chip + sizes.chip_gap
         for button in (self.undo_button, self.redo_button, self.stop_button):
-            button.setGeometry(x, 4, ACTION_WIDTH, 56)
-            x += ACTION_WIDTH + ACTION_GAP + (1 if button is self.redo_button else 0)
-        x += 28 - ACTION_GAP - 1
+            button.setGeometry(x, 4, sizes.action, 56)
+            x += sizes.action + (sizes.action_gap + (1 if button is self.redo_button else 0)
+                                 if button is not self.stop_button else 0)
+        x += sizes.volume_gap
         volume = max(VOLUME_WIDTH[0], min(VOLUME_WIDTH[1], width - x))
+        self.volume_slider.compact = not wide
         self.volume_slider.setGeometry(width - volume, 0, volume, HEADER_HEIGHT)
 
 
@@ -903,9 +970,9 @@ class ParentView(QWidget):
         if not self.detail.is_open:
             return DETAIL_HEIGHT
         grid_top = HEADER_TOP + HEADER_HEIGHT + HEADER_GRID_GAP
-        least_grid = self.rows * MIN_TILE + (self.rows - 1) * TILE_GAP
-        room = height - MARGIN_BOTTOM - DETAIL_GAP - grid_top - least_grid
-        return max(DETAIL_LEAST, min(round(height * DETAIL_SHARE), room))
+        free = height - MARGIN_BOTTOM - DETAIL_GAP - grid_top - (self.rows - 1) * TILE_GAP
+        wanted = max(DETAIL_LEAST, min(round(height * DETAIL_SHARE), free - self.rows * MIN_TILE))
+        return max(DETAIL_HEIGHT, min(wanted, free - self.rows * TILE_FLOOR))
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
         return QSize(1000, 600)
@@ -919,7 +986,8 @@ class ParentView(QWidget):
         self.volume_slider.set_state(controller.volume, controller.volume_limit)
         self.undo_button.setEnabled(controller.can_undo() or controller.recording_pad is not None)
         self.redo_button.setEnabled(controller.can_redo())
-        self.bar_chip.set_state(levels, bar_lines(controller.grid_info()))
+        info = controller.grid_info()
+        self.bar_chip.set_state(levels, bar_lines(info), short_bar_line(info))
         self._update_tiles()
         self.detail.refresh()
 
@@ -965,7 +1033,7 @@ class ParentView(QWidget):
         else:
             parts.append("bereit")
         if look.wave is not None and math.isfinite(look.wave.peak_db):
-            parts.append(f"Spitze {look.wave.peak_db:.0f} dBFS")
+            parts.append(f"Spitze {format_db(min(0, round(look.wave.peak_db)), 'dBFS')}")
         return " · ".join(parts)
 
     # --------------------------------------------------------------- paint

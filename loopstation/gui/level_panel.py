@@ -4,7 +4,7 @@ Three sections, one under the other (the side panel is narrow): the ceiling, the
 microphone with its scale, trim and automatic features, and the list of loud recordings.
 The controls act at once: ``edited(key, value, final)`` goes to the settings panels, which
 hand the value to the controller and write ``settings.toml`` when ``final`` is true (a switch,
-or the end of a drag).
+the end of a drag, a slider left after arrow keys) or after the pause of a number field.
 
 The panel owns no state of its own. The ceiling, the trim and the switches
 show and set the controller's values; the loud recordings come from the
@@ -19,7 +19,17 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QKeyEvent, QMouseEvent, QPainter, QPaintEvent, QPen, QPolygonF
+from PySide6.QtGui import (
+    QColor,
+    QFocusEvent,
+    QFont,
+    QKeyEvent,
+    QMouseEvent,
+    QPainter,
+    QPaintEvent,
+    QPen,
+    QPolygonF,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -81,8 +91,8 @@ def describe_clip(event: ClipEvent) -> str:
 class DbSlider(QWidget):
     """Horizontal slider with the value above the handle and both ends named below (mockup 09)."""
 
-    valueChanged = Signal(float)  # noqa: N815 - Qt API; while dragging
-    released = Signal(float)  # the drag ended, or a key was pressed
+    valueChanged = Signal(float)  # noqa: N815 - Qt API; while dragging or stepping with the keys
+    released = Signal(float)  # the drag ended, or the slider was left after the keys moved it
 
     HEIGHT = 74
     HANDLE = 14.0
@@ -96,6 +106,7 @@ class DbSlider(QWidget):
         self._unit, self._ends, self._signed = unit, ends, signed
         self._value = low
         self._dragging = False
+        self._keyed = False  # moved by keys since the last ``released``
         self.setFixedHeight(self.HEIGHT)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -107,6 +118,11 @@ class DbSlider(QWidget):
     @property
     def value(self) -> float:
         return self._value
+
+    @property
+    def dragging(self) -> bool:
+        """The handle is held: the value is saved when it is let go, not in a pause of the drag."""
+        return self._dragging
 
     def set_value(self, value: float) -> None:
         """Show ``value`` (no signal)."""
@@ -150,6 +166,7 @@ class DbSlider(QWidget):
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt API
         if event.button() == Qt.MouseButton.LeftButton and self._dragging:
             self._dragging = False
+            self._keyed = False
             self.released.emit(self._value)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 - Qt API
@@ -162,9 +179,15 @@ class DbSlider(QWidget):
         value = self._snap(self._value + move * self.step)
         if value != self._value:
             self._value = value
+            self._keyed = True
             self.update()
-            self.valueChanged.emit(value)
-            self.released.emit(value)
+            self.valueChanged.emit(value)  # saved after the pause, as a number field (or when left)
+
+    def focusOutEvent(self, event: QFocusEvent) -> None:  # noqa: N802 - Qt API
+        super().focusOutEvent(event)
+        if self._keyed:
+            self._keyed = False
+            self.released.emit(self._value)
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
         painter = QPainter(self)

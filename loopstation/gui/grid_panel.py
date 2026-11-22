@@ -19,7 +19,7 @@ from loopstation.gui.widgets import TEXT, TEXT_DIM
 if TYPE_CHECKING:
     from loopstation.controller import Controller, GridInfo
 
-NO_GRID = "–"
+NO_GRID = "-"
 # How a source reads in the tile: (title, hint for the parents).
 SOURCES = {
     "onset": "Klatschen",

@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from conftest import FakeAudio, make_settings
 from PySide6.QtCore import QPoint, QPointF, Qt
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtGui import QColor, QFontMetrics, QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractButton, QApplication, QDialog, QWidget
 
@@ -310,6 +310,80 @@ def test_the_view_and_the_window_are_freed(qapp, tmp_path, clock):
     assert window() is None
 
 
+def test_closing_the_window_in_the_parents_view_leaves_it_and_takes_the_input_watch_off(world):
+    """Left on, the watch outlived a window closed in the parents' view (a fixture closing it after a
+    failed test, too): under PySide6 6.11 every widget built later ran into it ("'MainWindow' object has
+    no attribute 'parent_view'"), and one failing GUI test made dozens of later ones fail."""
+    window, clock = world.window, world.clock
+    view = open_parents(window)
+    view.toolbar.buttons["system"].click()
+    panels = window.settings_panels
+    spin = panels.editors["parent_idle_minutes"]._spin
+    spin.setValue(9)  # waits for its pause
+    window.close()
+    assert window.parent_view is None  # left as with the switch: the number in its pause is saved
+    assert "parent_idle_minutes = 9" in world.config.read_text(encoding="utf-8")
+    # Input elsewhere no longer reaches the closed window.
+    stamp = window._last_input
+    clock.advance(30)
+    other = QWidget()
+    other.show()
+    QTest.keyClick(other, Qt.Key.Key_A)
+    QTest.mouseClick(other, Qt.MouseButton.LeftButton)
+    assert window._last_input == stamp
+    other.close()
+
+
+CLOSE_IN_THE_PARENTS_VIEW = """
+import sys, tempfile
+from pathlib import Path
+import loopstation.audio as audio_pkg
+from loopstation import app as app_module
+from loopstation.audio.null_backend import NullAudio
+from loopstation.config import Settings
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication
+
+audio_pkg.create_audio = lambda settings: (NullAudio(), None)
+tmp = Path(tempfile.mkdtemp())
+settings = Settings(data_dir=tmp, sample_rate=8000, launchpad=False)
+app = QApplication([])
+
+def poke():
+    from loopstation.gui.main_window import MainWindow
+    window = [w for w in app.topLevelWidgets() if isinstance(w, MainWindow)][0]
+    window.enter_parent_mode()  # the sum was answered
+    window.open_tool("system")
+    window.settings_panels.editors["parent_idle_minutes"]._spin.setValue(7)  # waits for its pause
+    if sys.argv[1] == "cross":
+        window.close()  # the cross of the window, in the parents' view: the app ends
+    else:
+        app.quit()  # the end of the app without the cross (a signal, opening a set)
+
+QTimer.singleShot(300, poke)
+code = app_module.run(settings, tmp / "settings.toml")
+saved = (tmp / "settings.toml").read_text(encoding="utf-8").count("parent_idle_minutes = 7")
+print("run returned", code, saved, flush=True)
+"""
+
+
+@pytest.mark.parametrize("way", ["cross", "quit"])
+def test_the_app_ends_cleanly_when_the_window_closes_in_the_parents_view(tmp_path, way):
+    import os
+    import subprocess
+    import sys
+
+    script = tmp_path / "close_in_parents_view.py"
+    script.write_text(CLOSE_IN_THE_PARENTS_VIEW, encoding="utf-8")
+    env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": str(REPO)}
+    done = subprocess.run([sys.executable, str(script), way], cwd=REPO, env=env, capture_output=True,
+                          text=True, timeout=120)
+    assert done.returncode == 0, (done.returncode, done.stdout, done.stderr[-2000:])
+    assert "run returned 0 1" in done.stdout, done.stdout  # the waiting number was saved on the way out
+    for sign in ("Traceback", "Error calling Python override", "RuntimeError", "AttributeError"):
+        assert sign not in done.stderr, done.stderr[-2000:]
+
+
 def test_entering_sets_the_children_mode_to_play(world):
     world.controller.set_mode(Mode.DELETE)
     open_parents(world.window)
@@ -571,6 +645,144 @@ def test_keys_of_the_parents_view(world):
     assert controller.pad(1).sample is not None
 
 
+def _key(window: MainWindow, key: Qt.Key, modifier=Qt.KeyboardModifier.NoModifier) -> None:
+    """A key as the parents press it: to the widget that has the focus (the window while nothing has)."""
+    QTest.keyClick(QApplication.focusWidget() or window, key, modifier)
+
+
+def test_every_key_the_help_names_does_what_it_says(world):
+    """The help behind "Tasten ?" lists the keys; each entry has a check here, and each check passes."""
+    window, controller, audio = world.window, world.controller, world.audio
+    window.activateWindow()
+    QTest.qWaitForWindowActive(window)
+    world.record(0, 2.0)
+    view = open_parents(window)
+    view.toolbar.keys_button.click()
+    entries = [entry.split(" ", 1)[0] for entry in view.detail.help.split(" · ")]
+    ctrl = Qt.KeyboardModifier.ControlModifier
+
+    def arrows():
+        _key(window, Qt.Key.Key_Right)
+        _key(window, Qt.Key.Key_Down)
+        assert view.selected == 5 and view.detail.pad == 5
+        _key(window, Qt.Key.Key_Up)
+        _key(window, Qt.Key.Key_Left)
+        assert view.selected == 0
+
+    def space():
+        _key(window, Qt.Key.Key_Space)
+        assert calls(audio, "play")[-1] == ("play", 0, False)
+        audio.finish(0)
+
+    def loop():
+        _key(window, Qt.Key.Key_L)
+        assert controller.pad(0).looping and controller.mode == Mode.PLAY
+        _key(window, Qt.Key.Key_L)
+        assert not controller.pad(0).looping
+
+    def record():
+        _key(window, Qt.Key.Key_Right)
+        _key(window, Qt.Key.Key_R)
+        assert controller.recording_pad == 1
+        world.clock.advance(1.0)
+        _key(window, Qt.Key.Key_R)
+        assert controller.recording_pad is None and controller.pad(1).sample is not None
+
+    def delete():
+        _key(window, Qt.Key.Key_Delete)
+        assert controller.pad(1).sample is None and controller.mode == Mode.PLAY
+
+    def undo():
+        _key(window, Qt.Key.Key_Z, ctrl)
+        assert controller.pad(1).sample is not None  # the deletion is taken back
+
+    def redo():
+        _key(window, Qt.Key.Key_Y, ctrl)
+        assert controller.pad(1).sample is None  # and done again
+        _key(window, Qt.Key.Key_Z, ctrl)
+
+    def enter():
+        _key(window, Qt.Key.Key_Return)
+        assert view.detail.is_open and view.detail.tab == "loop"
+        _key(window, Qt.Key.Key_Return)
+        assert not view.detail.is_open
+
+    def marker():
+        _key(window, Qt.Key.Key_Left)
+        view.detail.open_tab("loop")
+        wave = view.detail.loop_tab.waveform
+        frame = wave.loop_frames // 3
+        wave.pick(wave._x_of(frame), frame)  # a tap on the wave puts the cursor there
+        _key(window, Qt.Key.Key_M)
+        assert controller.markers(0) == [frame]
+
+    def escape():
+        view.toolbar.buttons["levels"].click()
+        assert view.panel_key == "levels" and not view.detail.is_open
+        view.detail.open_tab("pad")  # the detail panel unfolds, the side panel closes for it
+        view.toolbar.buttons["system"].click()  # and the other way round
+        _key(window, Qt.Key.Key_Escape)  # the top layer first: the side panel
+        assert view.panel_key is None
+        view.detail.open_tab("record")
+        _key(window, Qt.Key.Key_Escape)  # then the unfolded detail panel
+        assert not view.detail.is_open and window.parent_mode
+        controller.set_mode(Mode.DELETE)  # nothing open: as before, Esc leaves a mode of the children
+        _key(window, Qt.Key.Key_Escape)
+        assert controller.mode == Mode.PLAY and window.parent_mode
+
+    def f1():
+        _key(window, Qt.Key.Key_F1)
+        assert not window.parent_mode
+
+    checks = {"Pfeile": arrows, "Leertaste": space, "L": loop, "R": record, "Entf": delete,
+              "Enter": enter, "M": marker, "Esc": escape, "Strg+Z": undo, "Strg+Y": redo, "F1": f1}
+    assert sorted(entries) == sorted(checks)  # nothing in the help without a check, nothing missing
+    for entry in entries:  # in the order of the help
+        checks[entry]()
+
+
+def test_tab_never_lands_on_a_widget_out_of_sight_and_closing_gives_the_keys_back(world):
+    window = world.window
+    window.activateWindow()
+    QTest.qWaitForWindowActive(window)
+    world.like_the_mockup()
+    view = open_parents(window)
+
+    def walk(steps: int = 30) -> list[QWidget]:
+        reached = []
+        for _ in range(steps):
+            _key(window, Qt.Key.Key_Tab)
+            focus = QApplication.focusWidget()
+            if focus is not None and focus is not window:
+                assert focus.isVisible() and not focus.visibleRegion().isEmpty(), type(focus).__name__
+                assert view.isAncestorOf(focus)  # never the hidden child page behind the view
+                reached.append(focus)
+        return reached
+
+    assert walk() == []  # the pads alone: nothing to tab to, the keys stay with the pads
+    for key in ("levels", "devices", "tempo", "system"):
+        window.open_tool(key)
+        reached = walk()
+        assert reached and all(view.side_panel.isAncestorOf(w) for w in reached), key
+        view.side_panel.close_button.click()  # the cross, with a field of the panel in focus
+        before = view.selected
+        _key(window, Qt.Key.Key_Right)
+        assert view.selected == before + 1, key  # the keys belong to the pads again
+        _key(window, Qt.Key.Key_Left)
+    view.detail.open_tab("record")
+    reached = walk()
+    assert reached and all(view.detail.isAncestorOf(w) for w in reached)
+    view.detail.fold_button.click()
+    _key(window, Qt.Key.Key_Right)
+    assert view.selected == 1
+    view.detail.open_tab("record")
+    walk(3)
+    _key(window, Qt.Key.Key_Escape)  # Esc folds it from a field, too
+    assert not view.detail.is_open
+    _key(window, Qt.Key.Key_Right)
+    assert view.selected == 2
+
+
 def test_backspace_deletes_nothing(world):
     world.record(0, 2.0)
     open_parents(world.window)
@@ -785,6 +997,45 @@ def test_nothing_overlaps_at_any_size(qapp, tmp_path, clock, size):
         assert card.height() >= card.minimumSizeHint().height(), size
     finally:
         w.close()
+
+
+def _header_at(qapp, tmp_path, clock, size) -> tuple[float, tuple, list]:
+    """The share of the header the volume track has, the bar chip's lines as drawn, and the switch."""
+    w = World(tmp_path, clock, size=size)
+    try:
+        w.like_the_mockup()
+        view = open_parents(w.window)
+        QTest.qWait(20)
+        share = view.volume_slider._track().width() / view.header.width()
+        lines = view.bar_chip.shown_lines()
+        segments = []
+        for segment in (view.mode_switch.kids_button, view.mode_switch.parents_button):
+            word = QFontMetrics(segment.label_font()).horizontalAdvance(segment.text())
+            segments.append((segment.width(), segment.ICON + segment.ICON_GAP + word + 8))
+        return share, lines, segments
+    finally:
+        w.close()
+
+
+def test_at_1024_px_the_header_cuts_nothing_and_the_volume_keeps_its_track(qapp, tmp_path, clock):
+    wide_share, wide_lines, _ = _header_at(qapp, tmp_path / "wide", clock, (1280, 800))
+    share, lines, segments = _header_at(qapp, tmp_path / "narrow", clock, (1024, 640))
+    assert share >= wide_share - 0.002, (share, wide_share)  # as much track for its width as at 1280
+    assert [text for text, _font in wide_lines] == ["96 BPM · 4/4", "aus Aufnahmelänge · 2,50 s"]
+    # The narrow chip says where the bar came from without its length (the tooltip has it all), uncut.
+    assert [text for text, _font in lines] == ["96 BPM · 4/4", "aus Aufnahmelänge"]
+    assert all(font.pixelSize() >= 11 for _text, font in lines)
+    for width, needed in segments:  # "Kinder" and "Eltern" fit their half of the switch
+        assert needed <= width, (width, needed)
+
+
+def test_the_header_buttons_say_what_they_do_in_their_tooltips(world):
+    view = open_parents(world.window)
+    assert view.redo_button.text() == "Wieder" and "Wiederholen" in view.redo_button.toolTip()
+    assert "Strg+Z" in view.undo_button.toolTip() and "Strg+Y" in view.redo_button.toolTip()
+    world.like_the_mockup()
+    world.window._tick()
+    assert "aus Aufnahmelänge · 2,50 s" in view.bar_chip.toolTip()
 
 
 def _part(image: QImage, box: tuple[int, int, int, int], width: int, height: int) -> np.ndarray:

@@ -118,7 +118,7 @@ class TempoCard(QFrame):
         head.setWordWrap(True)
         head.setStyleSheet("font-size: 19px; font-weight: bold;")
         layout.addWidget(head)
-        layout.addWidget(dim_label("Vorrang vor gemessenem Takt (Regel 8)", 13.5))
+        layout.addWidget(dim_label("Hat Vorrang vor dem gemessenen Takt", 13.5))
         layout.addWidget(_heading("Tempo"))
         row = QHBoxLayout()
         row.setSpacing(10)

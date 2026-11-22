@@ -1,10 +1,10 @@
-"""Building blocks the parents' pages share: icons, cards and a width-aware card grid.
+"""Building blocks the pages of the parents' view share: icons, cards and a column of cards.
 
 The pages of the parents' view open as side panels next to the pads (``side_panel``). This module has
 the parts they share:
 
 - ``paint_icon``/``qicon``/``IconLabel``: the icons of the mockups,
-- ``CardGrid``: cards in two columns on a wide page, in one column on a narrow one (a side panel),
+- ``CardColumn``: cards one under the other at the width of the panel,
 - ``CurrentPageStack``: pages one over the other, only the shown one counts for the size,
 - ``card``/``dim_label``/``scrolled``: the small helpers every page uses.
 """
@@ -22,12 +22,10 @@ from PySide6.QtGui import (
     QPainter,
     QPaintEvent,
     QPixmap,
-    QResizeEvent,
 )
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLayout,
@@ -44,7 +42,6 @@ from loopstation.gui.widgets import DARK_SCROLLBAR_QSS, TEXT, TEXT_DIM
 ACTIVE_FILL = "#2F3550"
 CARD_FILL = "#1B1B1F"
 CARD_BORDER = "#2C2C31"
-WIDE_PAGE = 860  # content width from which cards go side by side
 
 # Icons the shared icon set (``icons.draw_icon``) does not have: the paths of the mockups (24 px grid).
 _SVG_ICONS = {
@@ -239,76 +236,20 @@ class CurrentPageStack(QWidget):
         return self._current
 
 
-class CardGrid(QWidget):
-    """Rows of cards. A row of two goes side by side from ``WIDE_PAGE`` px, else everything is stacked.
+class CardColumn(QWidget):
+    """Cards one under the other, each as wide as the column; ``stretch_last`` gives the last one the spare
+    height. The width comes from the panel, not from what a card would like (no sideways scroll bar)."""
 
-    ``rows`` is a list of rows, each a list of one widget (full width) or two (left, right);
-    ``ratio`` is the width share of the two columns; ``stretch_last`` lets the last row take the spare height.
-    The minimum width is that of the widest single card, so
-    the page never needs a sideways scroll bar at 1024 px.
-    """
-
-    def __init__(self, rows: list[list[QWidget]], ratio: tuple[int, int] = (1, 1), gap: int = 16,
-                 spacing: int = 14, stretch_last: bool = False, parent: QWidget | None = None) -> None:
+    def __init__(self, cards: list[QWidget], spacing: int = 14, stretch_last: bool = False,
+                 parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._stretch_last = stretch_last
-        self._rows = rows
-        self._ratio = ratio
-        self._wide: bool | None = None
-        self._grid = QGridLayout(self)
-        self._grid.setContentsMargins(0, 0, 0, 0)
-        self._grid.setHorizontalSpacing(gap)
-        self._grid.setVerticalSpacing(spacing)
-        self._grid.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
-        for row in rows:
-            for widget in row:
-                widget.setParent(self)
-                # The share of the width comes from ``ratio``, not from what a card would like.
-                widget.setSizePolicy(QSizePolicy.Policy.Ignored, widget.sizePolicy().verticalPolicy())
-        self._arrange(False)
-
-    @property
-    def wide(self) -> bool:
-        return bool(self._wide)
-
-    def _arrange(self, wide: bool) -> None:
-        if wide == self._wide:
-            return
-        self._wide = wide
-        grid = self._grid
-        while grid.count():
-            grid.takeAt(0)
-        for column in range(2):
-            grid.setColumnStretch(column, 0)
-            grid.setColumnMinimumWidth(column, 0)
-        for row in range(grid.rowCount()):
-            grid.setRowStretch(row, 0)
-        index = 0
-        for row in self._rows:
-            if wide and len(row) == 2:
-                grid.addWidget(row[0], index, 0)
-                grid.addWidget(row[1], index, 1)
-                grid.setRowStretch(index, 0)
-                index += 1
-            elif wide:
-                grid.addWidget(row[0], index, 0, 1, 2)
-                index += 1
-            else:
-                for widget in row:
-                    grid.addWidget(widget, index, 0)
-                    index += 1
-        if wide:
-            grid.setColumnStretch(0, self._ratio[0])
-            grid.setColumnStretch(1, self._ratio[1])
-        else:
-            grid.setColumnStretch(0, 1)
-        if self._stretch_last:
-            grid.setRowStretch(index - 1, 1)
-        self.updateGeometry()
-
-    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt API
-        self._arrange(event.size().width() >= WIDE_PAGE)
-        super().resizeEvent(event)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(spacing)
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
+        for index, card in enumerate(cards):
+            card.setSizePolicy(QSizePolicy.Policy.Ignored, card.sizePolicy().verticalPolicy())
+            layout.addWidget(card, 1 if stretch_last and index == len(cards) - 1 else 0)
 
 
 RADIO_QSS = (

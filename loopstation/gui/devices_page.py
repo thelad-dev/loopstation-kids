@@ -94,6 +94,7 @@ class HostApiList(QWidget):
         while self._layout.count():
             item = self._layout.takeAt(0)
             if item.widget() is not None:
+                item.widget().hide()  # gone at once: until it is deleted Tab could still land on it
                 item.widget().deleteLater()
         self._group = QButtonGroup(self)
         self.radios, self.by_name = {}, {}

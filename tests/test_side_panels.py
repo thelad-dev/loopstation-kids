@@ -8,6 +8,7 @@ at once. Every panel fits 1024 x 640 without a sideways scroll bar and without a
 from __future__ import annotations
 
 import gc
+import re
 import sys
 import weakref
 from dataclasses import fields
@@ -17,7 +18,15 @@ from conftest import FakeAudio, make_settings
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, Qt
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QAbstractButton, QLabel, QScrollArea, QWidget
+from PySide6.QtWidgets import (
+    QAbstractButton,
+    QAbstractSpinBox,
+    QComboBox,
+    QLabel,
+    QLineEdit,
+    QScrollArea,
+    QWidget,
+)
 
 from loopstation.config import Settings, load_settings
 from loopstation.controller import Controller
@@ -26,7 +35,7 @@ from loopstation.gui.changes_page import ChangesPage
 from loopstation.gui.detail_panel import DetailPanel, LoopTab, PadTab, RecordTab
 from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.main_window import TOOL_HEADS, MainWindow
-from loopstation.gui.parent_nav import WIDE_PAGE, CardGrid, breakable, dim_label
+from loopstation.gui.parent_nav import CardColumn, breakable, dim_label
 from loopstation.gui.sets_page import SetsPage
 from loopstation.gui.settings_panels import FIELDS, SETTINGS_PANELS, SettingsPanels, panel_of
 from loopstation.gui.side_panel import SAVED_LINE
@@ -38,8 +47,9 @@ from loopstation.store import EventStore
 TOOLS = ("changes", "sets", "export", "levels", "devices", "system", "tempo")
 DETAIL_TABS = ("loop", "pad", "record")  # the tabs of the detail panel under the pads
 SIZES = [(1024, 640), (1280, 800), (1920, 1080)]
-INTERNAL_KEYS = ("sample_rate", "data_dir", "max_level_db", "input_gain_db", "latency_ms", "audio_hostapi",
-                 "stretch_engine", "rubberband", "time_signature", "parent_idle_minutes", "duration")
+# Every key of the settings file and the sources of a bar: none of them may show up as a word in the view.
+INTERNAL_KEYS = (*(f.name for f in fields(Settings)),
+                 "rubberband", "onset", "duration", "parent_bpm", "free_pad")
 
 
 class Parts:
@@ -220,6 +230,30 @@ def test_a_change_is_saved_and_said_in_the_head(parts):
     parts.window.showMaximized()
 
 
+def test_a_save_after_the_pause_is_said_in_the_panel_that_is_open_then(parts):
+    parts.open("system")
+    panels_of(parts).editors["max_record_seconds"]._dspin.setValue(17)  # waits for its pause
+    parts.open("changes")  # another panel opens within the pause
+    QTest.qWait(settings_panels.NUMBER_PAUSE_MS + 200)
+    assert load_settings(parts.config).max_record_seconds == 17.0
+    assert parts.view.side_panel.message() == "Gespeichert: Längste Aufnahme"
+
+
+def test_a_save_after_the_pause_with_no_panel_open_is_said_in_the_folded_line(parts):
+    parts.open("system")
+    panels = panels_of(parts)
+    panels._calm.setInterval(300)  # the message goes back to the facts sooner than in the app
+    panels.editors["max_record_seconds"]._dspin.setValue(18)
+    parts.view.toolbar.buttons["pads"].click()  # the panel closes within the pause
+    detail = parts.view.detail
+    facts = detail.shown_info()[0]
+    QTest.qWait(settings_panels.NUMBER_PAUSE_MS + 100)
+    text, color = detail.shown_info()
+    assert text == "Gespeichert: Längste Aufnahme" and color.name().upper() == "#32D74B"
+    QTest.qWait(400)
+    assert detail.shown_info()[0] == facts  # and then the facts again
+
+
 def test_a_refusal_stays_in_the_head_when_the_panel_opens_again(parts):
     parts.open("system")
     edit = panels_of(parts).editors["data_dir"]._edit
@@ -307,22 +341,52 @@ def test_without_a_controller_the_panels_are_there_but_the_live_cards_are_not(qa
     assert panels.page("levels").isAncestorOf(panels.editors["volume"].widget)  # the plain rows
 
 
-def test_no_internal_key_in_any_text_of_the_panels(parts):
-    parts.record(0, 2.0)
+def _texts(root: QWidget) -> list[str]:
+    """Every text a parent can read on ``root`` and below it: words, values, tooltips, accessible names."""
     texts = []
+    for widget in [root, *root.findChildren(QWidget)]:
+        if isinstance(widget, (QLabel, QAbstractButton, QLineEdit)):
+            texts.append(widget.text())
+        if isinstance(widget, QComboBox):
+            texts += [widget.itemText(i) for i in range(widget.count())]
+        if isinstance(widget, QAbstractSpinBox):
+            texts.append(widget.text())
+        texts += [widget.toolTip(), widget.accessibleName()]
+    return [text for text in texts if text]
+
+
+def test_no_internal_key_and_no_long_dash_in_any_text_of_the_parents_view(parts):
+    """The whole parents' view: header, tool bar, every side panel, every tab of the detail panel with its
+    lines and the key help, and the sum over the window."""
+    view, window = parts.view, parts.window
+    parts.open("tempo")  # without a bar yet: the tiles of the bar have no values
+    texts = _texts(view.side_panel)
+    parts.record(0, 2.0)
+    texts += _texts(view)
     for key in TOOLS:
-        page = parts.open(key)
-        texts += [label.text() for label in page.findChildren(QLabel)]
-        texts += [button.text() for button in page.findChildren(QAbstractButton)]
-        texts.append(parts.view.side_panel.line.text())
+        parts.open(key)
+        texts += _texts(view.side_panel)
+    window.close_tool()
+    texts.append(view.detail.info)
     for key in DETAIL_TABS:
-        page = parts.open_tab(key)
-        texts += [w.text() for w in page.findChildren(QLabel) + page.findChildren(QAbstractButton)]
-        texts += [w.toolTip() for w in page.findChildren(QWidget)]
-        texts.append(parts.view.detail.open_info)
+        parts.open_tab(key)
+        window._tick()
+        texts += _texts(view.detail)
+        texts.append(view.detail.open_info)
+    view.toolbar.keys_button.click()
+    texts += [view.detail.help, *view.bar_chip.lines, view.bar_chip.toolTip()]
+    window.leave_parent_mode()
+    window._unlocked_until = 0.0
+    window.open_parent_area()
+    assert window.gate_overlay is not None
+    texts += _texts(window.gate_overlay)
     joined = " | ".join(texts)
     for key in INTERNAL_KEYS:
-        assert key not in joined, key
+        assert re.search(rf"(?<![A-Za-zÄÖÜäöü]){key}(?![A-Za-zÄÖÜäöü])", joined) is None, key
+    assert "—" not in joined and "–" not in joined, [t for t in texts if "—" in t or "–" in t]
+    # No references into the planning notes ("Regel 8", "§3") and no English "Session" beside "Sitzung".
+    found = re.findall(r".{0,30}(?:Regel \d|§|\bSession\b).{0,10}", joined)
+    assert not found, found
 
 
 def test_the_audio_system_is_a_list_of_the_systems_the_machine_has(qapp, tmp_path, monkeypatch):
@@ -441,18 +505,17 @@ def test_a_folder_path_in_a_wrapped_label_breaks_at_the_folders(qapp, path):
         assert plain.minimumSizeHint().width() > 2 * wrapped.minimumSizeHint().width()
 
 
-def test_two_columns_on_a_wide_page_and_one_on_a_narrow_page(qapp):
-    left, right, wide = QLabel("links"), QLabel("rechts"), QLabel("breit")
-    grid = CardGrid([[wide], [left, right]], ratio=(3, 2))
-    grid.resize(WIDE_PAGE + 100, 300)
-    grid.show()
-    QTest.qWait(20)
-    assert grid.wide and left.y() == right.y() and left.x() < right.x()
-    assert left.width() > right.width()  # 3 : 2
-    grid.resize(600, 300)
-    QTest.qWait(20)
-    assert not grid.wide and left.x() == right.x() and left.y() < right.y()
-    grid.close()
+def test_cards_stand_one_under_the_other_at_any_width(qapp):
+    first, last = QLabel("oben"), QLabel("unten")
+    column = CardColumn([first, last], stretch_last=True)
+    for width in (420, 1200):
+        column.resize(width, 400)
+        column.show()
+        QTest.qWait(20)
+        assert first.x() == last.x() == 0 and first.y() < last.y()
+        assert first.width() == last.width() == width  # as wide as the column
+        assert last.height() > first.height()  # the last card takes the spare height
+    column.close()
 
 
 # ---------------------------------------------------------- the lifetime of the pages

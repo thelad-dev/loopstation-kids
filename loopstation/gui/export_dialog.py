@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
 from loopstation import export as ex
 from loopstation.controller import Controller
 from loopstation.gui.parent_gate import PARENT_ACCENT, _IconLabel
-from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardGrid, scrolled
+from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardColumn, scrolled
 from loopstation.gui.settings_panels import ToggleSwitch
 from loopstation.gui.widgets import (
     ACCENT_GRAY,
@@ -241,7 +241,7 @@ class ExportPage(QWidget):
         inner_layout = QVBoxLayout(inner)
         inner_layout.setContentsMargins(0, 0, 0, 0)
         inner_layout.addWidget(
-            CardGrid([[self._sum_card(), right]], ratio=(29, 17), gap=20, stretch_last=True), 1)
+            CardColumn([self._sum_card(), right], stretch_last=True), 1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(scrolled(inner))
@@ -551,12 +551,12 @@ class ExportPage(QWidget):
         self.stand_in_widgets.setVisible(grid is None)
 
         if grid is None:
-            self.session_label.setText("Session · kein Takt")
+            self.session_label.setText("Sitzung · kein Takt")
         else:
             seconds = german_number(ex.bar_seconds(grid, rate), 2)
             bpm = ex.bpm_of(grid, rate)
             tempo = f" · {german_number(bpm, 0)} BPM · 4/4" if 40 <= bpm <= 200 else ""
-            self.session_label.setText(f"Session · Takt {seconds} s{tempo}")
+            self.session_label.setText(f"Sitzung · Takt {seconds} s{tempo}")
         self.fade_hint.setText(
             f"{round(ex.FADE_OUT_SECONDS * 1000)}{NBSP}ms Fade gegen Knacken")
         self.format_hint.setText(f"mono, 24{NBSP}Bit, {rate_text(rate)}")
@@ -655,6 +655,3 @@ class ExportPage(QWidget):
             self.last_path = path
         return path
 
-
-# The page used to be a dialog of its own; the name stays for code that still imports it.
-ExportDialog = ExportPage

@@ -173,6 +173,7 @@ def _run_session(
         if finished:
             return
         finished = True
+        window.leave_parent_mode()  # saves what still waits in a panel while the controller still runs
         controller.shutdown()
         if window.launchpad is not None:
             window.launchpad.close()

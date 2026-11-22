@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 from loopstation import sets
 from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
-from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardGrid, CurrentPageStack, fitted_font, scrolled
+from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardColumn, CurrentPageStack, fitted_font, scrolled
 from loopstation.gui.widgets import (
     ACCENT_GRAY,
     ACCENT_ORANGE,
@@ -386,7 +386,7 @@ class SetsPage(QWidget):
         good.addWidget(self.safe_title)
         good.addWidget(self._small(
             "Erst fertig schreiben, dann umbenennen: ein Abbruch überschreibt kein altes Set halb.\n"
-            "Nur lokal – keine Cloud.", TEXT.name(), 14))
+            "Nur lokal, keine Cloud.", TEXT.name(), 14))
         good.addStretch(1)
 
         right = QVBoxLayout()
@@ -398,7 +398,7 @@ class SetsPage(QWidget):
         right_widget.setLayout(right)
         columns = QVBoxLayout(page)
         columns.setContentsMargins(0, 0, 0, 0)
-        columns.addWidget(CardGrid([[form_card, right_widget]], ratio=(29, 17), gap=20, stretch_last=True), 1)
+        columns.addWidget(CardColumn([form_card, right_widget], stretch_last=True), 1)
         return page
 
     def _build_open_page(self) -> QWidget:
@@ -478,7 +478,7 @@ class SetsPage(QWidget):
         right_widget.setLayout(right)
         columns = QVBoxLayout(page)
         columns.setContentsMargins(0, 0, 0, 0)
-        columns.addWidget(CardGrid([[list_card, right_widget]], ratio=(29, 17), gap=20, stretch_last=True), 1)
+        columns.addWidget(CardColumn([list_card, right_widget], stretch_last=True), 1)
         return page
 
     @staticmethod
@@ -612,7 +612,7 @@ class SetsPage(QWidget):
             values["Format"].setText(f"v{manifest.format_version} · passt" if not info.error else "")
         else:
             for key in ("Gespeichert", "Pads mit Aufnahme", "Takt", "Zurück-Schritte"):
-                values[key].setText("–")
+                values[key].setText("-")
             values["Format"].setText("zu neu" if info.too_new else "unlesbar")
         values["Format"].setStyleSheet(
             f"font-size: 15px; font-weight: bold; color: {RED if info.error else TEXT.name()};")
@@ -646,6 +646,3 @@ class SetsPage(QWidget):
             self._on_open(prepared)
         self.accept()
 
-
-# The page used to be a dialog of its own; the name stays for code that still imports it.
-SetsDialog = SetsPage

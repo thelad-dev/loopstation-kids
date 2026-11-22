@@ -39,10 +39,10 @@ Selbst bauen (unter Windows, mit Python 3.12 und [Inno Setup 6](https://jrsoftwa
 pip install -c packaging/windows/constraints.txt -r requirements.txt -r packaging/windows/requirements-build.txt
 python packaging/windows/make_icon.py build/loopstation.ico
 pyinstaller --noconfirm packaging/windows/loopstation.spec
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.1.3 packaging\windows\loopstation.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.2.0 packaging\windows\loopstation.iss
 ```
 
-Das Ergebnis liegt in `dist\Loopstation-Setup-1.1.3.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
+Das Ergebnis liegt in `dist\Loopstation-Setup-1.2.0.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
 
 ## Linux-Installation
 
@@ -91,9 +91,10 @@ Was sich für Bestandsnutzer ändert:
 - **Neuer Elternbereich** hinter der Kachel „Eltern“ unten rechts (zwei Sekunden halten, Rechenaufgabe), mit sieben Bereichen: Lautstärke & Pegel, Geräte & Audio, Takt & Loop (mit Eltern-Takt und Metronom), Verlauf & Undo, Erweitert (Wellenform, Marker), Sets sichern und öffnen, Export als WAV.
 - **„Alle löschen“ ist von der Kinderseite in den Elternbereich gewandert** (Verlauf & Undo, „Alle Pads löschen …“, mit Rückfrage; „Zurück“ holt alles wieder). Kinder können so nicht mehr versehentlich alles leeren.
 - **Loops kürzen (neu in 1.1.1):** Erweitert schneidet einen Loop an Anfang und Ende zu (Griffe in der Wellenform, Vorhören, Übernehmen oder Verwerfen); das Original bleibt im Verlauf, Zurück bringt es wieder, und ein Stand ohne diese Version kennt das Kürzen nicht.
-- **Marker bleiben, wo Sie sie setzen (1.1.2):** „Zwischen Markern strecken“ meckert nicht mehr, wenn ein Marker auf einem Schlag sitzt, der neben der geschätzten Taktlinie liegt; die 10-%-Grenze gilt nur noch bei einem von Erwachsenen eingestellten Takt. Die Schlag-Erkennung erfindet bei Rascheln, Rauschen und Nachhall keine Schläge mehr, und neue Marker rasten auf Wunsch auf die nächste echte Transiente ein (`snap_markers`, Schalter in Erweitert, standardmäßig aus).
-- **Kein Piepen mehr auf der Aufnahme (1.1.3):** Der Start-Ton klingt vollständig aus, bevor die Aufnahme beginnt (sie startet dadurch einen Moment nach dem Druck), und der leise Metronom-Ton schweigt, solange aufgenommen wird; der Start-Ton lässt sich im Elternbereich (Lautstärke & Pegel, „Aufnahmestart-Ton“, `record_start_tone`) abschalten.
+- **Marker bleiben, wo Sie sie setzen (1.1.2):** „Zwischen Markern strecken“ meckert nicht mehr, wenn ein Marker auf einem Schlag sitzt, der neben der geschätzten Taktlinie liegt; die 10-%-Grenze gilt nur noch bei einem von Erwachsenen eingestellten Takt. Die Schlag-Erkennung erfindet bei Rascheln, Rauschen und Nachhall keine Schläge mehr, und neue Marker rasten auf Wunsch auf die nächste echte Transiente ein (`snap_markers`, standardmäßig aus; ab 1.2.0 ein Schalter unter „System“).
+- **Kein Piepen mehr auf der Aufnahme (1.1.3):** Der Start-Ton klingt vollständig aus, bevor die Aufnahme beginnt (sie startet dadurch einen Moment nach dem Druck), und der leise Metronom-Ton schweigt, solange aufgenommen wird; der Start-Ton lässt sich im Elternbereich (Lautstärke & Pegel, „Aufnahmestart-Ton“, `record_start_tone`) abschalten (ab 1.2.0 unter „System“ und im Detailfeld, Reiter „Aufnahme“).
 - **Auf der Kinderseite neu:** „Wiederholen“, das Zurück-Abzeichen am Pad, der freie Modus per langem Halten und das rote „zu laut“-Zeichen. Am Launchpad wirkt ein kurzer Tipp jetzt beim Loslassen.
+- **Neue Elternansicht (1.2.0):** Der Elternbereich ist keine eigene Seite mit Liste links mehr, sondern ein zweiter Zustand desselben Fensters mit den Pads in der Mitte (siehe [Elternbereich](#elternbereich)). Die früheren Bereiche sind Werkzeuge mit Seitenleiste geworden (Verlauf, Sets, Export, Pegel, Geräte, System, Takt); was unter „Erweitert“ lag (Wellenform, Marker, Kürzen), steht im Detailfeld des gewählten Pads. Die Kinderseite ist unverändert, `settings.toml`, Protokoll und Sets bleiben gültig.
 
 ### Zurück zur vorigen Version
 
@@ -153,7 +154,7 @@ Oben wählt man den Modus, unten gibt es vier Knöpfe:
 
 Ein zweiter Klick auf den aktiven Modus oder ESC führt zurück zu „Spielen“. Aufnahmen stoppen nach der eingestellten Höchstlänge von selbst.
 
-Tastatur: Strg+Z (Zurück), Strg+Y oder Strg+Umschalt+Z (Wiederholen), ESC (zurück zu „Spielen“). Im Elternbereich lassen sich die Pegel-Regler mit den Pfeiltasten und Bild auf/ab verstellen.
+Tastatur auf der Kinderseite: Strg+Z (Zurück), Strg+Y oder Strg+Umschalt+Z (Wiederholen), ESC (zurück zu „Spielen“). Die Tasten der Elternansicht stehen unter [Tastatur in der Elternansicht](#tastatur-in-der-elternansicht).
 
 ### Im Takt bleiben
 
@@ -186,20 +187,43 @@ In `settings.toml` im Startordner (jede Zeile ist dort kommentiert): Rastergrö�
 
 ## Elternbereich
 
-Erwachsene erreichen den Elternbereich über die Kachel „Eltern“ unten rechts: zwei Sekunden gedrückt halten, dann eine Rechenaufgabe lösen. Die Aufgabe liegt abgedunkelt über dem Fenster, die Musik läuft weiter, Tipper, Tasten und das Launchpad lösen dabei nichts aus; Esc oder „Abbrechen“ führt zurück. Die Kinderseite bleibt bewusst schlicht: Pads, Modi, Zurück und Wiederholen, Alles still, Lautstärke, ein rotes Zeichen bei zu lauter Aufnahme und der Puls (ein Punkt je Schlag des Takts, der aktuelle leuchtet weich auf). Alles mit Zahlen und Fachbegriffen liegt im Elternbereich.
+Die Kinderseite bleibt bewusst schlicht: Pads, Modi, Zurück und Wiederholen, Alles still, Lautstärke, ein rotes Zeichen bei zu lauter Aufnahme und der Puls (ein Punkt je Schlag des Takts, der aktuelle leuchtet weich auf). Alles mit Zahlen und Fachbegriffen liegt in der Elternansicht. Sie ist kein eigenes Fenster und keine eigene Seite, sondern ein zweiter Zustand desselben Fensters: die Pads bleiben in der Mitte, die Musik läuft weiter, das Launchpad spielt mit.
 
-Nach der richtigen Antwort zeigt dasselbe Fenster die **Elternansicht**: oben der Umschalter Kinder|Eltern, der Takt (Tempo, Taktart, woher er kommt), Zurück, Wieder, Still und die Lautstärke; links die Werkzeuge; in der Mitte dieselben Pads als breite Kacheln mit Länge, kleiner Welle und Zustandssymbol; unten das Detailfeld des gewählten Pads. Die Pads bleiben spielbar, das Launchpad auch: ein Tipp auf das Symbol unten links wirkt wie ein Tipp auf der Kinderseite („Spielen“), ein Tipp auf die übrige Kachel wählt sie nur aus. Tasten: Pfeile wählen, Leertaste spielt, L startet oder stoppt den Loop, R nimmt auf, Entf löscht (Zurück holt es wieder), Enter klappt das Detailfeld auf und zu, M setzt dort einen Marker, F1 führt zur Kinderseite. Zurück zu den Kindern geht es mit einem Tipp auf „Kinder“ oder F1; nach `parent_idle_minutes` Minuten ohne Eingabe am Bildschirm oder an der Tastatur (Standard 10, 0 = nie) kehrt die Ansicht von selbst zurück, schließt dabei eine offene Seitenleiste und verlangt danach wieder die Rechenaufgabe. Wer innerhalb von `parent_unlock_minutes` Minuten (0 bis 15, Standard 0 = immer fragen) nach der Rechenaufgabe wieder das Schloss hält, kommt ohne neue Aufgabe hinein, aber nur, wenn die Eltern in der Aufgabe den Schalter „Sperre … offen lassen“ eingeschaltet haben (er ist standardmäßig aus und nur sichtbar, wenn `parent_unlock_minutes` über 0 liegt).
+### Hinein und zurück
 
-Die Werkzeuge der Elternansicht öffnen eine **Seitenleiste** rechts neben den Pads, im selben Fenster. Die Pads rücken zusammen und bleiben spielbar, das Launchpad auch; so lässt sich etwa der Pegel prüfen, während das Kind spielt. Ein erneuter Tipp auf das Werkzeug, „Pads“, das Kreuz oben in der Leiste oder Esc schließt sie wieder. Ein Tipp auf den Takt oben öffnet „Takt“:
+- **Schloss halten:** Die Kachel „Eltern“ unten rechts auf der Kinderseite zwei Sekunden gedrückt halten. Dann liegt eine Rechenaufgabe abgedunkelt über dem Fenster. Die Musik läuft weiter, Tipper, Tasten und das Launchpad lösen dabei nichts aus; Esc oder „Abbrechen, zurück zur Kinderseite“ schließt die Aufgabe. Nach der richtigen Antwort zeigt dasselbe Fenster die Elternansicht.
+- **Zurück zu den Kindern:** ein Tipp auf „Kinder“ im Umschalter Kinder|Eltern oben links oder F1. Gehaltene Pads werden dabei losgelassen, eine Zahl, die noch auf ihre Pause wartet, wird vorher gesichert. Das Kind findet die Kinderseite so vor, wie es sie verlassen hat, im Modus „Spielen“.
+- **Leerlauf:** Nach `parent_idle_minutes` Minuten ohne Eingabe am Bildschirm oder an der Tastatur (Standard 10, 0 = nie) kehrt die Ansicht von selbst zur Kinderseite zurück und schließt dabei eine offene Seitenleiste. Tipper auf dem Launchpad zählen nicht als Eingabe der Eltern.
+- **Sperrfrist:** Standardmäßig verlangt jedes Halten des Schlosses eine neue Rechenaufgabe. Steht `parent_unlock_minutes` über 0 (bis 15), zeigt die Aufgabe den Schalter „Sperre … Minuten offen lassen“ (standardmäßig aus). Ist er eingeschaltet, öffnet erneutes Halten innerhalb dieser Minuten die Elternansicht ohne Aufgabe. Die Rückkehr nach Leerlauf beendet die Frist: wer danach kommt, rechnet wieder.
+
+### Aufbau
+
+Oben die Kopfzeile: der Umschalter Kinder|Eltern, der Takt (Schläge, Tempo, Taktart und woher er kommt; ein Tipp öffnet „Takt“), Zurück, Wieder (Wiederholen), Still (Alles still) und die Lautstärke mit der Obergrenze als Strich mit Schloss. Links die Werkzeugleiste, in der Mitte die Pads als breite Kacheln, darunter das Detailfeld des gewählten Pads. Mit den üblichen 4 × 3 Pads passt die Ansicht ab 1024 × 640 Pixeln ohne Abschneiden. Bei mehr Zeilen bleiben die Kacheln mindestens 64 Pixel hoch, solange das Fenster hoch genug ist; das aufgeklappte Detailfeld wird dafür niedriger und scrollt.
+
+### Pads
+
+Jede Kachel zeigt Nummer, Länge („1 Takt“, „2 Takte“, „frei 3,1 s“), eine kleine Welle und unten links das Zustandssymbol (Aufnehmen auf einem leeren Pad, Abspielen, Loop). Ein freies Pad ist rund.
+
+- **Das Symbol startet:** Ein Tipp darauf wirkt wie ein Tipp auf das Pad der Kinderseite im Modus „Spielen“ (aufnehmen, abspielen, stoppen); langes Halten schaltet den freien Modus um.
+- **Die Fläche wählt:** Ein Tipp auf die übrige Kachel wählt das Pad nur aus (blauer Ring), ohne es zu starten. Ein Doppeltipp klappt zusätzlich das Detailfeld auf.
+- Starten (Symbol, Tasten, Launchpad) ändert die Auswahl nicht; das Detailfeld zeigt immer das gewählte Pad.
+
+### Werkzeuge und Seitenleisten
+
+Ein Werkzeug der Leiste links öffnet eine **Seitenleiste** rechts neben den Pads. Die Pads rücken zusammen und bleiben spielbar, so lässt sich etwa der Pegel prüfen, während das Kind spielt. Ein erneuter Tipp auf das Werkzeug, „Pads“, das Kreuz oben in der Leiste oder Esc schließt sie wieder. Eine Seitenleiste und das aufgeklappte Detailfeld wechseln sich ab: öffnet das eine, klappt das andere zu.
 
 - **Verlauf:** die Änderungen der Sitzung (neueste oben, Uhrzeit aus dem Protokoll), Zurück und Wiederholen, „nur dieses Pad“ an der jeweils letzten Änderung eines Pads und „Alle Pads löschen …“ mit Rückfrage.
 - **Sets** und **Export:** eigene Abschnitte weiter unten.
 - **Pegel:** Obergrenze, Limiter, Mikrofon mit Pegelanzeige und Trim, automatischer Aufnahmepegel, weiche Naht und die zuletzt zu lauten Aufnahmen.
 - **Geräte:** Mikrofon und Ausgabe getrennt (mit Testton), Audio-System, Verzögerung (automatisch oder von Hand). Siehe [Plattformen und Audio](#plattformen-und-audio).
-- **System:** Launchpad, Vollbild, längste Aufnahme, Pieptöne, Stretch-Verfahren, Marker, Sperrzeit und Rückkehr der Elternansicht, Rastergröße, Abtastrate, Datenordner.
-- **Takt:** aktueller Takt (Tempo, Taktart, Länge, Quelle), Takt korrigieren (Eltern-BPM), Loop-Verhalten, Metronom, Taktart und Tempo-Fenster.
+- **System:** Launchpad, Vollbild, längste Aufnahme, Pieptöne, Stretch-Verfahren, Marker, Sperrfrist und Leerlauf der Elternansicht, Rastergröße, Abtastrate, Datenordner.
+- **Takt** (Tipp auf den Takt oben): aktueller Takt (Tempo, Taktart, Länge, Quelle), Takt korrigieren (Eltern-BPM), Loop-Verhalten, Metronom, Taktart und Tempo-Fenster.
 
-Unter den Pads liegt das **Detailfeld** des gewählten Pads. Zugeklappt ist es eine Zeile (Nummer, Länge, Zustand); ein Tipp auf die Zeile, den Pfeil rechts, einen Reiter, Enter oder ein Doppeltipp auf eine Kachel klappt es auf, Esc oder der Pfeil klappt es wieder zu. Aufgeklappt nimmt es knapp die halbe Fensterhöhe, die Kacheln werden flacher und bleiben spielbar. Eine Seitenleiste und das aufgeklappte Detailfeld wechseln sich ab. Wählen ändert, was das Detailfeld zeigt; Starten eines Pads (Symbol, Tasten, Launchpad) ändert es nicht. Die Reiter:
+**Einstellungen wirken sofort und werden sofort gesichert;** es gibt keinen Knopf „Speichern“. Schalter und Auswahllisten sichern bei jedem Tipp, Zahlen und die Pegel-Regler beim Verlassen oder kurz nach der letzten Änderung (auch mit den Pfeiltasten verstellt), Text beim Verlassen oder mit Enter. Unter dem Titel der Leiste steht „wirkt sofort · automatisch gesichert“, nach einer Änderung kurz „Gespeichert: …“. Kommt diese Meldung erst nach einer Pause, während schon eine andere Leiste offen ist, erscheint sie dort, sonst in der Zeile des Detailfelds. Ein ungültiger Wert wird nicht gesichert; die Leiste sagt in Rot, warum, bis er korrigiert ist. Die Loopstation schreibt die `settings.toml` mit allen Kommentaren (siehe [Einstellungen](#einstellungen)), eine beschädigte Datei überschreibt sie nie. Nur Rastergröße, Abtastrate, ASIO und Datenordner wirken erst nach einem Neustart; das steht direkt am Feld. Die Pegelanzeige (`peak_meter`) ist standardmäßig an.
+
+### Detailfeld
+
+Unter den Pads liegt das **Detailfeld** des gewählten Pads. Zugeklappt ist es eine Zeile: Nummer, „Pad N“, Länge, Raster und Zustand, rechts die Reiter. Ein Tipp auf die Zeile, den Pfeil rechts, einen Reiter, Enter oder ein Doppeltipp auf eine Kachel klappt es auf; Esc, Enter oder der Pfeil klappt es wieder zu. Aufgeklappt nimmt es knapp die halbe Fensterhöhe, die Kacheln werden flacher und bleiben spielbar. Neben einer offenen Seitenleiste ist die Zeile schmal; dann weichen die Reiter, damit „Pad N“ und die Angaben lesbar bleiben. Die Reiter:
 
 - **Loop:** Wellenform mit Kürz-Griffen, Markern und Abspielkopf; darunter die Kürz-Bilanz und eine Zeile Anhören, Marker, Strecken, Export, Takt rasten, rechts Verwerfen und Übernehmen (siehe [Wellenform, Marker und Kürzen](#wellenform-marker-und-kürzen)). Ein gesperrter Knopf sagt, warum.
 - **Pad:** freier Modus, Start am Takt (die Einstellung `free_pad_on_grid`, gilt für alle freien Pads), die Takes dieses Pads zum Anhören und Zurückholen (ein Schritt auf dem Zurück-Stapel) und der Pegel der Aufnahme mit Zielzone und „zu laut“. Name und Lautstärke je Pad sind ausgegraut: sie kommen mit dem neuen Kern.
@@ -208,7 +232,28 @@ Unter den Pads liegt das **Detailfeld** des gewählten Pads. Zugeklappt ist es e
 
 Der Verlauf eines Pads (alle früheren Aufnahmen zum Anhören und Zurückholen) ist auch für Kinder da: Modus „Verlauf“, dann Pad antippen.
 
-Der Elternbereich schreibt die `settings.toml` mit allen Kommentaren (siehe [Einstellungen](#einstellungen)). Es gibt keinen Knopf „Speichern“: jede Änderung wirkt sofort und wird sofort gesichert, Schalter und Auswahllisten bei jedem Tipp, Zahlen beim Verlassen des Feldes oder kurz nach der letzten Änderung, Text beim Verlassen oder mit Enter. Ein ungültiger Wert wird nicht gesichert; die Leiste sagt oben in Rot, warum, bis er korrigiert ist. Eine beschädigte `settings.toml` wird nie überschrieben. Nur Rastergröße, Abtastrate, ASIO und Datenordner wirken erst nach einem Neustart; das steht direkt am Feld. Die Pegelanzeige (`peak_meter`) ist standardmäßig an.
+### Tastatur in der Elternansicht
+
+„Tasten ?“ unten in der Werkzeugleiste blendet diese Übersicht im Detailfeld ein:
+
+| Taste | Wirkung |
+|---|---|
+| Pfeile | ein Pad weiter wählen; am Rand bleibt die Auswahl stehen |
+| Leertaste | das gewählte Pad spielen (wie ein Tipp im Modus „Spielen“) |
+| L | Loop des gewählten Pads starten oder stoppen |
+| R | Aufnahme auf dem gewählten Pad starten oder beenden |
+| Entf | das gewählte Pad leeren (Zurück holt es wieder) |
+| Enter | Detailfeld auf- und zuklappen |
+| M | Marker am Cursor der Welle (Reiter „Loop“) |
+| Esc | die oberste Ebene schließen: erst die Rechenaufgabe oder die Seitenleiste, dann das Detailfeld |
+| Strg+Z, Strg+Y | Zurück, Wiederholen (auch Strg+Umschalt+Z) |
+| F1 | zur Kinderseite |
+
+Tippt man in ein Feld einer Leiste, bleiben die Tasten dort, bis die Leiste schließt oder eine Kachel angetippt wird. Tab springt nur zwischen sichtbaren Feldern. Die Pegel-Regler lassen sich mit den Pfeiltasten und Bild auf/ab verstellen.
+
+### Ideen aus Suhina
+
+Einige Bedienprinzipien der Elternansicht stammen aus [Suhina](https://github.com/suhina-daw/suhina-daw), einer freien Audio-Workstation: Starten und Auswählen sind auf einer Kachel getrennt; die Auswahl wandert mit den Pfeiltasten und bleibt am Rand stehen; ein Detailbereich unten zeigt, was ausgewählt ist; gehaltene Eingaben werden beim Wechsel der Ansicht und bei Fokusverlust losgelassen; Einstellungen wirken sofort; Esc schließt die oberste Ebene. Übernommen sind nur diese Ideen. Code, Texte und Grafiken stammen nicht von dort.
 
 ## Wellenform, Marker und Kürzen
 

@@ -77,6 +77,8 @@ HEADER = 64  # the folded panel, and the head of the unfolded one
 MARGIN = 16
 FOLD_SIZE = QSize(44, 42)
 WIDE = 1000  # from this width the tabs and the action row have their full size
+INFO_LEAST = 200  # the folded line keeps this much room for "Pad N" and its facts, else the tabs give way
+BADGE_END = MARGIN + 36 + 16  # where "Pad N" begins, right of the badge
 TABS = (("loop", "Loop"), ("pad", "Pad"), ("record", "Aufnahme"), ("effects", "Effekte (später)"))
 NEW_CORE = "kommt mit dem neuen Kern"
 LABEL = QColor("#C7C7CC")
@@ -292,7 +294,7 @@ class LoopTab(QWidget):
         self._play: tuple[float, int, int] | None = None  # (start time, first frame, frames) while it plays
         self._tip_stamp = ""  # the minute the tooltip of "Export" was made for
         self.waveform = WaveformWidget()
-        self.waveform.setMinimumHeight(FLAG_ROOM + 34)
+        self.waveform.setMinimumHeight(FLAG_ROOM + 56)  # a low panel scrolls rather than flatten the wave
         self.waveform.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.waveform.bar_labels = True
         self.waveform.selection_changed.connect(weak_slot(self._selection_changed))
@@ -856,15 +858,16 @@ class PadTab(QWidget):
             if LABELS[0] in labels:  # the microphone of this take was louder than what was kept
                 peak_db = max(peak_db, events[labels.index(LABELS[0])].peak_db)
                 peak = 10 ** (peak_db / 20)
-            loud_now = LABELS[0] in labels or peak_db >= NEAR_CLIP_DB
+            rounded = min(0, round(peak_db))  # the verdict follows the number shown (-12.04 reads -12)
+            loud_now = LABELS[0] in labels or rounded >= NEAR_CLIP_DB
             self.meter.setEnabled(True)
             self.meter.set_state(peak, peak, loud_now)
-            shown = f"Spitze {format_db(min(0, round(peak_db)), 'dBFS')}" if peak > 0 else "Stille"
+            shown = f"Spitze {format_db(rounded, 'dBFS')}" if peak > 0 else "Stille"
             if loud_now:
                 self._say(f"{shown} · zu laut", WARN, True)
-            elif peak_db > TARGET_HIGH_DB:
+            elif rounded > TARGET_HIGH_DB:
                 self._say(f"{shown} · etwas laut", LOUD, True)
-            elif peak_db >= TARGET_LOW_DB:
+            elif rounded >= TARGET_LOW_DB:
                 self._say(f"{shown} · im Ziel", GOOD, True)
             else:
                 self._say(f"{shown} · leise", TEXT_DIM.name(), True)
@@ -1001,7 +1004,9 @@ class DetailPanel(QWidget):
         self.message = QLabel(self)
         self.message.setWordWrap(True)
         self.message.hide()
+        self._message_color = QColor(GOOD)
         self.pages: dict[str, QWidget] = {}
+        self._holders: dict[str, QWidget] = {}  # what the stack shows for a tab: the page or its scroll area
 
     # ---------------------------------------------------------------- tabs
 
@@ -1015,8 +1020,22 @@ class DetailPanel(QWidget):
             builder = {"loop": LoopTab, "pad": PadTab, "record": RecordTab}[key]
             widget = builder(self)
             self.pages[key] = widget
-            self.stack.addWidget(widget)
+            holder = widget
+            if key == "loop":
+                # Wave, line and action row scroll together in a low panel (many rows in a low window);
+                # the columns of the other tabs scroll on their own.
+                # The width is the panel's (the row fits itself to it), never more: no sideways scrolling.
+                widget.setSizePolicy(QSizePolicy.Policy.Ignored, widget.sizePolicy().verticalPolicy())
+                holder = scrolled(widget)
+                holder.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            self._holders[key] = holder
+            self.stack.addWidget(holder)
         return widget
+
+    def holder(self, key: str) -> QWidget:
+        """What the stack shows for the tab ``key``: its page, or the scroll area around it."""
+        self.page(key)
+        return self._holders[key]
 
     @property
     def loop_tab(self) -> LoopTab:
@@ -1038,7 +1057,7 @@ class DetailPanel(QWidget):
         if key != self.tab and isinstance(loop, LoopTab):
             loop.stop_listening()  # its play head would run on unseen
         self.tab = key
-        self.stack.setCurrentWidget(self.page(key))
+        self.stack.setCurrentWidget(self.holder(key))
         if self.is_open:
             self._light_tabs()
             self.refresh()
@@ -1056,7 +1075,7 @@ class DetailPanel(QWidget):
             return
         self.is_open = unfolded
         if unfolded:
-            self.stack.setCurrentWidget(self.page(self.tab))
+            self.stack.setCurrentWidget(self.holder(self.tab))
         self.stack.setVisible(unfolded)
         self.message.setVisible(unfolded and bool(self.message.text()))
         self.fold_button.set_unfolded(unfolded)
@@ -1129,18 +1148,38 @@ class DetailPanel(QWidget):
 
     # ---------------------------------------------------------------- geometry
 
+    @staticmethod
+    def _wrapped_help(parts: list[str], room: float, pixels: int) -> list[str]:
+        """``parts`` filled greedily into lines of at most ``room`` px at ``pixels``; a part too long
+        for a line of its own still gets one."""
+        metrics = QFontMetrics(_font(pixels, QFont.Weight.Medium))
+        lines: list[str] = []
+        for part in parts:
+            if lines and metrics.horizontalAdvance(f"{lines[-1]} · {part}") <= room:
+                lines[-1] = f"{lines[-1]} · {part}"
+            else:
+                lines.append(part)
+        return lines
+
     def help_lines(self, room: float) -> tuple[list[str], QFont]:
         """The key help in one line, or in two or three when it does not fit ``room`` px."""
         parts = self.help.split(" · ")
         lines: list[str] = [self.help]
         font = _font(14, QFont.Weight.Medium)
-        for count, pixels in ((1, 14), (2, 13), (3, 12)):
-            size = -(-len(parts) // count)  # parts per line, rounded up
-            lines = [" · ".join(parts[i:i + size]) for i in range(0, len(parts), size)]
+        # One line at 14 px, else two at 13, else three at 12 (each may give one pixel); the last way
+        # shrinks the three lines further rather than cut them.
+        for count, pixels, least in ((1, 14, 13), (2, 13, 12), (3, 12, 11), (3, 11, 10)):
+            lines = self._wrapped_help(parts, room, pixels)
+            if len(lines) > count:
+                continue
             longest = max(lines, key=QFontMetrics(_font(pixels, QFont.Weight.Medium)).horizontalAdvance)
-            font = fitted_font(longest, room, pixels, QFont.Weight.Medium, 10)
-            if QFontMetrics(font).horizontalAdvance(longest) <= room:
+            font = fitted_font(longest, room, pixels, QFont.Weight.Medium, least)
+            metrics = QFontMetrics(font)
+            # Judge every line with the fitted font: its hinting can make another line the widest.
+            if all(metrics.horizontalAdvance(line) <= room for line in lines):
                 return lines, font
+        lines = self._wrapped_help(parts, room, 10)
+        font = fitted_font(max(lines, key=len), room, 11, QFont.Weight.Medium, 10)
         metrics = QFontMetrics(font)
         return [metrics.elidedText(line, Qt.TextElideMode.ElideRight, int(room)) for line in lines], font
 
@@ -1152,12 +1191,23 @@ class DetailPanel(QWidget):
         return lines, font, QFontMetrics(font).height() * len(lines) + 6
 
     def say(self, text: str, level: str = "ok") -> None:
-        """``text`` under the head while the panel is open ("" takes it away); a refused value in red."""
+        """``text`` under the head of the open panel, in place of the facts in the folded line ("" takes
+        it away); a refused value in red."""
         color = {"ok": GOOD, "warning": WARN, "error": "#FF3B30"}.get(level, TEXT_DIM.name())
         self.message.setStyleSheet(f"color: {color}; font-size: 14px; font-weight: bold;")
+        self._message_color = QColor(color)
         self.message.setText(text)
         self.message.setVisible(bool(text) and self.is_open)
         self._place()
+        self.update()
+
+    def shown_info(self) -> tuple[str, QColor]:
+        """The line under "Pad N" as it is drawn: the facts, or (folded) a message of the settings."""
+        if self.is_open:
+            return self.open_info, TEXT_DIM
+        if self.message.text():
+            return self.message.text(), self._message_color
+        return self.info, TEXT_DIM
 
     def _message_height(self) -> int:
         if self.message.isHidden():
@@ -1186,9 +1236,14 @@ class DetailPanel(QWidget):
             tab_width = button.width_for(pixels, padding)
             right -= tab_width
             button.setGeometry(round(right), 13, tab_width, 38)
-            button.setVisible(not folded_help)
             right -= 6
         self._tabs_left = right + 6
+        # Folded beside a side panel the line is narrow: the facts stay readable, a tap on the line unfolds.
+        crowded = not self.is_open and self._tabs_left - 16 - BADGE_END < INFO_LEAST
+        for button in self.tab_buttons.values():
+            button.setVisible(not (folded_help or crowded))
+        if crowded:
+            self._tabs_left = fold.left() - 8
         help_height = self._help_strip()[2]
         self.message.setGeometry(MARGIN, HEADER + help_height, max(1, width - 2 * MARGIN),
                                  self._message_height())
@@ -1232,9 +1287,10 @@ class DetailPanel(QWidget):
             right = end - help_width - 24
         room = max(10.0, right - left)
         draw_line(painter, QRectF(left, 8, room, 26), self.title, _font(18), TEXT)
-        info = self.open_info if self.is_open else self.info
-        draw_line(painter, QRectF(left, 34, room, 22), info,
-                   fitted_font(info, room, 14, QFont.Weight.Normal, 12), TEXT_DIM)
+        info, color = self.shown_info()
+        said = not self.is_open and bool(self.message.text())  # a message of the settings, in bold
+        weight = QFont.Weight.Bold if said else QFont.Weight.Normal
+        draw_line(painter, QRectF(left, 34, room, 22), info, fitted_font(info, room, 14, weight, 12), color)
         lines, help_font, _height = self._help_strip()
         if lines:
             painter.setFont(help_font)

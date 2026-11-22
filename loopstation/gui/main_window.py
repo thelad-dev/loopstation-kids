@@ -22,6 +22,7 @@ from typing import Any
 
 from PySide6.QtCore import QEvent, QObject, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import (
+    QCloseEvent,
     QColor,
     QKeyEvent,
     QKeySequence,
@@ -545,6 +546,15 @@ class MainWindow(QMainWindow):
         view.deleteLater()
         self.refresh()
 
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
+        """The window closes (the app ends, or a set is opened): leave the parents' view first.
+
+        That saves what still waits in a panel and takes the input watch off the application. Left on, it
+        would outlive the window: the application would hand every later event to a window that is gone.
+        """
+        self.leave_parent_mode()
+        super().closeEvent(event)
+
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt API
         # Installed on the application only while the parents' view is shown: any input keeps it open.
         if self.parent_view is not None and event.type() in INPUT_EVENTS:
@@ -655,13 +665,20 @@ class MainWindow(QMainWindow):
         return panels
 
     def _panels_said(self, text: str, level: str) -> None:
+        """What the settings say (saved, refused) goes to the head of the open side panel, else to the
+        detail panel (folded: in its line). A save that comes from a pause after another panel opened is
+        shown there, not lost; "" takes the message away wherever it is."""
         view = self.parent_view
         if view is None:
             return
-        if view.panel_key in SETTINGS_PANELS:
+        if not text:
+            view.side_panel.say("")
+            view.detail.say("")
+        elif view.panel_key is not None:
             view.side_panel.say(text, level)
-        elif view.detail.is_open or not text:
-            view.detail.say(text, level)  # a setting of the tabs "Pad" and "Aufnahme"
+            view.detail.say("")
+        else:
+            view.detail.say(text, level)
 
     def _detail_folded(self) -> None:
         """The detail panel folded or unfolded (a side panel may have closed for it): the keys go to the
