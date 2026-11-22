@@ -142,6 +142,14 @@ PANEL_QSS = (
     f"#take_now {{ background: {ACTIVE_FILL}; border: 1.5px solid {PARENT_ACCENT}; border-radius: 12px; }} "
     "#loud { background: rgba(255, 159, 10, 23); border: 1.5px solid rgba(255, 159, 10, 102); "
     "border-radius: 14px; } "
+    "QPushButton#padbutton { color: #F2F2F2; background: #26262B; border: 1.5px solid #3A3A41; "
+    "border-radius: 12px; font-size: 15px; font-weight: 700; min-height: 40px; padding: 0 18px; } "
+    "QPushButton#padbutton:hover { background: #303036; } "
+    "QPushButton#padbutton:pressed { background: #3A3A41; } "
+    "QPushButton#padbutton:disabled { color: #5A5A60; border-color: #2C2C31; } "
+    f"QSlider::sub-page:horizontal {{ background: {PARENT_ACCENT}; border-radius: 4px; }} "
+    "QSlider::handle:horizontal:hover { background: #5A5A62; } "
+    "QSlider:focus { outline: none; } "
     "QLineEdit:disabled { color: #5A5A60; border: 1.5px solid #2C2C31; } "
     "QSlider::groove:horizontal { height: 8px; background: #2C2C31; border-radius: 4px; } "
     "QSlider::handle:horizontal { width: 22px; margin: -8px 0; border-radius: 11px; background: #48484E; } "
@@ -776,9 +784,15 @@ class PadTab(QWidget):
         self.volume_slider.sliderReleased.connect(weak_slot(self._volume_committed))
         self.volume_slider.mouseDoubleClickEvent = self._volume_double_click  # type: ignore[method-assign]
         self.volume_label = _dim("100 % · 0,0 dB", 13)
+        # Own line under the slider and never squeezed: the dB and "Verstärkung" text must stay readable.
+        self.volume_label.setWordWrap(False)
+        self.volume_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.volume_label.setMinimumWidth(self.volume_label.fontMetrics().horizontalAdvance(
+            "100 % · −00,0 dB · Verstärkung") + 4)
         self.volume_clip = _dim("", 12.5, WARN)
         self.volume_clip.hide()
         self.normalize_button = QPushButton("Anheben")
+        self.normalize_button.setObjectName("padbutton")
         self.normalize_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.normalize_button.setMinimumWidth(0)
         self.normalize_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -788,11 +802,11 @@ class PadTab(QWidget):
         self.normalize_button.clicked.connect(weak_slot(self._normalize_gain))
         vol_row = QWidget()
         vol_row.setMinimumWidth(0)
-        vol_layout = QHBoxLayout(vol_row)
+        vol_layout = QVBoxLayout(vol_row)
         vol_layout.setContentsMargins(0, 0, 0, 0)
-        vol_layout.setSpacing(10)
+        vol_layout.setSpacing(4)
         self.volume_slider.setMinimumWidth(0)
-        vol_layout.addWidget(self.volume_slider, 1)
+        vol_layout.addWidget(self.volume_slider)
         vol_layout.addWidget(self.volume_label)
         self.start_label = _dim("0 · Schlag 1", 13)
         self.start_hint = _dim("in der Welle (Reiter Loop) als grüne Marke ziehbar", 12.5)
@@ -814,6 +828,7 @@ class PadTab(QWidget):
             (self.parent_redo_button, "Einstellung wiederholen",
              "Zurückgenommene Änderung dieses Pads wiederholen (Strg+Umschalt+Z)", self._parent_redo),
         ):
+            button.setObjectName("padbutton")
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.setMinimumWidth(0)
             button.setCursor(Qt.CursorShape.PointingHandCursor)

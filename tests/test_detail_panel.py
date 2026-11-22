@@ -23,7 +23,7 @@ from loopstation.audio.base import PREVIEW_VOICE
 from loopstation.audio.dynamics import db_to_gain
 from loopstation.config import load_settings
 from loopstation.controller import Controller, Mode
-from loopstation.gui.detail_panel import BADGE_END, INFO_LEAST
+from loopstation.gui.detail_panel import BADGE_END, INFO_LEAST, PAD_VOLUME_MAX
 from loopstation.gui.parent_view import ParentView, WaveCache
 from loopstation.store import EventStore
 
@@ -269,6 +269,25 @@ def test_the_verdict_of_the_take_level_goes_with_the_number_shown(world):
     view.detail.open_tab("pad")
     tick(world)
     assert view.detail.pad_tab.verdict.text() == "Spitze \u221212 dBFS · im Ziel"
+
+
+def test_the_pad_volume_text_is_visible_and_whole_at_boost(world):
+    world.record(0, 2.0)
+    view = open_parents(world.window)
+    view.detail.open_tab("pad")
+    pad = view.detail.pad_tab
+    tick(world)
+    for position, expected in ((30, "30 %"), (PAD_VOLUME_MAX, "+18,0 dB · Verstärkung")):
+        pad.volume_slider.setValue(position)
+        tick(world)
+        label = pad.volume_label
+        assert label.text().startswith(expected)
+        assert label.width() > 0 and label.isVisibleTo(pad)
+        assert label.width() >= label.fontMetrics().horizontalAdvance(label.text())
+    assert pad.volume_slider.width() > 0
+    for button in (pad.parent_undo_button, pad.parent_redo_button, pad.normalize_button):
+        assert button.objectName() == "padbutton"
+        assert button.width() > 0 and button.isVisibleTo(pad)
 
 
 def test_pad_name_volume_start_and_bars_work_in_the_detail_panel(world):
