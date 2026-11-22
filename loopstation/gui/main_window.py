@@ -231,8 +231,6 @@ class MainWindow(QMainWindow):
         self.clock: Callable[[], float] = time.monotonic
         self._unlocked_until = 0.0  # ``clock`` time until which the lock opens without a sum
         self._last_input = 0.0  # ``clock`` time of the last screen or keyboard input in the parents' view
-        # Last parent-side input (also ends the unlock window on the child page).
-        self._last_parent_input = 0.0
         self._hold_minutes = controller.settings.parent_hold_minutes
         self._hold_until_exit = controller.settings.parent_hold_until_exit
         self._idle_minutes = controller.settings.parent_idle_minutes
@@ -526,9 +524,7 @@ class MainWindow(QMainWindow):
         self._unlocked_until = 0.0
 
     def _note_parent_input(self) -> None:
-        now = self.clock()
-        self._last_input = now
-        self._last_parent_input = now
+        self._last_input = self.clock()
 
     def lock_parent_area(self) -> None:
         """Close the unlock window at once and leave the parents' view (button or shortcut)."""
@@ -787,23 +783,18 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def _check_idle(self) -> None:
-        """Idle handling for the parents' view and for an open unlock window on the child page.
+        """Idle handling for the parents' view.
 
         No screen or keyboard input in the parents' view for ``parent_idle_minutes``: back to the
-        child page (an open side panel goes with it). The unlock window stays until it expires, the
-        parents lock it, or the child page sits without parent input for the same idle time.
+        child page (an open side panel goes with it). The unlock window is not touched: it ends
+        only when ``parent_hold_minutes`` run out (sliding from the last parent input), the parents
+        lock it, or the program ends.
         """
         if self._idle_minutes <= 0:
             return
         idle_after = 60 * self._idle_minutes
-        if self.parent_view is not None:
-            if self.clock() - self._last_input >= idle_after:
-                self.leave_parent_mode()
-            return
-        if self._hold_until_exit:
-            return
-        if self._is_unlocked() and self.clock() - self._last_parent_input >= idle_after:
-            self._clear_unlock()
+        if self.parent_view is not None and self.clock() - self._last_input >= idle_after:
+            self.leave_parent_mode()
 
     def _release_launchpad_holds(self) -> None:
         """No note off will come for keys that were down when the Launchpad went away."""

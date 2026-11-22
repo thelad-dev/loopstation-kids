@@ -579,23 +579,19 @@ def test_zero_idle_minutes_means_never(world):
     assert window.parent_mode
 
 
-def test_kids_idle_ends_the_unlock_window_parent_idle_does_not(lock_world):
+def test_the_idle_return_does_not_shut_the_lock(lock_world):
     window, clock = lock_world.window, lock_world.clock
-    window.apply_settings(replace(lock_world.controller.settings, parent_hold_minutes=120))
+    window.apply_settings(replace(lock_world.controller.settings, parent_hold_minutes=15))
     open_parents(window)
-    view = window.parent_view
-    view.mode_switch.kids_button.click()  # leave on purpose: the unlock window stays
-    hold_the_lock(window)
-    assert window.parent_mode and window.gate_overlay is None
-    window.leave_parent_mode()
-    clock.advance(9 * 60)
-    window._tick()
-    assert window._is_unlocked()  # still open on the child page
-    hold_the_lock(window)
-    assert window.parent_mode and window.gate_overlay is None
-    window.leave_parent_mode()
     clock.advance(10 * 60)
-    window._tick()  # kids idle without parent input: lock shut
+    window._tick()  # idle in the parents' view: back to the child page
+    assert not window.parent_mode
+    assert window._is_unlocked()
+    hold_the_lock(window)
+    assert window.parent_mode and window.gate_overlay is None  # inside the 15 minutes: no sum
+    window.leave_parent_mode()
+    clock.advance(16 * 60)
+    window._tick()
     assert not window._is_unlocked()
     hold_the_lock(window)
     assert window.gate_overlay is not None and not window.parent_mode

@@ -179,7 +179,8 @@ FIELDS: list[Field] = [
     Field("parent_hold_until_exit", "Schloss bis Programmende offen lassen", "bool",
           hint="Ein: keine Frist, die Rechenaufgabe kommt erst nach einem Neustart wieder."),
     Field("parent_idle_minutes", "Zurück zur Kinderseite nach", "int", 0, 240, suffix=" min",
-          hint="Ohne Eingabe kehrt die Elternansicht nach dieser Zeit zur Kinderseite zurück. 0 = nie."),
+          hint="Ohne Eingabe kehrt die Elternansicht nach dieser Zeit zur Kinderseite zurück, das Schloss "
+               "bleibt dabei offen (das regelt allein \"Schloss offen lassen\"). 0 = nie."),
     Field("rows", "Zeilen", "int", 1, 16),
     Field("cols", "Spalten", "int", 1, 16),
     Field("sample_rate", "Abtastrate", "int", 8000, 192000, suffix=" Hz"),

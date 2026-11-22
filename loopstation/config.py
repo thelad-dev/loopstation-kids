@@ -107,8 +107,8 @@ class Settings:
     # true = the lock stays open until the program ends, whatever the minutes say.
     parent_hold_until_exit: bool = False
     # Minutes without any input after which the parents' view goes back to the
-    # child page by itself (0 = never). While the lock is open, the same idle
-    # on the child page ends the unlock window.
+    # child page by itself (0 = never). It does not shut the lock: that is
+    # parent_hold_minutes.
     parent_idle_minutes: int = 10
 
     @property
@@ -365,7 +365,8 @@ SETTING_COMMENTS: dict[str, str] = {
     "parent_hold_until_exit": "true = das Schloss bleibt nach der Rechenaufgabe bis zum Programmende offen, "
                               "false (Standard) = es gilt parent_hold_minutes. Wirkt sofort.",
     "parent_idle_minutes": "Minuten ohne Eingabe, nach denen die Elternansicht von selbst zur Kinderseite "
-                           "zurückkehrt (0 bis 240). 0 = nie. Wirkt sofort.",
+                           "zurückkehrt (0 bis 240). 0 = nie. Das Schloss bleibt offen, das regelt nur "
+                           "parent_hold_minutes. Wirkt sofort.",
     "data_dir": "Ordner für die Daten (relativ zum Startordner). Wirkt erst nach einem Neustart.",
 }
 
