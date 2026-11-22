@@ -800,6 +800,8 @@ class MainWindow(QMainWindow):
             if self.clock() - self._last_input >= idle_after:
                 self.leave_parent_mode()
             return
+        if self._hold_until_exit:
+            return
         if self._is_unlocked() and self.clock() - self._last_parent_input >= idle_after:
             self._clear_unlock()
 

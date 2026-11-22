@@ -581,8 +581,7 @@ def test_zero_idle_minutes_means_never(world):
 
 def test_kids_idle_ends_the_unlock_window_parent_idle_does_not(lock_world):
     window, clock = lock_world.window, lock_world.clock
-    # Until program end, so only kids idle (not the minute timer) can shut the lock.
-    window.apply_settings(replace(lock_world.controller.settings, parent_hold_until_exit=True))
+    window.apply_settings(replace(lock_world.controller.settings, parent_hold_minutes=120))
     open_parents(window)
     view = window.parent_view
     view.mode_switch.kids_button.click()  # leave on purpose: the unlock window stays
@@ -600,6 +599,18 @@ def test_kids_idle_ends_the_unlock_window_parent_idle_does_not(lock_world):
     assert not window._is_unlocked()
     hold_the_lock(window)
     assert window.gate_overlay is not None and not window.parent_mode
+
+
+def test_the_exit_switch_survives_the_kids_idle(lock_world):
+    window, clock = lock_world.window, lock_world.clock
+    window.apply_settings(replace(lock_world.controller.settings, parent_hold_until_exit=True))
+    open_parents(window)
+    window.leave_parent_mode()
+    clock.advance(60 * 60)
+    window._tick()
+    assert window._is_unlocked()
+    hold_the_lock(window)
+    assert window.parent_mode and window.gate_overlay is None
 
 
 def test_launchpad_taps_do_not_keep_the_parents_view_open(world):
