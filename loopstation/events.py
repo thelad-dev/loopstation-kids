@@ -69,14 +69,19 @@ LOOP_TRIM = "loop_trim"
 # boundaries; start and end map onto themselves). The next stretch of that sample maps the
 # markers back over ``map`` and stretches ``root`` once. Without ``root``/``map`` (older
 # logs) the sample itself is stretched; the state ignores both fields.
-# Pad labels and playback shape (parents' detail panel). ``pad_name`` is an annotation
-# like ``marker_set`` (not on the child's undo stack). ``pad_gain``, ``pad_start`` and
-# ``pad_bars`` change what is heard and can be undone. Logs without them read as before
-# (gain 1, start 0, bars = auto fit from the recording).
+# Pad label and playback shape (parents' detail panel): ``pad_name``, ``pad_gain``,
+# ``pad_start`` and ``pad_bars``, written with ``source: "eltern"``. They are on the
+# parents' own undo track, never on the child's: ``parent_undo`` / ``parent_redo`` with
+# ``pad`` and ``data {target, source: "eltern"}`` take back / bring back the latest
+# such change of that pad and leave recordings alone. Logs without them read as before
+# (no name, gain 1, start 0, bars = auto fit from the recording).
 PAD_NAME = "pad_name"
 PAD_GAIN = "pad_gain"
 PAD_START = "pad_start"
 PAD_BARS = "pad_bars"
+PARENT_UNDO = "parent_undo"
+PARENT_REDO = "parent_redo"
+PARENT_SOURCE = "eltern"
 
 EVENT_TYPES = frozenset(
     {
@@ -100,6 +105,8 @@ EVENT_TYPES = frozenset(
         PAD_GAIN,
         PAD_START,
         PAD_BARS,
+        PARENT_UNDO,
+        PARENT_REDO,
     }
 )
 
@@ -107,7 +114,6 @@ EVENT_TYPES = frozenset(
 # flow events (play, loops, record_start) are skipped by undo on purpose.
 CONTENT_TYPES = frozenset({
     RECORD_STOP, DELETE_PAD, DELETE_ALL, RESTORE_PAD, PAD_FREE, LOOP_TRIM,
-    PAD_GAIN, PAD_START, PAD_BARS,
 })
 
 

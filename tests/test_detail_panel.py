@@ -300,7 +300,7 @@ def test_pad_name_volume_start_and_bars_work_in_the_detail_panel(world):
     view.detail.open_tab("loop")
     loop = view.detail.loop_tab
     assert loop.waveform.start_editable
-    loop.waveform.start_changed.emit(1000)
+    loop.waveform.start_committed.emit(1000)
     tick(world)
     assert controller.pad_start_frames(0) == 1000
     effects = detail.tab_buttons["effects"]
@@ -610,3 +610,88 @@ def test_the_pad_tab_looks_like_the_mockup(world):
     assert _difference(folded, mockup) > 3 * PAD_THRESHOLD
     for name, (box, size, threshold) in PAD_PARTS.items():
         assert _part_difference(folded, mockup, box, size) >= threshold, name
+
+
+def _pad_events(controller, type_):
+    text = controller.store.log_path.read_text(encoding="utf-8")
+    from loopstation import events as ev
+    return [e for e in (ev.Event.from_json(line) for line in text.splitlines() if line.strip())
+            if e.type == type_]
+
+
+def test_dragging_the_start_mark_writes_one_event_on_release(world):
+    from loopstation import events as ev
+    world.record(0, 2.0)
+    window, controller = world.window, world.controller
+    view = open_parents(window)
+    view.detail.open_tab("loop")
+    wave = view.detail.loop_tab.waveform
+    tick(world)  # let the layout give the wave its width
+    frames = len(wave._data)
+    none = Qt.KeyboardModifier.NoModifier
+    wave.set_start_frame(frames // 2)  # off the trim handles at frame 0
+    start_x = wave._x_of(frames // 2)
+    QTest.mousePress(wave, Qt.MouseButton.LeftButton, none, QPoint(int(start_x), 100))
+    before = len(controller.store.active_events())
+    for x in range(int(start_x) + 10, int(start_x) + 100, 10):
+        QTest.mouseMove(wave, QPoint(x, 100))
+        tick(world)
+        assert controller.pad_start_frames(0) == 0  # nothing is committed while the hand is down
+    assert len(controller.store.active_events()) == before
+    moved = wave._start_frame
+    assert frames // 2 < moved < frames
+    QTest.mouseRelease(wave, Qt.MouseButton.LeftButton, none, QPoint(int(start_x) + 90, 100))
+    assert controller.pad_start_frames(0) == moved
+    assert len(_pad_events(controller, ev.PAD_START)) == 1
+    assert controller.parent_undo(0)
+    assert controller.pad_start_frames(0) == 0
+
+
+def test_ctrl_z_on_the_pad_tab_undoes_the_pad_setting_not_the_recording(world):
+    world.record(0, 2.0)
+    window, controller = world.window, world.controller
+    view = open_parents(window)
+    view.detail.open_tab("pad")
+    pad = view.detail.pad_tab
+    pad.volume_slider.setValue(40)
+    pad.volume_slider.setValue(30)
+    tick(world)
+    assert controller.pad_gain(0) == pytest.approx(0.3)
+    assert pad.parent_undo_button.isEnabled() and not pad.parent_redo_button.isEnabled()
+    window.undo_shortcut.activated.emit()
+    tick(world)
+    assert controller.pad_gain(0) == pytest.approx(0.4)
+    assert controller.pad(0).sample is not None
+    assert pad.parent_redo_button.isEnabled()
+    window.redo_shortcuts[1].activated.emit()
+    tick(world)
+    assert controller.pad_gain(0) == pytest.approx(0.3)
+    pad.parent_undo_button.click()
+    pad.parent_undo_button.click()
+    assert controller.pad_gain(0) == pytest.approx(1.0)
+    assert controller.pad(0).sample is not None
+    view.detail.open_tab("loop")  # elsewhere Strg+Z is the children's "Zurück" again
+    window.undo_shortcut.activated.emit()
+    tick(world)
+    assert controller.pad(0).sample is None
+
+
+def test_the_limiter_warning_comes_from_the_refresh_and_fades(world, monkeypatch):
+    world.record(0, 2.0)
+    window = world.window
+    view = open_parents(window)
+    view.detail.open_tab("pad")
+    pad = view.detail.pad_tab
+    now = [100.0]
+    monkeypatch.setattr("loopstation.gui.detail_panel.time.monotonic", lambda: now[0])
+    tick(world)
+    assert not pad.volume_clip.isVisibleTo(pad)
+    world.audio.clipping_pads.add(0)  # the audio limits later, without any setting changing
+    tick(world)
+    assert pad.volume_clip.isVisibleTo(pad) and "Begrenzt" in pad.volume_clip.text()
+    now[0] += 1.0
+    tick(world)
+    assert pad.volume_clip.isVisibleTo(pad)
+    now[0] += 5.0
+    tick(world)
+    assert not pad.volume_clip.isVisibleTo(pad)

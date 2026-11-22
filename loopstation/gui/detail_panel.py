@@ -87,6 +87,7 @@ NEW_CORE = "kommt mit dem neuen Kern"
 PAD_BAR_CHOICES = (1, 2, 4, 8, 16)  # whole bars; 0 in the button group means "auto"
 # Slider: 0..100 = 0..100 % (up to 0 dB), 100..100+PAD_GAIN_MAX_DB = boost in dB.
 PAD_VOLUME_UNITY = 100
+CLIP_SHOW_SECONDS = 2.0  # how long "Begrenzt" stays after the last limiting
 PAD_VOLUME_MAX = PAD_VOLUME_UNITY + int(PAD_GAIN_MAX_DB)
 LABEL = QColor("#C7C7CC")
 OFF = QColor("#55555C")
@@ -346,7 +347,7 @@ class LoopTab(QWidget):
         self.waveform.bar_labels = True
         self.waveform.start_editable = True
         self.waveform.selection_changed.connect(weak_slot(self._selection_changed))
-        self.waveform.start_changed.connect(weak_slot(self._start_dragged, pass_signal_args=True))
+        self.waveform.start_committed.connect(weak_slot(self._start_committed, pass_signal_args=True))
         tab = weakref.ref(self)
         self.trim = TrimBalance(self.controller, self.waveform, lambda: _pad_of(tab),
                                 on_done=weak_slot(self.reload))
@@ -472,8 +473,8 @@ class LoopTab(QWidget):
             self.trim.refresh()
             self._update_buttons()
 
-    def _start_dragged(self, frame: int) -> None:
-        """The green start mark was moved: keep the pad's start in step (undoable)."""
+    def _start_committed(self, frame: int) -> None:
+        """The green start mark was let go: one change of the pad's start (parents' undo step)."""
         self.controller.set_pad_start(self.pad, frame)
 
     def _hint(self) -> str:
@@ -738,6 +739,7 @@ class PadTab(QWidget):
         self._takes_key: object = None
         self._level_key: object = None
         self._shape_key: object = None
+        self._clip_until = 0.0
         self._take_cache: dict[str, tuple[np.ndarray, int, float]] = {}  # sample -> (peaks, frames, peak)
         self.take_rows: dict[str, TakeRow] = {}
 
@@ -803,8 +805,30 @@ class PadTab(QWidget):
             self.bars_combo.addItem("1 Takt" if count == 1 else f"{count} Takte", count)
         self.bars_combo.currentIndexChanged.connect(weak_slot(self._bars_chosen))
         self.bars_hint = _dim("ganze Takte · Auto = aus der Aufnahme", 12.5)
+        self.parent_undo_button = QPushButton("Zurück")
+        self.parent_redo_button = QPushButton("Wieder")
+        for button, name, tip, slot in (
+            (self.parent_undo_button, "Einstellung zurück",
+             "Letzte Änderung von Name, Lautstärke, Start oder Länge dieses Pads zurück (Strg+Z)",
+             self._parent_undo),
+            (self.parent_redo_button, "Einstellung wiederholen",
+             "Zurückgenommene Änderung dieses Pads wiederholen (Strg+Umschalt+Z)", self._parent_redo),
+        ):
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            button.setMinimumWidth(0)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setToolTip(tip)
+            button.setAccessibleName(name)
+            button.clicked.connect(weak_slot(slot))
+        history_row = QWidget()
+        history_layout = QHBoxLayout(history_row)
+        history_layout.setContentsMargins(0, 0, 0, 0)
+        history_layout.setSpacing(8)
+        history_layout.addWidget(self.parent_undo_button)
+        history_layout.addWidget(self.parent_redo_button)
+        history_layout.addStretch(1)
         left = _column(
-            _heading("Name"), self.name_edit, free_row, on_grid_row,
+            history_row, _heading("Name"), self.name_edit, free_row, on_grid_row,
             _heading("Pad-Lautstärke"), vol_row, self.volume_clip, self.normalize_button,
             _heading("Startposition"), self.start_label, self.start_hint,
             _heading("Padlänge in Takten"), self.bars_combo, self.bars_hint,
@@ -857,6 +881,15 @@ class PadTab(QWidget):
 
     def show_pad(self, pad: int) -> None:
         self.pad = pad
+        self._clip_until = 0.0
+        self.refresh()
+
+    def _parent_undo(self) -> None:
+        self.controller.parent_undo(self.pad)
+        self.refresh()
+
+    def _parent_redo(self) -> None:
+        self.controller.parent_redo(self.pad)
         self.refresh()
 
     def set_free(self, free: bool) -> None:
@@ -908,8 +941,24 @@ class PadTab(QWidget):
                 "wartet auf den nächsten Takt · gilt für alle freien Pads" if state.free
                 else "wirkt nur bei einem freien Pad · gilt für alle freien Pads")
         self._update_shape()
+        self._update_history_buttons()
+        self._update_clipping()
         self._update_takes()
         self._update_level()
+
+    def _update_history_buttons(self) -> None:
+        self.parent_undo_button.setEnabled(self.controller.can_parent_undo(self.pad))
+        self.parent_redo_button.setEnabled(self.controller.can_parent_redo(self.pad))
+
+    def _update_clipping(self) -> None:
+        """Show the soft-limiter warning for a while after the audio last had to limit this pad."""
+        now = time.monotonic()
+        if self.controller.audio.poll_pad_clipping(self.pad):
+            self._clip_until = now + CLIP_SHOW_SECONDS
+        clipped = now < self._clip_until
+        self.volume_clip.setVisible(clipped)
+        if clipped:
+            self.volume_clip.setText("Begrenzt · Verstärkung übersteuert den Soft-Limiter")
 
     def _update_shape(self) -> None:
         controller = self.controller
@@ -931,10 +980,6 @@ class PadTab(QWidget):
         self.volume_label.setText(pad_gain_label(state.gain))
         self.volume_slider.setEnabled(not recording)
         self.normalize_button.setEnabled(not recording and state.sample is not None)
-        clipped = self.controller.audio.poll_pad_clipping(self.pad)
-        self.volume_clip.setVisible(clipped)
-        if clipped:
-            self.volume_clip.setText("Begrenzt · Verstärkung übersteuert den Soft-Limiter")
         info = controller.grid_info()
         beats = 4 if info is None else info.beats
         bar = grid or 0

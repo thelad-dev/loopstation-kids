@@ -51,10 +51,10 @@ def test_pad_gain_is_live_undoable_and_replays(world):
     controller.set_pad_gain(0, 0.4)
     assert controller.pad_gain(0) == pytest.approx(0.4)
     assert audio.pad_gains[0] == pytest.approx(0.4)
-    controller.undo()
+    assert controller.parent_undo(0)
     assert controller.pad_gain(0) == pytest.approx(1.0)
     assert audio.pad_gains[0] == pytest.approx(1.0)
-    controller.redo()
+    assert controller.parent_redo(0)
     assert controller.pad_gain(0) == pytest.approx(0.4)
     # Replay of the log restores the same gain.
     text = controller.store.log_path.read_text(encoding="utf-8")
@@ -63,16 +63,18 @@ def test_pad_gain_is_live_undoable_and_replays(world):
     assert state.pads[0].gain == pytest.approx(0.4)
 
 
-def test_pad_name_is_annotation_not_on_undo(world):
+def test_pad_name_is_on_the_parents_track_not_the_childs(world):
     controller, audio, clock = world
     record_bar(controller, clock)
     stack = list(controller.store.state.undo_stack)
     controller.set_pad_name(0, "Trommel")
     assert controller.pad_name(0) == "Trommel"
-    assert controller.store.state.undo_stack == stack  # name is not a Zurück step
+    assert controller.store.state.undo_stack == stack
     controller.undo()  # undoes the recording, not the name
     assert controller.pad(0).sample is None
     assert controller.pad_name(0) == "Trommel"
+    assert controller.parent_undo(0)
+    assert controller.pad_name(0) == ""
 
 
 def test_pad_start_and_bars_change_what_is_heard(world):
@@ -89,8 +91,8 @@ def test_pad_start_and_bars_change_what_is_heard(world):
     controller.set_pad_start(0, GRID // 4)
     heard = controller.loop_audio(sample, 0)
     assert heard is not None and heard[0] == long[GRID // 4]
-    controller.undo()  # start
-    controller.undo()  # bars
+    assert controller.parent_undo(0)  # start
+    assert controller.parent_undo(0)  # bars
     assert controller.pad_bars(0) is None
     assert controller.pad_start_frames(0) == 0
     assert len(controller.loop_view_audio(sample, 0)) == len(base)
@@ -145,3 +147,106 @@ def test_pad_boost_persists_above_unity(world):
     lines = [line for line in text.splitlines() if line.strip()]
     state = replay([ev.Event.from_json(line) for line in lines], controller.pad_count)
     assert state.pads[0].gain == pytest.approx(boost)
+
+
+def _replayed(controller):
+    text = controller.store.log_path.read_text(encoding="utf-8")
+    lines = [line for line in text.splitlines() if line.strip()]
+    return replay([ev.Event.from_json(line) for line in lines], controller.pad_count)
+
+
+def test_child_undo_takes_the_recording_back_after_many_parent_changes(world):
+    controller, _audio, clock = world
+    record_bar(controller, clock)
+    for gain in (0.9, 0.8, 0.7, 0.6, 0.5):
+        controller.set_pad_gain(0, gain)
+    controller.set_pad_start(0, 100)
+    controller.set_pad_bars(0, 2)
+    assert controller.undo_depth() == 1  # only the recording
+    controller.undo()
+    assert controller.pad(0).sample is None
+    assert controller.pad_gain(0) == pytest.approx(0.5)  # the parents' settings stay
+    assert controller.pad_bars(0) == 2
+
+
+def test_parent_undo_leaves_recordings_alone(world):
+    controller, _audio, clock = world
+    record_bar(controller, clock)
+    sample = controller.pad(0).sample
+    undo_stack = list(controller.store.state.undo_stack)
+    controller.set_pad_gain(0, 0.3)
+    controller.set_pad_gain(0, 0.6)
+    assert controller.parent_undo(0)
+    assert controller.pad_gain(0) == pytest.approx(0.3)
+    assert controller.parent_undo(0)
+    assert controller.pad_gain(0) == pytest.approx(1.0)
+    assert not controller.parent_undo(0) and not controller.can_parent_undo(0)
+    assert controller.pad(0).sample == sample
+    assert controller.store.state.undo_stack == undo_stack
+    assert controller.parent_redo(0)
+    assert controller.pad_gain(0) == pytest.approx(0.3)
+
+
+def test_parent_track_is_per_pad_and_a_new_change_ends_its_redo(world):
+    controller, _audio, clock = world
+    record_bar(controller, clock, pad=0)
+    record_bar(controller, clock, pad=1)
+    controller.set_pad_gain(0, 0.4)
+    controller.set_pad_gain(1, 0.7)
+    assert controller.parent_undo(0)
+    assert controller.pad_gain(0) == pytest.approx(1.0) and controller.pad_gain(1) == pytest.approx(0.7)
+    assert controller.can_parent_redo(0) and not controller.can_parent_redo(1)
+    controller.set_pad_gain(0, 0.2)
+    assert not controller.can_parent_redo(0)
+
+
+def test_child_changes_do_not_end_the_parents_redo(world):
+    controller, _audio, clock = world
+    record_bar(controller, clock, pad=0)
+    controller.set_pad_gain(0, 0.4)
+    controller.parent_undo(0)
+    record_bar(controller, clock, pad=1)
+    assert controller.can_parent_redo(0)
+    assert controller.parent_redo(0)
+    assert controller.pad_gain(0) == pytest.approx(0.4)
+
+
+def test_parent_events_are_marked_and_replay_matches(world):
+    controller, _audio, clock = world
+    record_bar(controller, clock)
+    controller.set_pad_name(0, "Bass")
+    controller.set_pad_gain(0, 0.5)
+    controller.set_pad_start(0, 200)
+    controller.set_pad_bars(0, 2)
+    controller.undo()  # child undo in between
+    controller.redo()
+    controller.parent_undo(0)  # bars
+    controller.parent_undo(0)  # start
+    controller.parent_redo(0)  # start again
+    events = [ev.Event.from_json(line) for line in
+              controller.store.log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    parent_types = {ev.PAD_NAME, ev.PAD_GAIN, ev.PAD_START, ev.PAD_BARS, ev.PARENT_UNDO, ev.PARENT_REDO}
+    marked = [e for e in events if e.type in parent_types]
+    assert marked and all(e.data.get("source") == ev.PARENT_SOURCE for e in marked)
+    assert [e.seq for e in events] == sorted(e.seq for e in events)
+    replayed = _replayed(controller)
+    live = controller.store.state
+    for pad_id, pad in live.pads.items():
+        again = replayed.pads[pad_id]
+        assert (again.name, again.gain, again.start_frames, again.bars, again.sample) == (
+            pad.name, pad.gain, pad.start_frames, pad.bars, pad.sample)
+    assert replayed.undo_stack == live.undo_stack
+    assert replayed.parent_undo_stack == live.parent_undo_stack
+    assert replayed.parent_redo_stack == live.parent_redo_stack
+    assert AppState.from_dict(live.to_dict()).parent_undo_stack == live.parent_undo_stack
+
+
+def test_parent_undo_of_start_restores_exactly_the_state_before(world):
+    controller, audio, clock = world
+    record_bar(controller, clock)
+    controller.set_pad_start(0, 500)
+    assert controller.pad_start_frames(0) == 500
+    assert controller.parent_undo(0)
+    assert controller.pad_start_frames(0) == 0
+    assert controller.parent_redo(0)
+    assert controller.pad_start_frames(0) == 500

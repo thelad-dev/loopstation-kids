@@ -53,7 +53,14 @@ from loopstation.audio.sync import (
 )
 from loopstation.clips import ClipEvent, ClipLog
 from loopstation.config import SIGNATURES, Settings, restart_keys_changed
-from loopstation.state import MAX_MARKERS, PadState, find_entry, master_source
+from loopstation.state import (
+    MAX_MARKERS,
+    RESHAPING_FIELDS,
+    PadState,
+    find_entry,
+    find_parent_entry,
+    master_source,
+)
 from loopstation.store import EventStore
 from loopstation.trim import ORDER, SAME, SHORT, TrimPlan, plan_trim, trim_audio
 
@@ -832,13 +839,13 @@ class Controller:
         return self.pad(pad).name
 
     def set_pad_name(self, pad: int, name: str) -> None:
-        """Set the parents' label of ``pad`` (not on the undo stack; not while recording)."""
+        """Set the parents' label of ``pad`` (parents' undo track; not while recording)."""
         if not 0 <= pad < self.pad_count or self._recording is not None:
             return
         text = name.strip() if isinstance(name, str) else ""
         if text == self.pad(pad).name:
             return
-        self.store.append(ev.PAD_NAME, pad, {"name": text})
+        self.store.append(ev.PAD_NAME, pad, {"name": text, "source": ev.PARENT_SOURCE})
         self._changed()
 
     def pad_gain(self, pad: int) -> float:
@@ -846,14 +853,14 @@ class Controller:
         return self.pad(pad).gain
 
     def set_pad_gain(self, pad: int, gain: float) -> float:
-        """Set the pad volume/boost (0 .. +18 dB); returns the value that applies. Undoable."""
+        """Set the pad volume/boost (0 .. +18 dB); returns the value that applies. Parents' undo."""
         if not 0 <= pad < self.pad_count:
             return 1.0
         gain = min(PAD_GAIN_MAX, max(0.0, float(gain)))
         if gain == self.pad(pad).gain:
             self.audio.set_pad_gain(pad, gain)
             return gain
-        self.store.append(ev.PAD_GAIN, pad, {"gain": gain})
+        self.store.append(ev.PAD_GAIN, pad, {"gain": gain, "source": ev.PARENT_SOURCE})
         self.audio.set_pad_gain(pad, gain)
         self._changed()
         return gain
@@ -878,7 +885,7 @@ class Controller:
         return self.pad(pad).start_frames
 
     def set_pad_start(self, pad: int, start_frames: int) -> None:
-        """Set the loop start offset. Undoable; a running loop restarts on the grid."""
+        """Set the loop start offset (parents' undo); a running loop restarts on the grid."""
         if not 0 <= pad < self.pad_count or self._recording is not None:
             return
         start = max(0, int(start_frames))
@@ -888,7 +895,7 @@ class Controller:
         if start == self.pad(pad).start_frames:
             return
         was_looping = self.pad(pad).looping
-        self.store.append(ev.PAD_START, pad, {"start_frames": start})
+        self.store.append(ev.PAD_START, pad, {"start_frames": start, "source": ev.PARENT_SOURCE})
         if was_looping:
             self._reload_loop(pad)
         self._changed()
@@ -898,14 +905,14 @@ class Controller:
         return self.pad(pad).bars
 
     def set_pad_bars(self, pad: int, bars: int | None) -> None:
-        """Set the pad length in whole bars (None = auto). Undoable; restarts a running loop."""
+        """Set the pad length in whole bars (None = auto); parents' undo, restarts a running loop."""
         if not 0 <= pad < self.pad_count or self._recording is not None:
             return
         value = None if bars is None else max(1, int(bars))
         if value == self.pad(pad).bars:
             return
         was_looping = self.pad(pad).looping
-        self.store.append(ev.PAD_BARS, pad, {"bars": value})
+        self.store.append(ev.PAD_BARS, pad, {"bars": value, "source": ev.PARENT_SOURCE})
         if was_looping:
             self._reload_loop(pad)
         self._changed()
@@ -1428,18 +1435,50 @@ class Controller:
             return
         self._travel(ev.REDO, entry, pad)
 
+    def can_parent_undo(self, pad: int) -> bool:
+        """Is there a change of name, volume, start or length of ``pad`` to take back?"""
+        return (self._recording is None
+                and find_parent_entry(self.store.state.parent_undo_stack, pad) is not None)
+
+    def can_parent_redo(self, pad: int) -> bool:
+        """Is there a taken-back change of ``pad`` to bring back?"""
+        return (self._recording is None
+                and find_parent_entry(self.store.state.parent_redo_stack, pad) is not None)
+
+    def parent_undo(self, pad: int) -> bool:
+        """Take back the latest parents' change of ``pad`` (never a recording). False if none."""
+        return self._parent_travel(ev.PARENT_UNDO, pad)
+
+    def parent_redo(self, pad: int) -> bool:
+        """Bring back the parents' change of ``pad`` that was just taken back. False if none."""
+        return self._parent_travel(ev.PARENT_REDO, pad)
+
+    def _parent_travel(self, kind: str, pad: int) -> bool:
+        undoing = kind == ev.PARENT_UNDO
+        if not 0 <= pad < self.pad_count or self._recording is not None:
+            return False
+        stack = self.store.state.parent_undo_stack if undoing else self.store.state.parent_redo_stack
+        entry = find_parent_entry(stack, pad)
+        if entry is None:
+            return False
+        was_looping = self.pad(pad).looping
+        reshaping = entry["field"] in RESHAPING_FIELDS
+        if reshaping:
+            self.audio.stop(pad)
+        self.store.append(kind, pad, {"target": entry["seq"], "source": ev.PARENT_SOURCE})
+        self.audio.set_pad_gain(pad, self.pad(pad).gain)
+        if reshaping and was_looping:
+            self._reload_loop(pad)
+        self._changed()
+        return True
+
     def _travel(self, kind: str, entry: dict[str, Any], pad: int | None) -> None:
         """Log an undo or redo of ``entry`` and stop the pads whose sound changes."""
         affected = [pad] if pad is not None else list(entry["pads"])
         free = entry.get("free", {})
-        starts = entry.get("start_frames", {})
-        bars = entry.get("bars", {})
         for pad_id in affected:
             state = self.pad(pad_id)
-            if (state.sample != entry["pads"][pad_id]
-                    or state.free != free.get(pad_id, state.free)
-                    or state.start_frames != starts.get(pad_id, state.start_frames)
-                    or state.bars != bars.get(pad_id, state.bars)):
+            if state.sample != entry["pads"][pad_id] or state.free != free.get(pad_id, state.free):
                 self.audio.stop(pad_id)
         had_content = self.store.state.has_content()
         self.store.append(kind, pad, {"target": entry["seq"]})

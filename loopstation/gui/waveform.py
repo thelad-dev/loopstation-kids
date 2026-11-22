@@ -79,8 +79,10 @@ class WaveformWidget(QWidget):
     selection_changed = Signal()
     # A trim handle moved (``trim_range`` has the new frames).
     trim_changed = Signal()
-    # The loop-start mark was dragged (``start_frame`` has the new frames).
+    # The loop-start mark is being dragged (live: only the mark moves).
     start_changed = Signal(int)
+    # The drag of the loop-start mark ended at a new place (once per drag, with the frame).
+    start_committed = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -96,6 +98,7 @@ class WaveformWidget(QWidget):
         # Handles that shorten the loop: ``(start, end)`` in frames, the whole loop when untouched.
         self._trim: tuple[int, int] = (0, 0)
         self._drag: str | None = None  # "start", "end" or "loop_start" while a handle is held
+        self._start_moved = False  # the held start mark was moved
         self._start_frame = 0  # where the pad loop begins inside the shown wave
         self.start_editable = False  # parents' Loop tab: drag the green start mark
         self.empty_text = "Auf diesem Pad ist noch kein Loop."
@@ -110,6 +113,8 @@ class WaveformWidget(QWidget):
 
     def set_start_frame(self, frame: int) -> None:
         """Put the loop-start mark at ``frame`` (clamped into the loop)."""
+        if self._drag == "loop_start":
+            return  # the held mark is where the hand put it
         size = 0 if self._data is None else len(self._data)
         frame = 0 if size <= 0 else min(max(0, int(frame)), size - 1)
         if frame != self._start_frame:
@@ -230,6 +235,7 @@ class WaveformWidget(QWidget):
             frame = 0 if size <= 0 else min(max(0, frame), size - 1)
             if frame != self._start_frame:
                 self._start_frame = frame
+                self._start_moved = True
                 self.update()
                 self.start_changed.emit(frame)
             return
@@ -241,7 +247,11 @@ class WaveformWidget(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt API
         if event.button() == Qt.MouseButton.LeftButton:
+            committed = self._drag == "loop_start" and self._start_moved
             self._drag = None
+            self._start_moved = False
+            if committed:
+                self.start_committed.emit(self._start_frame)
 
     def pick(self, x: float, frame: int) -> None:
         """A click at pixel ``x`` (loop frame ``frame``): select the marker there, else move the cursor."""

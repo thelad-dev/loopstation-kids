@@ -92,6 +92,11 @@ class AppState:
     # Undone changes that can be redone, same entry shape: {"seq": seq of the
     # undo event, "pads": {pad_id: sample the undo replaced}}.
     redo_stack: list[dict[str, Any]] = field(default_factory=list)
+    # The parents' own undo track (pad name, volume, start, length): entries are
+    # {"seq", "pad", "field": "name"|"gain"|"start_frames"|"bars", "value": what it was}.
+    # It never mixes with the child's stacks above.
+    parent_undo_stack: list[dict[str, Any]] = field(default_factory=list)
+    parent_redo_stack: list[dict[str, Any]] = field(default_factory=list)
     last_seq: int = 0
     # Loop grid {"frames": int, "rate": int} plus, if the log said so, "source",
     # "signature" and "pad" (see ``parse_master``), or None while recordings are free.
@@ -115,6 +120,8 @@ class AppState:
             pads={pad_id: replace(pad) for pad_id, pad in self.pads.items()},
             undo_stack=list(self.undo_stack),
             redo_stack=list(self.redo_stack),
+            parent_undo_stack=list(self.parent_undo_stack),
+            parent_redo_stack=list(self.parent_redo_stack),
             last_seq=self.last_seq,
             master=self.master,
             markers=dict(self.markers),
@@ -126,6 +133,8 @@ class AppState:
             "pads": {str(pad_id): _pad_to_dict(pad) for pad_id, pad in sorted(self.pads.items())},
             "undo_stack": [_entry_to_dict(entry) for entry in self.undo_stack],
             "redo_stack": [_entry_to_dict(entry) for entry in self.redo_stack],
+            "parent_undo_stack": [dict(entry) for entry in self.parent_undo_stack],
+            "parent_redo_stack": [dict(entry) for entry in self.parent_redo_stack],
             "last_seq": self.last_seq,
             "master": None if self.master is None else dict(self.master),
             "markers": {name: {"rate": m["rate"], "frames": list(m["frames"])}
@@ -155,6 +164,8 @@ class AppState:
             pads=pads,
             undo_stack=undo_stack,
             redo_stack=redo_stack,
+            parent_undo_stack=_parent_stack(raw.get("parent_undo_stack")),
+            parent_redo_stack=_parent_stack(raw.get("parent_redo_stack")),
             last_seq=int(raw.get("last_seq", 0)),
             master=parse_master(raw.get("master")),
             markers=parse_markers(raw.get("markers")),
@@ -178,6 +189,28 @@ def _pad_to_dict(pad: PadState) -> dict[str, Any]:
     if pad.bars is not None:
         out["bars"] = pad.bars
     return out
+
+
+PARENT_FIELDS = ("name", "gain", "start_frames", "bars")
+
+
+def _parent_value(field_name: str, raw: Any) -> Any:
+    return {"name": _pad_name, "gain": _pad_gain, "start_frames": _pad_start,
+            "bars": _pad_bars}[field_name](raw)
+
+
+def _parent_stack(raw: Any) -> list[dict[str, Any]]:
+    """The parents' undo or redo entries from a snapshot; unusable ones are left out."""
+    entries: list[dict[str, Any]] = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        seq, pad, name = item.get("seq"), item.get("pad"), item.get("field")
+        if (isinstance(seq, int) and not isinstance(seq, bool)
+                and isinstance(pad, int) and not isinstance(pad, bool) and name in PARENT_FIELDS):
+            entries.append({"seq": seq, "pad": pad, "field": name,
+                            "value": _parent_value(name, item.get("value"))})
+    return entries[-UNDO_LIMIT:]
 
 
 def _pad_name(raw: Any) -> str:
@@ -276,9 +309,6 @@ def _entry_to_dict(entry: dict[str, Any]) -> dict[str, Any]:
         out["master"] = None if entry["master"] is None else dict(entry["master"])
     if "free" in entry:
         out["free"] = {str(p): flag for p, flag in sorted(entry["free"].items())}
-    for key in ("gain", "start_frames", "bars"):
-        if key in entry:
-            out[key] = {str(p): value for p, value in sorted(entry[key].items())}
     return out
 
 
@@ -293,12 +323,6 @@ def _entry_from_dict(raw: dict[str, Any]) -> dict[str, Any]:
     # Only entries that switched the free mode of a pad carry the key.
     if "free" in raw:
         entry["free"] = {int(p): bool(flag) for p, flag in raw["free"].items()}
-    if "gain" in raw:
-        entry["gain"] = {int(p): _pad_gain(value) for p, value in raw["gain"].items()}
-    if "start_frames" in raw:
-        entry["start_frames"] = {int(p): _pad_start(value) for p, value in raw["start_frames"].items()}
-    if "bars" in raw:
-        entry["bars"] = {int(p): _pad_bars(value) for p, value in raw["bars"].items()}
     return entry
 
 
@@ -336,25 +360,14 @@ def _push_undo(
     seq: int,
     previous: dict[int, str | None],
     free: dict[int, bool] | None = None,
-    *,
-    gain: dict[int, float] | None = None,
-    start_frames: dict[int, int] | None = None,
-    bars: dict[int, int | None] | None = None,
 ) -> None:
     """Push the undo entry of a new content change; that ends the redo chain.
 
     ``free`` is given when the change also moved pads out of (or into) the free mode.
-    ``gain`` / ``start_frames`` / ``bars`` remember pad playback shape the same way.
     """
     entry: dict[str, Any] = {"seq": seq, "pads": dict(previous)}
     if free:
         entry["free"] = dict(free)
-    if gain:
-        entry["gain"] = dict(gain)
-    if start_frames:
-        entry["start_frames"] = dict(start_frames)
-    if bars:
-        entry["bars"] = dict(bars)
     _push(state.undo_stack, entry)
     state.redo_stack.clear()
 
@@ -398,12 +411,6 @@ def _entry_without(
         out["free"] = free
     else:
         out.pop("free", None)
-    for key in ("gain", "start_frames", "bars"):
-        kept = {p: value for p, value in entry.get(key, {}).items() if p in pads}
-        if kept:
-            out[key] = kept
-        else:
-            out.pop(key, None)
     return out
 
 
@@ -433,16 +440,10 @@ def _travel(state: AppState, event: ev.Event, undoing: bool) -> None:
         moved = dict(entry["pads"])
         del source[index]
     moved_free = {p: flag for p, flag in entry.get("free", {}).items() if p in moved}
-    moved_gain = {p: value for p, value in entry.get("gain", {}).items() if p in moved}
-    moved_start = {p: value for p, value in entry.get("start_frames", {}).items() if p in moved}
-    moved_bars = {p: value for p, value in entry.get("bars", {}).items() if p in moved}
 
     master_before = state.master
     replaced: dict[int, str | None] = {}
     replaced_free: dict[int, bool] = {}
-    replaced_gain: dict[int, float] = {}
-    replaced_start: dict[int, int] = {}
-    replaced_bars: dict[int, int | None] = {}
     for p, sample in moved.items():
         pad = _pad(state, p)
         replaced[p] = pad.sample
@@ -455,28 +456,9 @@ def _travel(state: AppState, event: ev.Event, undoing: bool) -> None:
             if pad.free != moved_free[p]:
                 pad.looping = False
             pad.free = moved_free[p]
-        if p in moved_gain:
-            replaced_gain[p] = pad.gain
-            pad.gain = moved_gain[p]
-        if p in moved_start:
-            replaced_start[p] = pad.start_frames
-            if pad.start_frames != moved_start[p]:
-                pad.looping = False
-            pad.start_frames = moved_start[p]
-        if p in moved_bars:
-            replaced_bars[p] = pad.bars
-            if pad.bars != moved_bars[p]:
-                pad.looping = False
-            pad.bars = moved_bars[p]
     twin: dict[str, Any] = {"seq": event.seq, "pads": replaced}
     if replaced_free:
         twin["free"] = replaced_free
-    if replaced_gain:
-        twin["gain"] = replaced_gain
-    if replaced_start:
-        twin["start_frames"] = replaced_start
-    if replaced_bars:
-        twin["bars"] = replaced_bars
 
     # The grid comes back with the entry whose event changed it. A step on a
     # single pad only restores a grid that is gone; it never replaces another.
@@ -544,35 +526,11 @@ def apply(state: AppState, event: ev.Event) -> AppState:
                 pad.free = free
                 pad.looping = False  # it plays differently now: the loop has to be started again
 
-    elif event.type == ev.PAD_NAME:
-        if pad_id is not None:
-            _pad(new, pad_id).name = _pad_name(event.data.get("name"))
+    elif event.type in PARENT_CHANGES:
+        _apply_parent_change(new, event)
 
-    elif event.type == ev.PAD_GAIN:
-        if pad_id is not None:
-            pad = _pad(new, pad_id)
-            gain = _pad_gain(event.data.get("gain"))
-            if gain != pad.gain:
-                _push_undo(new, event.seq, {pad_id: pad.sample}, gain={pad_id: pad.gain})
-                pad.gain = gain
-
-    elif event.type == ev.PAD_START:
-        if pad_id is not None:
-            pad = _pad(new, pad_id)
-            start = _pad_start(event.data.get("start_frames"))
-            if start != pad.start_frames:
-                _push_undo(new, event.seq, {pad_id: pad.sample}, start_frames={pad_id: pad.start_frames})
-                pad.start_frames = start
-                pad.looping = False
-
-    elif event.type == ev.PAD_BARS:
-        if pad_id is not None:
-            pad = _pad(new, pad_id)
-            bars = _pad_bars(event.data.get("bars"))
-            if bars != pad.bars:
-                _push_undo(new, event.seq, {pad_id: pad.sample}, bars={pad_id: pad.bars})
-                pad.bars = bars
-                pad.looping = False
+    elif event.type in (ev.PARENT_UNDO, ev.PARENT_REDO):
+        _travel_parent(new, event, undoing=event.type == ev.PARENT_UNDO)
 
     elif event.type == ev.RESTORE_PAD:
         sample = event.data.get("sample")
@@ -634,6 +592,61 @@ def apply(state: AppState, event: ev.Event) -> AppState:
         # Remember the previous grid so that undoing this event restores it.
         new.undo_stack[-1] = {**new.undo_stack[-1], "master": master_before}
     return new
+
+
+PARENT_CHANGES = {
+    ev.PAD_NAME: ("name", "name", _pad_name),
+    ev.PAD_GAIN: ("gain", "gain", _pad_gain),
+    ev.PAD_START: ("start_frames", "start_frames", _pad_start),
+    ev.PAD_BARS: ("bars", "bars", _pad_bars),
+}
+# Playback shape: the pad has to start its loop again after these change.
+RESHAPING_FIELDS = ("start_frames", "bars")
+
+
+def _apply_parent_change(new: AppState, event: ev.Event) -> None:
+    """A change of name, volume, start or length: one step on the parents' own undo track."""
+    if event.pad is None:
+        return
+    field_name, key, parse = PARENT_CHANGES[event.type]
+    pad = _pad(new, event.pad)
+    value = parse(event.data.get(key))
+    before = getattr(pad, field_name)
+    if value == before:
+        return
+    _push(new.parent_undo_stack,
+          {"seq": event.seq, "pad": event.pad, "field": field_name, "value": before})
+    new.parent_redo_stack.clear()
+    setattr(pad, field_name, value)
+    if field_name in RESHAPING_FIELDS:
+        pad.looping = False
+
+
+def find_parent_entry(stack: list[dict[str, Any]], pad: int) -> dict[str, Any] | None:
+    """The latest entry of the parents' track that touches ``pad``."""
+    for entry in reversed(stack):
+        if entry["pad"] == pad:
+            return entry
+    return None
+
+
+def _travel_parent(state: AppState, event: ev.Event, undoing: bool) -> None:
+    """Undo or redo the latest parents' change of ``event.pad``; recordings are never touched."""
+    source, other = ((state.parent_undo_stack, state.parent_redo_stack) if undoing
+                     else (state.parent_redo_stack, state.parent_undo_stack))
+    entry = None if event.pad is None else find_parent_entry(source, event.pad)
+    if entry is None or entry["seq"] != event.data.get("target"):
+        log.warning("%s seq=%s: target %r (pad %r) is not on the parents' stack; ignored",
+                    event.type, event.seq, event.data.get("target"), event.pad)
+        return
+    source.remove(entry)
+    pad = _pad(state, entry["pad"])
+    field_name = entry["field"]
+    current = getattr(pad, field_name)
+    setattr(pad, field_name, entry["value"])
+    if field_name in RESHAPING_FIELDS and current != entry["value"]:
+        pad.looping = False
+    _push(other, {"seq": event.seq, "pad": entry["pad"], "field": field_name, "value": current})
 
 
 def _apply_trim(new: AppState, event: ev.Event) -> None:

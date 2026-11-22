@@ -77,6 +77,7 @@ class FakeAudio:
         # the real maths is tested against SoundDeviceAudio.
         self.volume = 1.0
         self.pad_gains: dict[int, float] = {}
+        self.clipping_pads: set[int] = set()  # pads whose next poll reports soft-limiting
         self.ceiling_db = 0.0
         self.input_gain_db = 0.0
         self.auto_gain = False
@@ -164,7 +165,9 @@ class FakeAudio:
         self.levels.append(("pad_gain", pad, self.pad_gains[pad]))
 
     def poll_pad_clipping(self, pad: int) -> bool:
-        return False
+        clipped = pad in self.clipping_pads
+        self.clipping_pads.discard(pad)
+        return clipped
 
     def set_ceiling_db(self, db: float) -> None:
         self.ceiling_db = db
