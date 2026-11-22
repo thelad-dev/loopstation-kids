@@ -39,10 +39,10 @@ Selbst bauen (unter Windows, mit Python 3.12 und [Inno Setup 6](https://jrsoftwa
 pip install -c packaging/windows/constraints.txt -r requirements.txt -r packaging/windows/requirements-build.txt
 python packaging/windows/make_icon.py build/loopstation.ico
 pyinstaller --noconfirm packaging/windows/loopstation.spec
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.1.3 packaging\windows\loopstation.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=1.2.0 packaging\windows\loopstation.iss
 ```
 
-Das Ergebnis liegt in `dist\Loopstation-Setup-1.1.3.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
+Das Ergebnis liegt in `dist\Loopstation-Setup-1.2.0.exe`. Gebündelt wird mit PyInstaller als Ordner (nicht als Einzeldatei), damit die App schnell startet und nichts nach `%TEMP%` entpacken muss.
 
 ## Linux-Installation
 
