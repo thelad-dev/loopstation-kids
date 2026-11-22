@@ -519,9 +519,10 @@ def _clear_redo(root: Path, manifest: SetManifest) -> None:
     events = [ev.Event.from_json(line) for line in log_path.read_text(encoding="utf-8").splitlines()
               if line.strip()]
     state = replay(events, manifest.pad_count).to_dict()
-    if not state.get("redo_stack"):
+    if not state.get("redo_stack") and not state.get("parent_redo_stack"):
         return
     state["redo_stack"] = []
+    state["parent_redo_stack"] = []
     last = events[-1]
     snapshot = ev.Event(seq=last.seq + 1, ts=last.ts, type=ev.SNAPSHOT, pad=None, data={"state": state})
     tmp = log_path.with_name(log_path.name + ".tmp")

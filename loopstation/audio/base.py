@@ -107,6 +107,14 @@ class AudioBackend(Protocol):
         """Master volume as a linear gain from 0 (silent) to 1; the engine moves there in a ramp."""
         ...
 
+    def set_pad_gain(self, pad: int, gain: float) -> None:
+        """Per-pad linear gain (0 .. +18 dB) for the voice of ``pad``; the engine ramps."""
+        ...
+
+    def poll_pad_clipping(self, pad: int) -> bool:
+        """True if ``pad`` soft-limited since the last poll (boost past 0 dBFS)."""
+        ...
+
     def set_ceiling_db(self, db: float) -> None:
         """Peak ceiling of the output in dB(FS) (0 or below); the output never gets louder."""
         ...

@@ -52,6 +52,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from loopstation import events as ev
+from loopstation.audio.dynamics import PAD_GAIN_MAX
 from loopstation.trim import shift_markers
 
 log = logging.getLogger(__name__)
@@ -70,6 +71,14 @@ class PadState:
     free: bool = False
     # Every sample ever recorded on this pad, oldest first, without duplicates.
     history: list[str] = field(default_factory=list)
+    # Parents' label (empty = show "Pad N"); annotation, not on the undo stack.
+    name: str = ""
+    # Linear playback gain 0..1 (1 = full); undoable via ``pad_gain``.
+    gain: float = 1.0
+    # Loop start offset in frames of the shaped (fitted) loop; undoable.
+    start_frames: int = 0
+    # Whole bars the pad loops for, or None = auto from the recording length.
+    bars: int | None = None
 
 
 @dataclass
@@ -83,6 +92,11 @@ class AppState:
     # Undone changes that can be redone, same entry shape: {"seq": seq of the
     # undo event, "pads": {pad_id: sample the undo replaced}}.
     redo_stack: list[dict[str, Any]] = field(default_factory=list)
+    # The parents' own undo track (pad name, volume, start, length): entries are
+    # {"seq", "pad", "field": "name"|"gain"|"start_frames"|"bars", "value": what it was}.
+    # It never mixes with the child's stacks above.
+    parent_undo_stack: list[dict[str, Any]] = field(default_factory=list)
+    parent_redo_stack: list[dict[str, Any]] = field(default_factory=list)
     last_seq: int = 0
     # Loop grid {"frames": int, "rate": int} plus, if the log said so, "source",
     # "signature" and "pad" (see ``parse_master``), or None while recordings are free.
@@ -106,6 +120,8 @@ class AppState:
             pads={pad_id: replace(pad) for pad_id, pad in self.pads.items()},
             undo_stack=list(self.undo_stack),
             redo_stack=list(self.redo_stack),
+            parent_undo_stack=list(self.parent_undo_stack),
+            parent_redo_stack=list(self.parent_redo_stack),
             last_seq=self.last_seq,
             master=self.master,
             markers=dict(self.markers),
@@ -117,6 +133,8 @@ class AppState:
             "pads": {str(pad_id): _pad_to_dict(pad) for pad_id, pad in sorted(self.pads.items())},
             "undo_stack": [_entry_to_dict(entry) for entry in self.undo_stack],
             "redo_stack": [_entry_to_dict(entry) for entry in self.redo_stack],
+            "parent_undo_stack": [dict(entry) for entry in self.parent_undo_stack],
+            "parent_redo_stack": [dict(entry) for entry in self.parent_redo_stack],
             "last_seq": self.last_seq,
             "master": None if self.master is None else dict(self.master),
             "markers": {name: {"rate": m["rate"], "frames": list(m["frames"])}
@@ -132,6 +150,10 @@ class AppState:
                 looping=bool(pad.get("looping", False)),
                 free=bool(pad.get("free", False)),
                 history=list(pad.get("history", [])),
+                name=_pad_name(pad.get("name")),
+                gain=_pad_gain(pad.get("gain")),
+                start_frames=_pad_start(pad.get("start_frames")),
+                bars=_pad_bars(pad.get("bars")),
             )
             for pad_id, pad in raw.get("pads", {}).items()
         }
@@ -142,6 +164,8 @@ class AppState:
             pads=pads,
             undo_stack=undo_stack,
             redo_stack=redo_stack,
+            parent_undo_stack=_parent_stack(raw.get("parent_undo_stack")),
+            parent_redo_stack=_parent_stack(raw.get("parent_redo_stack")),
             last_seq=int(raw.get("last_seq", 0)),
             master=parse_master(raw.get("master")),
             markers=parse_markers(raw.get("markers")),
@@ -156,7 +180,61 @@ def _pad_to_dict(pad: PadState) -> dict[str, Any]:
     out: dict[str, Any] = {"sample": pad.sample, "looping": pad.looping, "history": list(pad.history)}
     if pad.free:
         out["free"] = True  # left out otherwise: snapshots of sessions without free pads stay as they were
+    if pad.name:
+        out["name"] = pad.name
+    if pad.gain != 1.0:
+        out["gain"] = pad.gain
+    if pad.start_frames:
+        out["start_frames"] = pad.start_frames
+    if pad.bars is not None:
+        out["bars"] = pad.bars
     return out
+
+
+PARENT_FIELDS = ("name", "gain", "start_frames", "bars")
+
+
+def _parent_value(field_name: str, raw: Any) -> Any:
+    return {"name": _pad_name, "gain": _pad_gain, "start_frames": _pad_start,
+            "bars": _pad_bars}[field_name](raw)
+
+
+def _parent_stack(raw: Any) -> list[dict[str, Any]]:
+    """The parents' undo or redo entries from a snapshot; unusable ones are left out."""
+    entries: list[dict[str, Any]] = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        seq, pad, name = item.get("seq"), item.get("pad"), item.get("field")
+        if (isinstance(seq, int) and not isinstance(seq, bool)
+                and isinstance(pad, int) and not isinstance(pad, bool) and name in PARENT_FIELDS):
+            entries.append({"seq": seq, "pad": pad, "field": name,
+                            "value": _parent_value(name, item.get("value"))})
+    return entries[-UNDO_LIMIT:]
+
+
+def _pad_name(raw: Any) -> str:
+    return raw.strip() if isinstance(raw, str) else ""
+
+
+def _pad_gain(raw: Any) -> float:
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return 1.0
+    return min(PAD_GAIN_MAX, max(0.0, float(raw)))
+
+
+def _pad_start(raw: Any) -> int:
+    if not isinstance(raw, int) or isinstance(raw, bool) or raw < 0:
+        return 0
+    return raw
+
+
+def _pad_bars(raw: Any) -> int | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, int) or isinstance(raw, bool) or raw < 1:
+        return None
+    return raw
 
 
 def parse_master(raw: Any) -> dict[str, Any] | None:
@@ -278,7 +356,10 @@ def _push(stack: list[dict[str, Any]], entry: dict[str, Any]) -> None:
 
 
 def _push_undo(
-    state: AppState, seq: int, previous: dict[int, str | None], free: dict[int, bool] | None = None
+    state: AppState,
+    seq: int,
+    previous: dict[int, str | None],
+    free: dict[int, bool] | None = None,
 ) -> None:
     """Push the undo entry of a new content change; that ends the redo chain.
 
@@ -445,6 +526,12 @@ def apply(state: AppState, event: ev.Event) -> AppState:
                 pad.free = free
                 pad.looping = False  # it plays differently now: the loop has to be started again
 
+    elif event.type in PARENT_CHANGES:
+        _apply_parent_change(new, event)
+
+    elif event.type in (ev.PARENT_UNDO, ev.PARENT_REDO):
+        _travel_parent(new, event, undoing=event.type == ev.PARENT_UNDO)
+
     elif event.type == ev.RESTORE_PAD:
         sample = event.data.get("sample")
         if pad_id is None:
@@ -505,6 +592,61 @@ def apply(state: AppState, event: ev.Event) -> AppState:
         # Remember the previous grid so that undoing this event restores it.
         new.undo_stack[-1] = {**new.undo_stack[-1], "master": master_before}
     return new
+
+
+PARENT_CHANGES = {
+    ev.PAD_NAME: ("name", "name", _pad_name),
+    ev.PAD_GAIN: ("gain", "gain", _pad_gain),
+    ev.PAD_START: ("start_frames", "start_frames", _pad_start),
+    ev.PAD_BARS: ("bars", "bars", _pad_bars),
+}
+# Playback shape: the pad has to start its loop again after these change.
+RESHAPING_FIELDS = ("start_frames", "bars")
+
+
+def _apply_parent_change(new: AppState, event: ev.Event) -> None:
+    """A change of name, volume, start or length: one step on the parents' own undo track."""
+    if event.pad is None:
+        return
+    field_name, key, parse = PARENT_CHANGES[event.type]
+    pad = _pad(new, event.pad)
+    value = parse(event.data.get(key))
+    before = getattr(pad, field_name)
+    if value == before:
+        return
+    _push(new.parent_undo_stack,
+          {"seq": event.seq, "pad": event.pad, "field": field_name, "value": before})
+    new.parent_redo_stack.clear()
+    setattr(pad, field_name, value)
+    if field_name in RESHAPING_FIELDS:
+        pad.looping = False
+
+
+def find_parent_entry(stack: list[dict[str, Any]], pad: int) -> dict[str, Any] | None:
+    """The latest entry of the parents' track that touches ``pad``."""
+    for entry in reversed(stack):
+        if entry["pad"] == pad:
+            return entry
+    return None
+
+
+def _travel_parent(state: AppState, event: ev.Event, undoing: bool) -> None:
+    """Undo or redo the latest parents' change of ``event.pad``; recordings are never touched."""
+    source, other = ((state.parent_undo_stack, state.parent_redo_stack) if undoing
+                     else (state.parent_redo_stack, state.parent_undo_stack))
+    entry = None if event.pad is None else find_parent_entry(source, event.pad)
+    if entry is None or entry["seq"] != event.data.get("target"):
+        log.warning("%s seq=%s: target %r (pad %r) is not on the parents' stack; ignored",
+                    event.type, event.seq, event.data.get("target"), event.pad)
+        return
+    source.remove(entry)
+    pad = _pad(state, entry["pad"])
+    field_name = entry["field"]
+    current = getattr(pad, field_name)
+    setattr(pad, field_name, entry["value"])
+    if field_name in RESHAPING_FIELDS and current != entry["value"]:
+        pad.looping = False
+    _push(other, {"seq": event.seq, "pad": entry["pad"], "field": field_name, "value": current})
 
 
 def _apply_trim(new: AppState, event: ev.Event) -> None:

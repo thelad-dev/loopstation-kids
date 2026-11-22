@@ -100,6 +100,31 @@ def test_volume_scales_the_output():
     assert np.allclose(device.output_signal(), 0.2)
 
 
+def test_pad_gain_scales_only_that_pad_and_ramps():
+    audio, device = make(volume=1.0, ceiling_db=0.0)
+    audio.play(0, np.full(SR, 0.5, dtype=np.float32), loop=True)
+    audio.play(1, np.full(SR, 0.5, dtype=np.float32), loop=True)
+    device.step(5)
+    before = block_peak(device.output_signal()[-200:])
+    audio.set_pad_gain(0, 0.0)
+    device.step(20)
+    # After the ramp, pad 0 is silent and pad 1 still contributes 0.5.
+    settled = device.output_signal()[-500:]
+    assert before == pytest.approx(1.0, abs=0.02)
+    assert block_peak(settled) == pytest.approx(0.5, abs=0.02)
+    assert settled[-1] == pytest.approx(0.5, abs=0.02)
+
+
+def test_pad_boost_soft_limits_instead_of_hard_clip():
+    audio, device = make(volume=1.0, ceiling_db=0.0)
+    audio.set_pad_gain(0, db_to_gain(18.0))
+    audio.play(0, np.full(SR, 0.8, dtype=np.float32), loop=True)
+    device.step(30)
+    out = device.output_signal()
+    assert block_peak(out) <= 1.0 + 1e-5
+    assert audio.poll_pad_clipping(0)
+
+
 def test_output_default_is_neutral():
     audio, device = make()
     audio.play(0, np.full(300, 0.6, dtype=np.float32), loop=False)

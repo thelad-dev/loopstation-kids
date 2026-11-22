@@ -20,9 +20,10 @@ from PySide6.QtWidgets import QAbstractButton, QPushButton, QScrollArea
 from test_parent_mode import ShapedAudio, World, _difference, _part, calls, open_parents, tap
 
 from loopstation.audio.base import PREVIEW_VOICE
+from loopstation.audio.dynamics import db_to_gain
 from loopstation.config import load_settings
 from loopstation.controller import Controller, Mode
-from loopstation.gui.detail_panel import BADGE_END, INFO_LEAST
+from loopstation.gui.detail_panel import BADGE_END, INFO_LEAST, PAD_VOLUME_MAX
 from loopstation.gui.parent_view import ParentView, WaveCache
 from loopstation.store import EventStore
 
@@ -270,22 +271,60 @@ def test_the_verdict_of_the_take_level_goes_with_the_number_shown(world):
     assert view.detail.pad_tab.verdict.text() == "Spitze \u221212 dBFS · im Ziel"
 
 
-def test_greyed_fields_cannot_be_used(world):
+def test_the_pad_volume_text_is_visible_and_whole_at_boost(world):
     world.record(0, 2.0)
     view = open_parents(world.window)
+    view.detail.open_tab("pad")
+    pad = view.detail.pad_tab
+    tick(world)
+    for position, expected in ((30, "30 %"), (PAD_VOLUME_MAX, "+18,0 dB · Verstärkung")):
+        pad.volume_slider.setValue(position)
+        tick(world)
+        label = pad.volume_label
+        assert label.text().startswith(expected)
+        assert label.width() > 0 and label.isVisibleTo(pad)
+        assert label.width() >= label.fontMetrics().horizontalAdvance(label.text())
+    assert pad.volume_slider.width() > 0
+    for button in (pad.parent_undo_button, pad.parent_redo_button, pad.normalize_button):
+        assert button.objectName() == "padbutton"
+        assert button.width() > 0 and button.isVisibleTo(pad)
+
+
+def test_pad_name_volume_start_and_bars_work_in_the_detail_panel(world):
+    world.record(0, 2.0)
+    window, controller = world.window, world.controller
+    view = open_parents(window)
     detail = view.detail
     detail.open_tab("pad")
     pad = detail.pad_tab
-    QTest.keyClicks(pad.name_edit, "Trommel")
-    assert pad.name_edit.text() == "" and not pad.name_edit.isEnabled()
-    assert "neuen Kern" in pad.name_edit.toolTip()
-    value = pad.volume_slider.value()
-    QTest.mouseClick(pad.volume_slider, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
-                     QPoint(5, pad.volume_slider.height() // 2))
-    assert pad.volume_slider.value() == value and not pad.volume_slider.isEnabled()
+    pad.name_edit.setFocus()
+    pad.name_edit.setText("Trommel")
+    pad.name_edit.editingFinished.emit()
+    tick(world)
+    assert controller.pad_name(0) == "Trommel"
+    assert "Trommel" in detail.title
+    pad.volume_slider.setValue(40)  # 40 % → gain 0.4
+    tick(world)
+    assert controller.pad_gain(0) == pytest.approx(0.4)
+    assert world.audio.pad_gains[0] == pytest.approx(0.4)
+    pad.volume_slider.setValue(106)  # +6 dB boost
+    tick(world)
+    assert controller.pad_gain(0) == pytest.approx(db_to_gain(6.0), rel=0.02)
+    pad.normalize_button.click()
+    tick(world)
+    assert controller.pad_gain(0) > 1.0  # quiet test take is lifted toward −3 dBFS
+    pad.bars_combo.setCurrentIndex(pad.bars_combo.findData(2))
+    tick(world)
+    assert controller.pad_bars(0) == 2
+    view.detail.open_tab("loop")
+    loop = view.detail.loop_tab
+    assert loop.waveform.start_editable
+    loop.waveform.start_committed.emit(1000)
+    tick(world)
+    assert controller.pad_start_frames(0) == 1000
     effects = detail.tab_buttons["effects"]
     QTest.mouseClick(effects, Qt.MouseButton.LeftButton)
-    assert detail.tab == "pad" and not effects.isEnabled() and "neuen Kern" in effects.toolTip()
+    assert detail.tab == "loop" and not effects.isEnabled() and "neuen Kern" in effects.toolTip()
 
 
 def test_start_on_the_bar_is_the_setting_of_the_panel_takt(world):
@@ -556,13 +595,12 @@ def test_the_loop_tab_looks_like_the_mockup(world):
     assert _difference(dark, mockup) > 3 * LOOP_THRESHOLD
 
 
-# Mockup L2-04: whole 12.1, head 7.7, the left column 26.8 (the mockup shows a name and an active pad
-# volume, here greyed out until the new core), takes 18.6, level 13.9. Counter-checks: the tab "Loop"
-# in its place (whole 17.4, left 43, takes 38, level 31), the folded panel (about 69, parts over 120).
+# Mockup L2-04: whole 12.1, head 7.7, the left column (name, free mode, pad volume, start/length),
+# takes 18.6, level 13.9. Counter-checks: the tab "Loop" in its place, the folded panel.
 PAD_THRESHOLD = 14.5
 PAD_PARTS = {
     "head": ((108, 427, 1148, 64), (143, 8), 10.0),
-    "left": ((124, 495, 310, 270), (39, 34), 33.0),
+    "left": ((124, 495, 310, 270), (39, 34), 39.0),
     "takes": ((470, 495, 370, 220), (46, 27), 27.0),
     "level": ((870, 495, 370, 270), (46, 34), 21.0),
 }
@@ -591,3 +629,88 @@ def test_the_pad_tab_looks_like_the_mockup(world):
     assert _difference(folded, mockup) > 3 * PAD_THRESHOLD
     for name, (box, size, threshold) in PAD_PARTS.items():
         assert _part_difference(folded, mockup, box, size) >= threshold, name
+
+
+def _pad_events(controller, type_):
+    text = controller.store.log_path.read_text(encoding="utf-8")
+    from loopstation import events as ev
+    return [e for e in (ev.Event.from_json(line) for line in text.splitlines() if line.strip())
+            if e.type == type_]
+
+
+def test_dragging_the_start_mark_writes_one_event_on_release(world):
+    from loopstation import events as ev
+    world.record(0, 2.0)
+    window, controller = world.window, world.controller
+    view = open_parents(window)
+    view.detail.open_tab("loop")
+    wave = view.detail.loop_tab.waveform
+    tick(world)  # let the layout give the wave its width
+    frames = len(wave._data)
+    none = Qt.KeyboardModifier.NoModifier
+    wave.set_start_frame(frames // 2)  # off the trim handles at frame 0
+    start_x = wave._x_of(frames // 2)
+    QTest.mousePress(wave, Qt.MouseButton.LeftButton, none, QPoint(int(start_x), 100))
+    before = len(controller.store.active_events())
+    for x in range(int(start_x) + 10, int(start_x) + 100, 10):
+        QTest.mouseMove(wave, QPoint(x, 100))
+        tick(world)
+        assert controller.pad_start_frames(0) == 0  # nothing is committed while the hand is down
+    assert len(controller.store.active_events()) == before
+    moved = wave._start_frame
+    assert frames // 2 < moved < frames
+    QTest.mouseRelease(wave, Qt.MouseButton.LeftButton, none, QPoint(int(start_x) + 90, 100))
+    assert controller.pad_start_frames(0) == moved
+    assert len(_pad_events(controller, ev.PAD_START)) == 1
+    assert controller.parent_undo(0)
+    assert controller.pad_start_frames(0) == 0
+
+
+def test_ctrl_z_on_the_pad_tab_undoes_the_pad_setting_not_the_recording(world):
+    world.record(0, 2.0)
+    window, controller = world.window, world.controller
+    view = open_parents(window)
+    view.detail.open_tab("pad")
+    pad = view.detail.pad_tab
+    pad.volume_slider.setValue(40)
+    pad.volume_slider.setValue(30)
+    tick(world)
+    assert controller.pad_gain(0) == pytest.approx(0.3)
+    assert pad.parent_undo_button.isEnabled() and not pad.parent_redo_button.isEnabled()
+    window.undo_shortcut.activated.emit()
+    tick(world)
+    assert controller.pad_gain(0) == pytest.approx(0.4)
+    assert controller.pad(0).sample is not None
+    assert pad.parent_redo_button.isEnabled()
+    window.redo_shortcuts[1].activated.emit()
+    tick(world)
+    assert controller.pad_gain(0) == pytest.approx(0.3)
+    pad.parent_undo_button.click()
+    pad.parent_undo_button.click()
+    assert controller.pad_gain(0) == pytest.approx(1.0)
+    assert controller.pad(0).sample is not None
+    view.detail.open_tab("loop")  # elsewhere Strg+Z is the children's "Zurück" again
+    window.undo_shortcut.activated.emit()
+    tick(world)
+    assert controller.pad(0).sample is None
+
+
+def test_the_limiter_warning_comes_from_the_refresh_and_fades(world, monkeypatch):
+    world.record(0, 2.0)
+    window = world.window
+    view = open_parents(window)
+    view.detail.open_tab("pad")
+    pad = view.detail.pad_tab
+    now = [100.0]
+    monkeypatch.setattr("loopstation.gui.detail_panel.time.monotonic", lambda: now[0])
+    tick(world)
+    assert not pad.volume_clip.isVisibleTo(pad)
+    world.audio.clipping_pads.add(0)  # the audio limits later, without any setting changing
+    tick(world)
+    assert pad.volume_clip.isVisibleTo(pad) and "Begrenzt" in pad.volume_clip.text()
+    now[0] += 1.0
+    tick(world)
+    assert pad.volume_clip.isVisibleTo(pad)
+    now[0] += 5.0
+    tick(world)
+    assert not pad.volume_clip.isVisibleTo(pad)

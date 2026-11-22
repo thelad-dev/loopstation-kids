@@ -324,11 +324,11 @@ class MainWindow(QMainWindow):
 
         # Keyboard: Strg+Z undo, Strg+Y / Strg+Umschalt+Z redo, ESC leaves the mode. No menus.
         self.undo_shortcut = QShortcut(QKeySequence.StandardKey.Undo, self)
-        self.undo_shortcut.activated.connect(self.undo)
+        self.undo_shortcut.activated.connect(self.undo_key)
         self.redo_shortcuts = [QShortcut(QKeySequence(keys), self)
                                for keys in ("Ctrl+Y", "Ctrl+Shift+Z")]
         for shortcut in self.redo_shortcuts:
-            shortcut.activated.connect(self.redo)
+            shortcut.activated.connect(self.redo_key)
         self.escape_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
         self.escape_shortcut.activated.connect(self.escape)
         # F1 leads from the parents' view back to the children, never the other way.
@@ -418,6 +418,30 @@ class MainWindow(QMainWindow):
     def undo(self) -> None:
         if self.gate_overlay is None:
             self.controller.undo()
+
+    def _settings_pad(self) -> int | None:
+        """The pad whose settings (Pad tab of the unfolded detail panel) the parents are editing."""
+        view = self.parent_view
+        if view is None or self.gate_overlay is not None:
+            return None
+        detail = view.detail
+        return detail.pad if detail.is_open and detail.tab == "pad" else None
+
+    def undo_key(self) -> None:
+        """Strg+Z: the pad settings on the parents' Pad tab, else the children's "Zurück"."""
+        pad = self._settings_pad()
+        if pad is None:
+            self.undo()
+        else:
+            self.controller.parent_undo(pad)
+
+    def redo_key(self) -> None:
+        """Strg+Y / Strg+Umschalt+Z: the pad settings on the parents' Pad tab, else "Wiederholen"."""
+        pad = self._settings_pad()
+        if pad is None:
+            self.redo()
+        else:
+            self.controller.parent_redo(pad)
 
     def undo_pad(self, pad: int) -> None:
         """The "back" badge of a pad: take back the latest change of that pad only."""
