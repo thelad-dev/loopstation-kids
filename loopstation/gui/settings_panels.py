@@ -1022,6 +1022,11 @@ class SettingsPanels(QObject):
             if setter is not None and self.controller is not None:
                 getattr(self.controller, setter)(value)
                 self._applied = replace(self._applied, **{key: value})
+                sliders = {} if self.panel is None else {"max_level_db": self.panel.ceiling,
+                                                          "input_gain_db": self.panel.trim}
+                if key in sliders and sliders[key].dragging:  # saved when the handle is let go
+                    self.refresh_levels()
+                    return
                 if pause is None:
                     pause = QTimer(self)
                     pause.setSingleShot(True)

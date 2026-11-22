@@ -102,7 +102,7 @@ SOURCE_WORDS = {
 KEYS_HELP = ("Pfeile wählen · Leertaste spielt · L Loop · R nimmt auf · Entf löscht · Enter Detailfeld · "
              "M Marker · Esc schließt · Strg+Z zurück · Strg+Y wieder · F1 Kinderseite")
 
-# (tool key, icon, word) of the tool bar; the gap falls after the first four.
+# (tool key, icon, word) of the tool bar; the separator falls before "Pegel".
 TOOLS = (
     ("pads", "pads", "Pads"),
     ("changes", "history", "Verlauf"),

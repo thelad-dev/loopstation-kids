@@ -355,7 +355,10 @@ def poke():
     window.enter_parent_mode()  # the sum was answered
     window.open_tool("system")
     window.settings_panels.editors["parent_idle_minutes"]._spin.setValue(7)  # waits for its pause
-    window.close()  # the cross of the window, in the parents' view: the app ends
+    if sys.argv[1] == "cross":
+        window.close()  # the cross of the window, in the parents' view: the app ends
+    else:
+        app.quit()  # the end of the app without the cross (a signal, opening a set)
 
 QTimer.singleShot(300, poke)
 code = app_module.run(settings, tmp / "settings.toml")
@@ -364,7 +367,8 @@ print("run returned", code, saved, flush=True)
 """
 
 
-def test_the_app_ends_cleanly_when_the_window_closes_in_the_parents_view(tmp_path):
+@pytest.mark.parametrize("way", ["cross", "quit"])
+def test_the_app_ends_cleanly_when_the_window_closes_in_the_parents_view(tmp_path, way):
     import os
     import subprocess
     import sys
@@ -372,8 +376,8 @@ def test_the_app_ends_cleanly_when_the_window_closes_in_the_parents_view(tmp_pat
     script = tmp_path / "close_in_parents_view.py"
     script.write_text(CLOSE_IN_THE_PARENTS_VIEW, encoding="utf-8")
     env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": str(REPO)}
-    done = subprocess.run([sys.executable, str(script)], cwd=REPO, env=env, capture_output=True, text=True,
-                          timeout=120)
+    done = subprocess.run([sys.executable, str(script), way], cwd=REPO, env=env, capture_output=True,
+                          text=True, timeout=120)
     assert done.returncode == 0, (done.returncode, done.stdout, done.stderr[-2000:])
     assert "run returned 0 1" in done.stdout, done.stdout  # the waiting number was saved on the way out
     for sign in ("Traceback", "Error calling Python override", "RuntimeError", "AttributeError"):

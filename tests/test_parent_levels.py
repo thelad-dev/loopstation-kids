@@ -223,6 +223,21 @@ def test_ceiling_slider_by_mouse_and_keyboard(parts, dialog):
     assert load_settings(path).max_level_db == -11.0
 
 
+def test_a_held_drag_saves_when_let_go_not_in_its_pause(parts, dialog):
+    _, controller, path = parts
+    ceiling = dialog.panel.ceiling
+    y = ceiling.height() // 2
+    QTest.mousePress(ceiling, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                     QPoint(int(ceiling._x_of(-12)), y))
+    QTest.mouseMove(ceiling, QPoint(int(ceiling._x_of(-15)), y))
+    assert controller.max_level_db == -15.0  # live while held
+    QTest.qWait(NUMBER_PAUSE_MS + 200)  # the handle held still: nothing written yet
+    assert not path.exists()
+    QTest.mouseRelease(ceiling, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+                       QPoint(int(ceiling._x_of(-15)), y))
+    assert load_settings(path).max_level_db == -15.0
+
+
 def test_arrow_keys_on_a_level_slider_write_the_file_once_after_the_pause(parts, dialog):
     _, controller, path = parts
     trim = dialog.panel.trim

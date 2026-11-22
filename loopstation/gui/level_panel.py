@@ -119,6 +119,11 @@ class DbSlider(QWidget):
     def value(self) -> float:
         return self._value
 
+    @property
+    def dragging(self) -> bool:
+        """The handle is held: the value is saved when it is let go, not in a pause of the drag."""
+        return self._dragging
+
     def set_value(self, value: float) -> None:
         """Show ``value`` (no signal)."""
         value = min(self.high, max(self.low, value))

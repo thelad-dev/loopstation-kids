@@ -858,10 +858,10 @@ class PadTab(QWidget):
             if LABELS[0] in labels:  # the microphone of this take was louder than what was kept
                 peak_db = max(peak_db, events[labels.index(LABELS[0])].peak_db)
                 peak = 10 ** (peak_db / 20)
-            loud_now = LABELS[0] in labels or peak_db >= NEAR_CLIP_DB
+            rounded = min(0, round(peak_db))  # the verdict follows the number shown (-12.04 reads -12)
+            loud_now = LABELS[0] in labels or rounded >= NEAR_CLIP_DB
             self.meter.setEnabled(True)
             self.meter.set_state(peak, peak, loud_now)
-            rounded = min(0, round(peak_db))  # the verdict follows the number shown (-12.04 reads -12)
             shown = f"Spitze {format_db(rounded, 'dBFS')}" if peak > 0 else "Stille"
             if loud_now:
                 self._say(f"{shown} · zu laut", WARN, True)
@@ -1004,6 +1004,7 @@ class DetailPanel(QWidget):
         self.message = QLabel(self)
         self.message.setWordWrap(True)
         self.message.hide()
+        self._message_color = QColor(GOOD)
         self.pages: dict[str, QWidget] = {}
         self._holders: dict[str, QWidget] = {}  # what the stack shows for a tab: the page or its scroll area
 
@@ -1176,7 +1177,7 @@ class DetailPanel(QWidget):
         it away); a refused value in red."""
         color = {"ok": GOOD, "warning": WARN, "error": "#FF3B30"}.get(level, TEXT_DIM.name())
         self.message.setStyleSheet(f"color: {color}; font-size: 14px; font-weight: bold;")
-        self.message.setProperty("color", color)
+        self._message_color = QColor(color)
         self.message.setText(text)
         self.message.setVisible(bool(text) and self.is_open)
         self._place()
@@ -1187,7 +1188,7 @@ class DetailPanel(QWidget):
         if self.is_open:
             return self.open_info, TEXT_DIM
         if self.message.text():
-            return self.message.text(), QColor(str(self.message.property("color")))
+            return self.message.text(), self._message_color
         return self.info, TEXT_DIM
 
     def _message_height(self) -> int:
