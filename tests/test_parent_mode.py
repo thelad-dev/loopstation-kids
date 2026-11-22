@@ -310,6 +310,76 @@ def test_the_view_and_the_window_are_freed(qapp, tmp_path, clock):
     assert window() is None
 
 
+def test_closing_the_window_in_the_parents_view_leaves_it_and_takes_the_input_watch_off(world):
+    """Left on, the watch outlived a window closed in the parents' view (a fixture closing it after a
+    failed test, too): under PySide6 6.11 every widget built later ran into it ("'MainWindow' object has
+    no attribute 'parent_view'"), and one failing GUI test made dozens of later ones fail."""
+    window, clock = world.window, world.clock
+    view = open_parents(window)
+    view.toolbar.buttons["system"].click()
+    panels = window.settings_panels
+    spin = panels.editors["parent_idle_minutes"]._spin
+    spin.setValue(9)  # waits for its pause
+    window.close()
+    assert window.parent_view is None  # left as with the switch: the number in its pause is saved
+    assert "parent_idle_minutes = 9" in world.config.read_text(encoding="utf-8")
+    # Input elsewhere no longer reaches the closed window.
+    stamp = window._last_input
+    clock.advance(30)
+    other = QWidget()
+    other.show()
+    QTest.keyClick(other, Qt.Key.Key_A)
+    QTest.mouseClick(other, Qt.MouseButton.LeftButton)
+    assert window._last_input == stamp
+    other.close()
+
+
+CLOSE_IN_THE_PARENTS_VIEW = """
+import sys, tempfile
+from pathlib import Path
+import loopstation.audio as audio_pkg
+from loopstation import app as app_module
+from loopstation.audio.null_backend import NullAudio
+from loopstation.config import Settings
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication
+
+audio_pkg.create_audio = lambda settings: (NullAudio(), None)
+tmp = Path(tempfile.mkdtemp())
+settings = Settings(data_dir=tmp, sample_rate=8000, launchpad=False)
+app = QApplication([])
+
+def poke():
+    from loopstation.gui.main_window import MainWindow
+    window = [w for w in app.topLevelWidgets() if isinstance(w, MainWindow)][0]
+    window.enter_parent_mode()  # the sum was answered
+    window.open_tool("system")
+    window.settings_panels.editors["parent_idle_minutes"]._spin.setValue(7)  # waits for its pause
+    window.close()  # the cross of the window, in the parents' view: the app ends
+
+QTimer.singleShot(300, poke)
+code = app_module.run(settings, tmp / "settings.toml")
+saved = (tmp / "settings.toml").read_text(encoding="utf-8").count("parent_idle_minutes = 7")
+print("run returned", code, saved, flush=True)
+"""
+
+
+def test_the_app_ends_cleanly_when_the_window_closes_in_the_parents_view(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    script = tmp_path / "close_in_parents_view.py"
+    script.write_text(CLOSE_IN_THE_PARENTS_VIEW, encoding="utf-8")
+    env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": str(REPO)}
+    done = subprocess.run([sys.executable, str(script)], cwd=REPO, env=env, capture_output=True, text=True,
+                          timeout=120)
+    assert done.returncode == 0, (done.returncode, done.stdout, done.stderr[-2000:])
+    assert "run returned 0 1" in done.stdout, done.stdout  # the waiting number was saved on the way out
+    for sign in ("Traceback", "Error calling Python override", "RuntimeError", "AttributeError"):
+        assert sign not in done.stderr, done.stderr[-2000:]
+
+
 def test_entering_sets_the_children_mode_to_play(world):
     world.controller.set_mode(Mode.DELETE)
     open_parents(world.window)

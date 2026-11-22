@@ -22,6 +22,7 @@ from typing import Any
 
 from PySide6.QtCore import QEvent, QObject, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import (
+    QCloseEvent,
     QColor,
     QKeyEvent,
     QKeySequence,
@@ -544,6 +545,15 @@ class MainWindow(QMainWindow):
         view.hide()
         view.deleteLater()
         self.refresh()
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt API
+        """The window closes (the app ends, or a set is opened): leave the parents' view first.
+
+        That saves what still waits in a panel and takes the input watch off the application. Left on, it
+        would outlive the window: the application would hand every later event to a window that is gone.
+        """
+        self.leave_parent_mode()
+        super().closeEvent(event)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt API
         # Installed on the application only while the parents' view is shown: any input keeps it open.
