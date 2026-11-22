@@ -12,15 +12,19 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import make_settings
 from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractButton, QPushButton, QScrollArea
-from test_parent_mode import World, _difference, _part, calls, open_parents, tap
+from test_parent_mode import ShapedAudio, World, _difference, _part, calls, open_parents, tap
 
 from loopstation.audio.base import PREVIEW_VOICE
 from loopstation.config import load_settings
-from loopstation.controller import Mode
+from loopstation.controller import Controller, Mode
+from loopstation.gui.detail_panel import BADGE_END, INFO_LEAST
+from loopstation.gui.parent_view import ParentView, WaveCache
+from loopstation.store import EventStore
 
 REPO = Path(__file__).resolve().parent.parent
 MOCKUP_LOOP = REPO / "mockups" / "L2-03_eltern_detail_loop_kuerzen.png"
@@ -410,6 +414,70 @@ def test_at_1024_x_640_the_tiles_stay_playable_and_the_row_fits(qapp, tmp_path, 
         tile = view.tiles[3]
         tap(tile, tile.start_field().center())  # a pad under the open panel still records
         assert w.controller.recording_pad == 3
+    finally:
+        w.close()
+
+
+@pytest.mark.parametrize("rows,size", [(4, (1024, 640)), (6, (1280, 800))])
+def test_many_rows_in_a_low_window_keep_64_px_tiles_and_the_panel_scrolls(qapp, tmp_path, clock, rows, size):
+    settings = make_settings(tmp_path / "live", rows=rows, cols=4)
+    store = EventStore(settings.log_dir, settings.pad_count, clock=clock)
+    controller = Controller(store, ShapedAudio(clock), settings, clock=clock)
+    controller.press(0)
+    clock.advance(2.0)
+    controller.press(0)
+    view = ParentView(controller, WaveCache(), False)
+    try:
+        view.resize(*size)
+        view.show()
+        QTest.qWaitForWindowExposed(view)
+        detail = view.detail
+        for tab in ("loop", "pad", "record"):
+            detail.open_tab(tab)
+            view.refresh({}, (0.0,) * 4)
+            QTest.qWait(20)
+            assert min(t.body().height() for t in view.tiles) >= 64, tab
+            assert detail.geometry().bottom() < view.height() and detail.y() > view.grid.geometry().top()
+        detail.open_tab("loop")
+        QTest.qWait(20)
+        loop, holder = detail.loop_tab, detail.holder("loop")
+        assert isinstance(holder, QScrollArea)
+        assert holder.viewport().height() < loop.minimumSizeHint().height()
+        assert loop.height() >= loop.minimumSizeHint().height()  # not squeezed: the panel scrolls instead
+        assert holder.verticalScrollBar().maximum() > 0
+        assert loop.width() <= holder.viewport().width()  # never sideways
+        bar = holder.verticalScrollBar()
+        bar.setValue(bar.maximum())  # scrolled down, the whole action row is in sight
+        QTest.qWait(20)
+        apply = loop.trim.apply_button
+        box = apply.rect().translated(apply.mapTo(holder.viewport(), QPoint(0, 0)))
+        assert holder.viewport().rect().contains(box)
+    finally:
+        view.close()
+        store.close()
+
+
+@pytest.mark.parametrize("size", [(1024, 640), (1280, 800)])
+def test_beside_a_side_panel_the_folded_line_keeps_its_facts_readable(qapp, tmp_path, clock, size):
+    w = World(tmp_path, clock, size=size)
+    try:
+        w.like_the_mockup()
+        view = open_parents(w.window)
+        view.select(4)
+        tick(w)
+        detail = view.detail
+        assert all(button.isVisible() for button in detail.tab_buttons.values())  # the full width: tabs
+        for button in detail.tab_buttons.values():
+            assert button.x() - 16 - BADGE_END >= INFO_LEAST
+        view.toolbar.buttons["changes"].click()
+        tick(w)
+        assert view.panel_key == "changes" and not detail.is_open
+        # Tabs that would cover "Pad 5" and its facts give way; a tap on the line still unfolds it.
+        assert not any(button.isVisible() for button in detail.tab_buttons.values())
+        assert detail._tabs_left - 16 - BADGE_END >= INFO_LEAST
+        tap(detail, QPoint(BADGE_END + 20, 30))
+        assert detail.is_open and view.panel_key is None
+        assert all(button.isVisible() for button in detail.tab_buttons.values())
     finally:
         w.close()
 

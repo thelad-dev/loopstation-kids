@@ -77,6 +77,8 @@ HEADER = 64  # the folded panel, and the head of the unfolded one
 MARGIN = 16
 FOLD_SIZE = QSize(44, 42)
 WIDE = 1000  # from this width the tabs and the action row have their full size
+INFO_LEAST = 200  # the folded line keeps this much room for "Pad N" and its facts, else the tabs give way
+BADGE_END = MARGIN + 36 + 16  # where "Pad N" begins, right of the badge
 TABS = (("loop", "Loop"), ("pad", "Pad"), ("record", "Aufnahme"), ("effects", "Effekte (später)"))
 NEW_CORE = "kommt mit dem neuen Kern"
 LABEL = QColor("#C7C7CC")
@@ -292,7 +294,7 @@ class LoopTab(QWidget):
         self._play: tuple[float, int, int] | None = None  # (start time, first frame, frames) while it plays
         self._tip_stamp = ""  # the minute the tooltip of "Export" was made for
         self.waveform = WaveformWidget()
-        self.waveform.setMinimumHeight(FLAG_ROOM + 34)
+        self.waveform.setMinimumHeight(FLAG_ROOM + 56)  # a low panel scrolls rather than flatten the wave
         self.waveform.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.waveform.bar_labels = True
         self.waveform.selection_changed.connect(weak_slot(self._selection_changed))
@@ -1002,6 +1004,7 @@ class DetailPanel(QWidget):
         self.message.setWordWrap(True)
         self.message.hide()
         self.pages: dict[str, QWidget] = {}
+        self._holders: dict[str, QWidget] = {}  # what the stack shows for a tab: the page or its scroll area
 
     # ---------------------------------------------------------------- tabs
 
@@ -1015,8 +1018,22 @@ class DetailPanel(QWidget):
             builder = {"loop": LoopTab, "pad": PadTab, "record": RecordTab}[key]
             widget = builder(self)
             self.pages[key] = widget
-            self.stack.addWidget(widget)
+            holder = widget
+            if key == "loop":
+                # Wave, line and action row scroll together in a low panel (many rows in a low window);
+                # the columns of the other tabs scroll on their own.
+                # The width is the panel's (the row fits itself to it), never more: no sideways scrolling.
+                widget.setSizePolicy(QSizePolicy.Policy.Ignored, widget.sizePolicy().verticalPolicy())
+                holder = scrolled(widget)
+                holder.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            self._holders[key] = holder
+            self.stack.addWidget(holder)
         return widget
+
+    def holder(self, key: str) -> QWidget:
+        """What the stack shows for the tab ``key``: its page, or the scroll area around it."""
+        self.page(key)
+        return self._holders[key]
 
     @property
     def loop_tab(self) -> LoopTab:
@@ -1038,7 +1055,7 @@ class DetailPanel(QWidget):
         if key != self.tab and isinstance(loop, LoopTab):
             loop.stop_listening()  # its play head would run on unseen
         self.tab = key
-        self.stack.setCurrentWidget(self.page(key))
+        self.stack.setCurrentWidget(self.holder(key))
         if self.is_open:
             self._light_tabs()
             self.refresh()
@@ -1056,7 +1073,7 @@ class DetailPanel(QWidget):
             return
         self.is_open = unfolded
         if unfolded:
-            self.stack.setCurrentWidget(self.page(self.tab))
+            self.stack.setCurrentWidget(self.holder(self.tab))
         self.stack.setVisible(unfolded)
         self.message.setVisible(unfolded and bool(self.message.text()))
         self.fold_button.set_unfolded(unfolded)
@@ -1186,9 +1203,14 @@ class DetailPanel(QWidget):
             tab_width = button.width_for(pixels, padding)
             right -= tab_width
             button.setGeometry(round(right), 13, tab_width, 38)
-            button.setVisible(not folded_help)
             right -= 6
         self._tabs_left = right + 6
+        # Folded beside a side panel the line is narrow: the facts stay readable, a tap on the line unfolds.
+        crowded = not self.is_open and self._tabs_left - 16 - BADGE_END < INFO_LEAST
+        for button in self.tab_buttons.values():
+            button.setVisible(not (folded_help or crowded))
+        if crowded:
+            self._tabs_left = fold.left() - 8
         help_height = self._help_strip()[2]
         self.message.setGeometry(MARGIN, HEADER + help_height, max(1, width - 2 * MARGIN),
                                  self._message_height())

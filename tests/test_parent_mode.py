@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 from conftest import FakeAudio, make_settings
 from PySide6.QtCore import QPoint, QPointF, Qt
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtGui import QColor, QFontMetrics, QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractButton, QApplication, QDialog, QWidget
 
@@ -855,6 +855,45 @@ def test_nothing_overlaps_at_any_size(qapp, tmp_path, clock, size):
         assert card.height() >= card.minimumSizeHint().height(), size
     finally:
         w.close()
+
+
+def _header_at(qapp, tmp_path, clock, size) -> tuple[float, tuple, list]:
+    """The share of the header the volume track has, the bar chip's lines as drawn, and the switch."""
+    w = World(tmp_path, clock, size=size)
+    try:
+        w.like_the_mockup()
+        view = open_parents(w.window)
+        QTest.qWait(20)
+        share = view.volume_slider._track().width() / view.header.width()
+        lines = view.bar_chip.shown_lines()
+        segments = []
+        for segment in (view.mode_switch.kids_button, view.mode_switch.parents_button):
+            word = QFontMetrics(segment.label_font()).horizontalAdvance(segment.text())
+            segments.append((segment.width(), segment.ICON + segment.ICON_GAP + word + 8))
+        return share, lines, segments
+    finally:
+        w.close()
+
+
+def test_at_1024_px_the_header_cuts_nothing_and_the_volume_keeps_its_track(qapp, tmp_path, clock):
+    wide_share, wide_lines, _ = _header_at(qapp, tmp_path / "wide", clock, (1280, 800))
+    share, lines, segments = _header_at(qapp, tmp_path / "narrow", clock, (1024, 640))
+    assert share >= wide_share - 0.002, (share, wide_share)  # as much track for its width as at 1280
+    assert [text for text, _font in wide_lines] == ["96 BPM · 4/4", "aus Aufnahmelänge · 2,50 s"]
+    # The narrow chip says where the bar came from without its length (the tooltip has it all), uncut.
+    assert [text for text, _font in lines] == ["96 BPM · 4/4", "aus Aufnahmelänge"]
+    assert all(font.pixelSize() >= 11 for _text, font in lines)
+    for width, needed in segments:  # "Kinder" and "Eltern" fit their half of the switch
+        assert needed <= width, (width, needed)
+
+
+def test_the_header_buttons_say_what_they_do_in_their_tooltips(world):
+    view = open_parents(world.window)
+    assert view.redo_button.text() == "Wieder" and "Wiederholen" in view.redo_button.toolTip()
+    assert "Strg+Z" in view.undo_button.toolTip() and "Strg+Y" in view.redo_button.toolTip()
+    world.like_the_mockup()
+    world.window._tick()
+    assert "aus Aufnahmelänge · 2,50 s" in view.bar_chip.toolTip()
 
 
 def _part(image: QImage, box: tuple[int, int, int, int], width: int, height: int) -> np.ndarray:
