@@ -97,8 +97,9 @@ SOURCE_WORDS = {
     "parent_bpm": "von Hand eingestellt",
     "free_pad": "aus freiem Pad",
 }
+# The keys of the parents' view (the main window handles them), shown behind "Tasten ?".
 KEYS_HELP = ("Pfeile wählen · Leertaste spielt · L Loop · R nimmt auf · Entf löscht · Enter Detailfeld · "
-             "M Marker · Esc schließt · F1 Kinderseite")
+             "M Marker · Esc schließt · Strg+Z zurück · Strg+Y wieder · F1 Kinderseite")
 
 # (tool key, icon, word) of the tool bar; the gap falls after the first four.
 TOOLS = (

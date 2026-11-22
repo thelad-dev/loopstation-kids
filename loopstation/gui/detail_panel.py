@@ -1151,11 +1151,13 @@ class DetailPanel(QWidget):
         parts = self.help.split(" · ")
         lines: list[str] = [self.help]
         font = _font(14, QFont.Weight.Medium)
-        for count, pixels in ((1, 14), (2, 13), (3, 12)):
+        # One line at 14 px, else two at 13, else three at 12 (each may give one pixel); the last way
+        # shrinks the three lines further rather than cut them.
+        for count, pixels, least in ((1, 14, 13), (2, 13, 12), (3, 12, 11), (3, 11, 10)):
             size = -(-len(parts) // count)  # parts per line, rounded up
             lines = [" · ".join(parts[i:i + size]) for i in range(0, len(parts), size)]
             longest = max(lines, key=QFontMetrics(_font(pixels, QFont.Weight.Medium)).horizontalAdvance)
-            font = fitted_font(longest, room, pixels, QFont.Weight.Medium, 10)
+            font = fitted_font(longest, room, pixels, QFont.Weight.Medium, least)
             if QFontMetrics(font).horizontalAdvance(longest) <= room:
                 return lines, font
         metrics = QFontMetrics(font)
