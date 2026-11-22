@@ -386,7 +386,7 @@ class SetsPage(QWidget):
         good.addWidget(self.safe_title)
         good.addWidget(self._small(
             "Erst fertig schreiben, dann umbenennen: ein Abbruch überschreibt kein altes Set halb.\n"
-            "Nur lokal – keine Cloud.", TEXT.name(), 14))
+            "Nur lokal, keine Cloud.", TEXT.name(), 14))
         good.addStretch(1)
 
         right = QVBoxLayout()
@@ -612,7 +612,7 @@ class SetsPage(QWidget):
             values["Format"].setText(f"v{manifest.format_version} · passt" if not info.error else "")
         else:
             for key in ("Gespeichert", "Pads mit Aufnahme", "Takt", "Zurück-Schritte"):
-                values[key].setText("–")
+                values[key].setText("-")
             values["Format"].setText("zu neu" if info.too_new else "unlesbar")
         values["Format"].setStyleSheet(
             f"font-size: 15px; font-weight: bold; color: {RED if info.error else TEXT.name()};")

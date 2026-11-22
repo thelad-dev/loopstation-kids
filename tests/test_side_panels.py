@@ -8,6 +8,7 @@ at once. Every panel fits 1024 x 640 without a sideways scroll bar and without a
 from __future__ import annotations
 
 import gc
+import re
 import sys
 import weakref
 from dataclasses import fields
@@ -17,7 +18,15 @@ from conftest import FakeAudio, make_settings
 from PySide6.QtCore import QCoreApplication, QEvent, QPoint, Qt
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QAbstractButton, QLabel, QScrollArea, QWidget
+from PySide6.QtWidgets import (
+    QAbstractButton,
+    QAbstractSpinBox,
+    QComboBox,
+    QLabel,
+    QLineEdit,
+    QScrollArea,
+    QWidget,
+)
 
 from loopstation.config import Settings, load_settings
 from loopstation.controller import Controller
@@ -38,8 +47,9 @@ from loopstation.store import EventStore
 TOOLS = ("changes", "sets", "export", "levels", "devices", "system", "tempo")
 DETAIL_TABS = ("loop", "pad", "record")  # the tabs of the detail panel under the pads
 SIZES = [(1024, 640), (1280, 800), (1920, 1080)]
-INTERNAL_KEYS = ("sample_rate", "data_dir", "max_level_db", "input_gain_db", "latency_ms", "audio_hostapi",
-                 "stretch_engine", "rubberband", "time_signature", "parent_idle_minutes", "duration")
+# Every key of the settings file and the sources of a bar: none of them may show up as a word in the view.
+INTERNAL_KEYS = (*(f.name for f in fields(Settings)),
+                 "rubberband", "onset", "duration", "parent_bpm", "free_pad")
 
 
 class Parts:
@@ -331,22 +341,49 @@ def test_without_a_controller_the_panels_are_there_but_the_live_cards_are_not(qa
     assert panels.page("levels").isAncestorOf(panels.editors["volume"].widget)  # the plain rows
 
 
-def test_no_internal_key_in_any_text_of_the_panels(parts):
-    parts.record(0, 2.0)
+def _texts(root: QWidget) -> list[str]:
+    """Every text a parent can read on ``root`` and below it: words, values, tooltips, accessible names."""
     texts = []
+    for widget in [root, *root.findChildren(QWidget)]:
+        if isinstance(widget, (QLabel, QAbstractButton, QLineEdit)):
+            texts.append(widget.text())
+        if isinstance(widget, QComboBox):
+            texts += [widget.itemText(i) for i in range(widget.count())]
+        if isinstance(widget, QAbstractSpinBox):
+            texts.append(widget.text())
+        texts += [widget.toolTip(), widget.accessibleName()]
+    return [text for text in texts if text]
+
+
+def test_no_internal_key_and_no_long_dash_in_any_text_of_the_parents_view(parts):
+    """The whole parents' view: header, tool bar, every side panel, every tab of the detail panel with its
+    lines and the key help, and the sum over the window."""
+    view, window = parts.view, parts.window
+    parts.open("tempo")  # without a bar yet: the tiles of the bar have no values
+    texts = _texts(view.side_panel)
+    parts.record(0, 2.0)
+    texts += _texts(view)
     for key in TOOLS:
-        page = parts.open(key)
-        texts += [label.text() for label in page.findChildren(QLabel)]
-        texts += [button.text() for button in page.findChildren(QAbstractButton)]
-        texts.append(parts.view.side_panel.line.text())
+        parts.open(key)
+        texts += _texts(view.side_panel)
+    window.close_tool()
+    texts.append(view.detail.info)
     for key in DETAIL_TABS:
-        page = parts.open_tab(key)
-        texts += [w.text() for w in page.findChildren(QLabel) + page.findChildren(QAbstractButton)]
-        texts += [w.toolTip() for w in page.findChildren(QWidget)]
-        texts.append(parts.view.detail.open_info)
+        parts.open_tab(key)
+        window._tick()
+        texts += _texts(view.detail)
+        texts.append(view.detail.open_info)
+    view.toolbar.keys_button.click()
+    texts += [view.detail.help, *view.bar_chip.lines, view.bar_chip.toolTip()]
+    window.leave_parent_mode()
+    window._unlocked_until = 0.0
+    window.open_parent_area()
+    assert window.gate_overlay is not None
+    texts += _texts(window.gate_overlay)
     joined = " | ".join(texts)
     for key in INTERNAL_KEYS:
-        assert key not in joined, key
+        assert re.search(rf"(?<![A-Za-zÄÖÜäöü]){key}(?![A-Za-zÄÖÜäöü])", joined) is None, key
+    assert "—" not in joined and "–" not in joined, [t for t in texts if "—" in t or "–" in t]
 
 
 def test_the_audio_system_is_a_list_of_the_systems_the_machine_has(qapp, tmp_path, monkeypatch):

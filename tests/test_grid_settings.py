@@ -83,7 +83,7 @@ def test_tiles_name_a_length_grid_and_a_session_without_grid():
     assert not any("duration" in text for tile in tiles for text in tile)  # no internal key on the tile
     free = grid_panel.tiles(None, "onsets_without_beat_and_length_implausible")
     assert free[3] == ("Quelle", "Kein Takt", "Schläge unklar, Aufnahme zu lang")
-    assert grid_panel.tiles(None)[0] == ("Tempo", "–", "kein Takt")
+    assert grid_panel.tiles(None)[0] == ("Tempo", "-", "kein Takt")
 
 
 # --- the page ----------------------------------------------------------------------------------------
@@ -138,7 +138,7 @@ def test_a_change_on_the_panel_writes_and_applies_the_grid_settings(parts, dialo
 def test_the_card_shows_no_grid_before_a_recording_and_the_source_after(parts, dialog, clock):
     _, controller, audio, _ = parts
     panel = dialog.grid_panel
-    assert panel is not None and panel.texts()[0] == ("Tempo", "–", "kein Takt")
+    assert panel is not None and panel.texts()[0] == ("Tempo", "-", "kein Takt")
     assert not panel.note.isHidden()
     audio.clap_times = [0.5, 1.0]
     controller.press(0)
