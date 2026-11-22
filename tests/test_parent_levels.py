@@ -9,6 +9,7 @@ import pytest
 from conftest import FakeAudio, make_settings
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QLabel
 
 from loopstation.audio.dynamics import db_to_gain
 from loopstation.clips import KEEP, ClipEvent, ClipLog
@@ -18,7 +19,7 @@ from loopstation.gui import level_panel
 from loopstation.gui.level_panel import PANEL_KEYS, describe_clip, format_db, format_when
 from loopstation.gui.main_window import MainWindow
 from loopstation.gui.peak_meter import peak_to_position
-from loopstation.gui.settings_page import NOTES, SettingsDialog
+from loopstation.gui.settings_panels import NOTES, SettingsPanels
 from loopstation.store import EventStore
 
 SHIPPED = (Path(__file__).resolve().parent.parent / "settings.toml").read_text(encoding="utf-8")
@@ -42,11 +43,11 @@ def parts(qapp, tmp_path, clock):
 
 @pytest.fixture
 def dialog(parts):
-    window, controller, path = parts
-    page = SettingsDialog(path, controller.settings, window.apply_settings, SHIPPED, window)
-    page.show()
-    yield page
-    page.close()
+    """The side panel "Pegel" open in the parents' view of the real window; yields its ``SettingsPanels``."""
+    window = parts[0]
+    window.enter_parent_mode()
+    window.open_tool("levels")
+    yield window.settings_panels
 
 
 def controller_event_time(parts) -> float:
@@ -155,26 +156,27 @@ def test_child_page_has_no_extra_level_widget(parts):
 # ------------------------------------------------------ the page
 
 
-def test_page_has_the_volume_slider_top_right_and_the_level_cards(dialog):
-    slider = dialog.volume_slider
-    assert slider is not None and dialog.panel is not None
-    top_left = slider.mapTo(dialog, QPoint(0, 0))
-    assert top_left.x() + slider.width() >= dialog.width() - 40 and top_left.y() < 40
+def test_page_has_the_volume_slider_top_right_and_the_level_cards(parts, dialog):
+    window = parts[0]
+    slider = window.parent_view.volume_slider  # one volume: the slider of the header, beside the panel
+    top_left = slider.mapTo(window, QPoint(0, 0))
+    assert top_left.x() + slider.width() >= window.width() - 40 and top_left.y() < 40
+    assert dialog.panel is not None and dialog.panel.isVisible()
     for key in PANEL_KEYS:
         assert key in dialog.editors and dialog.editors[key] is dialog.panel.editors[key]
 
 
 def test_page_states_that_dbfs_is_not_db_spl(dialog):
-    texts = " ".join(label.text() for label in dialog.findChildren(type(dialog.message)))
+    texts = " ".join(label.text() for label in dialog.page("levels").findChildren(QLabel))
     assert level_panel.HONESTY_TITLE in texts and "dBFS ist nicht dB am Ohr" in texts
     assert any("dB(FS)" in note and "dB(SPL)" in note for note in NOTES)
 
 
 def test_one_volume_for_both_sliders(parts, dialog):
     window, controller, _ = parts
-    dialog.refresh_levels()
-    assert dialog.volume_slider.volume == pytest.approx(controller.volume)
-    slider = dialog.volume_slider
+    slider = window.parent_view.volume_slider
+    window.refresh()
+    assert slider.volume == pytest.approx(controller.volume)
     QTest.mouseClick(slider, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
                      QPoint(int(slider._x_of(0.5)), slider.height() // 2))
     assert controller.volume == pytest.approx(0.25, abs=0.01)
@@ -182,8 +184,8 @@ def test_one_volume_for_both_sliders(parts, dialog):
     window.refresh()
     assert window.volume_slider.volume == pytest.approx(controller.volume)  # the child's slider moved, too
     controller.set_volume(0.1)
-    dialog.refresh_levels()
-    assert dialog.volume_slider.volume == pytest.approx(0.1)
+    window.refresh()
+    assert slider.volume == pytest.approx(0.1)
 
 
 def test_lowering_the_ceiling_pulls_both_sliders_down(parts, dialog):
@@ -197,9 +199,8 @@ def test_lowering_the_ceiling_pulls_both_sliders_down(parts, dialog):
     assert not path.exists()
     ceiling.released.emit(-20.0)
     assert load_settings(path).max_level_db == -20.0
-    dialog.refresh_levels()
     window.refresh()
-    assert dialog.volume_slider.volume == pytest.approx(db_to_gain(-20.0))
+    assert window.parent_view.volume_slider.volume == pytest.approx(db_to_gain(-20.0))
     assert window.volume_slider.volume == pytest.approx(db_to_gain(-20.0))
     assert window.volume_slider.limit == pytest.approx(db_to_gain(-20.0))
 
@@ -229,42 +230,49 @@ def test_trim_and_switches_write_the_file_and_reach_the_engine(parts, dialog):
     assert audio.auto_gain is True and load_settings(path).auto_gain is True
     switches["peak_meter"].setChecked(False)
     assert controller.peak_meter is False and load_settings(path).peak_meter is False
-    switches["sound_effects"].setChecked(False)
-    assert controller.settings.sound_effects is False and load_settings(path).sound_effects is False
-    assert controller.settings.record_start_tone is True and switches["record_start_tone"].isChecked()
-    switches["record_start_tone"].setChecked(False)
-    assert controller.settings.record_start_tone is False and load_settings(path).record_start_tone is False
     switches["soft_seam"].setChecked(False)
     assert controller.settings.soft_seam is False and load_settings(path).soft_seam is False
+    # The beeps are on the panel "System" (mockup L2-05): they save and act the same way.
+    dialog.page("system")
+    beep = dialog.editors["sound_effects"]._box
+    beep.setChecked(False)
+    assert controller.settings.sound_effects is False and load_settings(path).sound_effects is False
+    start_tone = dialog.editors["record_start_tone"]._box
+    assert controller.settings.record_start_tone is True and start_tone.isChecked()
+    start_tone.setChecked(False)
+    assert controller.settings.record_start_tone is False and load_settings(path).record_start_tone is False
     # The values the child set meanwhile are kept in the file, too.
     assert load_settings(path).volume == pytest.approx(controller.volume)
 
 
-def test_a_live_change_leaves_unsaved_other_fields_alone(parts, dialog):
+def test_a_live_change_keeps_the_other_values_of_the_file(parts, dialog):
     _, controller, path = parts
-    dialog.editors["fullscreen"]._box.setChecked(True)  # typed, not saved yet
+    dialog.page("system")
+    rows = dialog.editors["rows"]._spin
+    rows.setValue(5)
+    rows.editingFinished.emit()  # saved, acts after a restart
     dialog.panel.switches["auto_gain"].setChecked(True)
-    assert load_settings(path).fullscreen is False and controller.settings.fullscreen is False
-    assert dialog.save()
-    assert load_settings(path).fullscreen is True and load_settings(path).auto_gain is True
+    stored = load_settings(path)
+    assert stored.rows == 5 and stored.auto_gain is True
+    assert controller.settings.rows == 3 and controller.settings.auto_gain is True
 
 
 def test_latency_is_live_from_the_page(parts, dialog):
     _, controller, path = parts
+    dialog.page("devices")
     editor = dialog.editors["latency_ms"]
     editor._manual.setChecked(True)
     editor._dspin.setValue(85.0)
-    assert dialog.save()
+    editor._dspin.editingFinished.emit()
     assert controller.settings.latency_ms == 85.0 and load_settings(path).latency_ms == 85.0
     editor._auto.setChecked(True)
-    assert dialog.save()
     assert controller.settings.latency_ms is None and load_settings(path).latency_ms is None
 
 
-def test_saving_the_page_keeps_the_childs_volume(parts, dialog):
+def test_saving_keeps_the_childs_volume(parts, dialog):
     _, controller, path = parts
-    controller.set_volume(0.2)  # the child moved the slider after the page opened
-    assert dialog.save()
+    controller.set_volume(0.2)  # the child moved the slider after the panel opened
+    dialog.panel.switches["auto_gain"].setChecked(True)
     assert controller.volume == pytest.approx(0.2) and load_settings(path).volume == pytest.approx(0.2)
 
 
@@ -273,7 +281,7 @@ def test_loud_recordings_show_up_on_the_page(parts, dialog, clock):
     dialog.refresh_levels()
     rows = dialog.panel.clip_list.rows
     assert len(rows) == 1
-    texts = " ".join(label.text() for label in rows[0].findChildren(type(dialog.message)))
+    texts = " ".join(label.text() for label in rows[0].findChildren(QLabel))
     when = format_when(controller_event_time(parts))
     assert "Pad 6" in texts and "übersteuert" in texts and when in texts
     record_take(parts, clock, pad=1, peak=db_to_gain(-1.0))
@@ -282,7 +290,7 @@ def test_loud_recordings_show_up_on_the_page(parts, dialog, clock):
 
 
 def test_empty_list_says_so(dialog):
-    texts = [label.text() for label in dialog.panel.clip_list.findChildren(type(dialog.message))]
+    texts = [label.text() for label in dialog.panel.clip_list.findChildren(QLabel)]
     assert texts == [level_panel.CLIP_EMPTY]
 
 
@@ -300,11 +308,11 @@ def test_scale_on_the_page_shows_the_last_take_and_dims_with_the_switch(parts, d
 
 def test_page_without_a_controller_still_has_the_plain_rows(qapp, tmp_path):
     running = make_settings(tmp_path)
-    plain = SettingsDialog(tmp_path / "s.toml", running, lambda new: [], SHIPPED)
-    assert plain.panel is None and plain.volume_slider is None
+    plain = SettingsPanels(tmp_path / "s.toml", running, lambda new: [], SHIPPED)
+    plain.page("levels")
+    assert plain.panel is None
     assert {"volume", "max_level_db", "peak_meter"} <= set(plain.editors)
     plain.refresh_levels()  # nothing to do
-    plain.close()
 
 
 # --------------------------------------------------------- helpers
@@ -327,4 +335,5 @@ def test_a_damaged_file_is_not_overwritten_by_a_level_change(parts, dialog):
     path.write_text("max_level_db = kaputt\n", encoding="utf-8")
     dialog.panel.switches["auto_gain"].setChecked(True)
     assert path.read_text(encoding="utf-8") == "max_level_db = kaputt\n"
-    assert "ungültiges TOML" in dialog.message.text()
+    head = parts[0].parent_view.side_panel
+    assert "ungültiges TOML" in dialog.message and head.message() == dialog.message  # said in the head

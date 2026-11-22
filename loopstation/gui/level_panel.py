@@ -1,14 +1,15 @@
-"""Volume and level section of the parents' area (mockup 09, plan 3.1, 7 and 9).
+"""The level section of the parents' view, the side panel "Pegel" (mockups 09 and L2-05, plan 3.1, 7 and 9).
 
-Four cards: the ceiling, the recording level, the automatic features and the
-list of loud recordings. The controls act at once: ``edited(key, value, final)``
-goes to the settings page, which hands the value to the controller and writes
-``settings.toml`` when ``final`` is true (a switch, or the end of a drag).
+Three sections, one under the other (the side panel is narrow): the ceiling, the
+microphone with its scale, trim and automatic features, and the list of loud recordings.
+The controls act at once: ``edited(key, value, final)`` goes to the settings panels, which
+hand the value to the controller and write ``settings.toml`` when ``final`` is true (a switch,
+or the end of a drag).
 
 The panel owns no state of its own. The ceiling, the trim and the switches
 show and set the controller's values; the loud recordings come from the
-controller's clip log. The volume itself lives in the slider at the top right
-of the page, the same one source of truth the child's slider uses.
+controller's clip log. The volume itself lives in the slider of the header,
+the same one source of truth the child's slider uses.
 """
 
 from __future__ import annotations
@@ -30,23 +31,17 @@ from PySide6.QtWidgets import (
 
 from loopstation.clips import ClipEvent
 from loopstation.gui.parent_gate import PARENT_ACCENT
-from loopstation.gui.parent_nav import CardGrid
 from loopstation.gui.peak_meter import PeakMeter
 from loopstation.gui.widgets import ACCENT_ORANGE, ACCENT_RED, TEXT, TEXT_DIM, weak_slot
 
 if TYPE_CHECKING:
     from loopstation.controller import Controller
 
-# The settings this panel takes over from the generic rows of the page.
-PANEL_KEYS = (
-    "volume", "max_level_db", "input_gain_db", "auto_gain", "peak_meter", "soft_seam", "sound_effects",
-    "record_start_tone",
-)
+# The settings this panel takes over from the generic rows (the beeps are on the panel "System").
+PANEL_KEYS = ("volume", "max_level_db", "input_gain_db", "auto_gain", "peak_meter", "soft_seam")
 
-HONESTY_TITLE = "Echte Lautstärke hängt vom Kopfhörer ab"
-HONESTY_TEXT = (
-    "dBFS ist nicht dB am Ohr: Systemlautstärke und Kopfhörer zählen mit. WHO: 75 dBA, 40 h/Wo."
-)
+HONESTY_TITLE = "dBFS ist nicht dB am Ohr"
+HONESTY_TEXT = "Systemlautstärke und Kopfhörer zählen mit · WHO: 75 dBA, 40 h/Woche"
 CLIP_TIP = "Tipp: Trim etwas senken oder Mikro weiter weg."
 CLIP_EMPTY = "Noch war nichts zu laut."
 CLIP_ROWS = 4  # most recent loud recordings shown
@@ -313,12 +308,11 @@ class LevelPanel(QWidget):
         self.meter = PeakMeter()
         self.clip_list = ClipList()
 
-        # Two columns on a wide page, one column at 1024 px.
-        cards = CardGrid([[self._ceiling_card(), self._input_card()],
-                          [self._automatic_card(values), self._clips_card()]], gap=20, spacing=16)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(cards)
+        outer.setSpacing(14)
+        for card in (self._ceiling_card(), self._input_card(values), self._clips_card()):
+            outer.addWidget(card)
 
         for slider, key in ((self.ceiling, "max_level_db"), (self.trim, "input_gain_db")):
             slider.valueChanged.connect(weak_slot(self._emit_edited, key, False, pass_signal_args=True))
@@ -347,10 +341,11 @@ class LevelPanel(QWidget):
         card = QFrame()
         card.setObjectName("card")
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(24, 18, 24, 18)
-        layout.setSpacing(10)
+        layout.setContentsMargins(24, 12, 24, 12)
+        layout.setSpacing(8)
         heading = QLabel(title)
-        heading.setStyleSheet("font-size: 19px; font-weight: bold;")
+        heading.setWordWrap(True)  # a narrow side panel: the title wraps instead of being cut off
+        heading.setStyleSheet("font-size: 17px; font-weight: bold;")
         layout.addWidget(heading)
         if subtitle:
             sub = QLabel(subtitle)
@@ -400,78 +395,60 @@ class LevelPanel(QWidget):
         return row
 
     def _ceiling_card(self) -> QFrame:
-        card, layout = self._card(
-            "Maximale Lautstärke (nur Eltern)", "Die App wird nie lauter als diese Grenze.")
+        card, layout = self._card("Höchste Lautstärke (nur Eltern)")
         layout.addWidget(self.ceiling)
         layout.addLayout(self._switch_row(
-            "Peak-Limiter auf die Summe", "verhindert Kratzen, wenn viele Loops laufen",
-            None, True, pill="IMMER AN", fixed=True))
+            "Limiter auf die Summe", "immer an · gegen Kratzen bei vielen Loops",
+            None, True, fixed=True))
         box = QFrame()
         box.setObjectName("honesty")
         box.setStyleSheet("#honesty { background: rgba(255, 159, 10, 23); border: 1.5px solid "
-                          "rgba(255, 159, 10, 102); border-radius: 14px; }")
+                          "rgba(255, 159, 10, 102); border-radius: 12px; }")
         inner = QHBoxLayout(box)
-        inner.setContentsMargins(16, 12, 16, 12)
-        inner.setSpacing(14)
-        inner.addWidget(WarnIcon(ACCENT_ORANGE, 28), 0, Qt.AlignmentFlag.AlignTop)
+        inner.setContentsMargins(14, 10, 14, 10)
+        inner.setSpacing(12)
+        inner.addWidget(WarnIcon(ACCENT_ORANGE, 24), 0, Qt.AlignmentFlag.AlignTop)
         texts = QVBoxLayout()
         texts.setSpacing(2)
         title = QLabel(HONESTY_TITLE)
         title.setWordWrap(True)
-        title.setStyleSheet("font-size: 13px; font-weight: bold;")
+        title.setStyleSheet("font-size: 14px; font-weight: bold;")
         body = QLabel(HONESTY_TEXT)
         body.setWordWrap(True)
-        body.setStyleSheet("color: #C7C7CC; font-size: 14px;")
+        body.setStyleSheet("color: #C7C7CC; font-size: 12.5px;")
         texts.addWidget(title)
         texts.addWidget(body)
         inner.addLayout(texts, 1)
-        layout.addStretch(1)
         layout.addWidget(box)
         return card
 
-    def _input_card(self) -> QFrame:
-        card, layout = self._card("Aufnahmepegel (Mikrofon)", "Reserve statt „so laut wie möglich“")
+    def _input_card(self, values: dict[str, Any]) -> QFrame:
+        card, layout = self._card("Mikrofon")
         layout.addWidget(self.meter)
-        heading = QLabel("Eingangs-Trim")
-        heading.setStyleSheet("font-size: 15px; font-weight: bold;")
+        heading = QLabel("Trim (Reserve statt „so laut wie möglich“)")
+        heading.setWordWrap(True)
+        heading.setStyleSheet("font-size: 14px; font-weight: bold;")
         layout.addWidget(heading)
         layout.addWidget(self.trim)
         layout.addLayout(self._switch_row(
-            "Soft-Clip am Eingang", "weiche Spitzenbegrenzung – ersetzt keine Reserve",
-            None, True, pill="IMMER AN", fixed=True))
-        layout.addStretch(1)
-        return card
-
-    def _automatic_card(self, values: dict[str, Any]) -> QFrame:
-        card, layout = self._card("Automatik")
+            "Soft-Clip am Eingang", "immer an · ersetzt keine Reserve",
+            None, True, fixed=True))
         layout.addLayout(self._switch_row(
-            "Auto-Gain", "langsames Nachziehen, kein Pumpen", "auto_gain", values["auto_gain"],
-            pill="STANDARD: AUS"))
-        for line in ("Festes Trim ist vorhersehbarer (Reizempfindlichkeit).",
-                     "Auto-Gain schützt NICHT vor Übersteuerung am Wandler."):
-            note = QLabel(line)
-            note.setWordWrap(True)
-            note.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 13px;")
-            layout.addWidget(note)
+            "Pegel automatisch nachziehen",
+            "Standard aus · festes Trim ist vorhersehbarer; schützt nicht vor Übersteuerung am Wandler",
+            "auto_gain", values["auto_gain"]))
         layout.addLayout(self._switch_row(
-            "Naht weich zeichnen (Crossfade)", "gegen Klicks am Loop-Ende · Standard an",
-            "soft_seam", values["soft_seam"]))
-        layout.addLayout(self._switch_row(
-            "Start-/Stopp-Pieps", "läuft durch dieselbe Grenze", "sound_effects", values["sound_effects"]))
-        layout.addLayout(self._switch_row(
-            "Aufnahmestart-Ton", "klingt vor der Aufnahme aus · Standard an",
-            "record_start_tone", values["record_start_tone"]))
+            "Naht weich zeichnen", "gegen Klicks am Loop-Ende · Standard an", "soft_seam",
+            values["soft_seam"]))
         layout.addLayout(self._switch_row(
             "Pegelanzeige bei Aufnahme",
             "drei Balken am Pad und die Skala hier · das Warnzeichen bleibt immer",
             "peak_meter", values["peak_meter"]))
-        layout.addStretch(1)
         return card
 
     def _clips_card(self) -> QFrame:
         card, layout = self._card("Zu laut gewesen (nur lokal gemerkt)")
         layout.addWidget(self.clip_list)
-        layout.addStretch(1)
         tip = QLabel(CLIP_TIP)
         tip.setWordWrap(True)
         tip.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 13px;")

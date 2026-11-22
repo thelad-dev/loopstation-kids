@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QAbstractScrollArea,
     QCheckBox,
     QComboBox,
-    QDialog,
     QLabel,
     QLineEdit,
     QMenuBar,
@@ -33,8 +32,10 @@ from loopstation.gui.export_dialog import ExportDialog
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.main_window import MainWindow
 from loopstation.gui.parent_gate import GateCard, ParentEntryButton, new_question
+from loopstation.gui.parent_view import PANEL_WIDTH
 from loopstation.gui.sets_page import SetsDialog
-from loopstation.gui.settings_page import SettingsDialog
+from loopstation.gui.settings_panels import SETTINGS_PANELS, SettingsPanels
+from loopstation.gui.side_panel import SidePanelHost
 from loopstation.gui.volume_slider import VolumeSlider
 from loopstation.gui.widgets import DARK_SCROLLBAR_QSS
 from loopstation.session import SetSession
@@ -67,11 +68,17 @@ class World:
         self.controller.press(pad)
 
     def parent_pages(self) -> dict[str, QWidget]:
-        pages = self.window.parent_pages()
+        # The settings panels in the side panel that shows them in the parents' view (its style, its head).
+        self.panels = SettingsPanels(self.config, self.controller.settings, self.window.apply_settings,
+                                     None, self.controller)
+        hosts: dict[str, QWidget] = {}
+        for key in SETTINGS_PANELS:
+            host = SidePanelHost()
+            host.show_page(key, "gear", key, "", self.panels.page(key))
+            hosts[key] = host
         return {
-            "settings": SettingsDialog(self.config, self.controller.settings, self.window.apply_settings,
-                                       None, self.window, pages),
-            # The areas are widgets of the parents' area; on their own they are top level windows here.
+            **hosts,
+            # The other pages of the side panels; on their own they are top level windows here.
             "advanced": AdvancedDialog(self.controller, None),
             "sets": SetsDialog(self.session, None, None),
             "export": ExportDialog(self.controller, None, export_dir=self.config.parent / "out",
@@ -184,8 +191,11 @@ def test_the_child_volume_control_names_no_units(world):
 
 def test_the_parents_pages_are_not_reachable_without_the_gate(world):
     window = world.window
-    pages = (SettingsDialog, AdvancedDialog, SetsDialog, ExportDialog)
-    assert [d for d in window.findChildren(QDialog) if isinstance(d, pages)] == []
+    pages = (AdvancedDialog, SetsDialog, ExportDialog, SidePanelHost)
+    assert [d for d in window.findChildren(QWidget) if isinstance(d, pages)] == []
+    assert window.settings_panels is None and window.parent_view is None
+    window.open_tool("levels")  # no way to a panel from the child page
+    assert window.findChildren(SidePanelHost) == [] and window.settings_panels is None
 
 
 # ------------------------------------------------------------------ 3. usable at 1024 px width
@@ -210,11 +220,13 @@ def test_the_main_window_fits_1024_px(world):
         assert widget.mapTo(window, widget.rect().bottomRight()).x() <= MIN_WINDOW_WIDTH
 
 
-@pytest.mark.parametrize("name", ["settings", "advanced", "sets", "export", "history"])
+@pytest.mark.parametrize("name", [*SETTINGS_PANELS, "advanced", "sets", "export", "history"])
 def test_every_parents_page_fits_1024_px_without_a_sideways_scroll_bar(world, name):
     dialog = world.parent_pages()[name]
-    assert dialog.minimumSizeHint().width() <= MIN_WINDOW_WIDTH
-    dialog.resize(MIN_WINDOW_WIDTH, 768)
+    # A settings panel fits the narrowest side panel (the other pages are checked there as well).
+    width = PANEL_WIDTH[0] if name in SETTINGS_PANELS else MIN_WINDOW_WIDTH
+    assert dialog.minimumSizeHint().width() <= width
+    dialog.resize(width, 768)
     dialog.show()
     QTest.qWaitForWindowExposed(dialog)
     QTest.qWait(30)
@@ -222,7 +234,7 @@ def test_every_parents_page_fits_1024_px_without_a_sideways_scroll_bar(world, na
         dialog.open_tab.click()
         assert dialog.minimumSizeHint().width() <= MIN_WINDOW_WIDTH
         dialog.save_tab.click()
-    assert dialog.width() == MIN_WINDOW_WIDTH, f"{name} grew to {dialog.width()} px"
+    assert dialog.width() == width, f"{name} grew to {dialog.width()} px"
     for area in dialog.findChildren(QScrollArea):
         assert area.horizontalScrollBar().maximum() == 0, f"{name}: sideways scroll bar"
     dialog.close()
@@ -241,13 +253,14 @@ def lightest_pixel(widget: QWidget) -> int:
     return max(image.pixelColor(x, y).lightness() for x, y in pixels)
 
 
-@pytest.mark.parametrize("name", ["settings", "advanced", "export"])
+@pytest.mark.parametrize("name", [*SETTINGS_PANELS, "advanced", "export"])
 def test_scroll_bars_are_dark_not_the_white_native_ones(world, name):
     dialog = world.parent_pages()[name]
-    dialog.resize(MIN_WINDOW_WIDTH, 360)  # short, so that every page has something to scroll
+    width = PANEL_WIDTH[0] if name in SETTINGS_PANELS else MIN_WINDOW_WIDTH
+    dialog.resize(width, 360)  # short, so that every page has something to scroll
     dialog.show()
     QTest.qWaitForWindowExposed(dialog)
-    # Only the areas on show: the other areas of the parents' area sit hidden behind the shown one.
+    QTest.qWait(30)
     areas = [a for a in dialog.findChildren(QScrollArea)
              if a.isVisible() and a.verticalScrollBar().maximum() > 0]
     assert areas, f"{name}: nothing to scroll in this state"
@@ -343,20 +356,15 @@ APP_SCRIPT = textwrap.dedent(
             timer.timeout.connect(close_modal)
             timer.start()
 
-            def every_area(*args):
-                from loopstation.gui.settings_page import SettingsDialog
-
-                dialog = SettingsDialog(*args)
-                for key in dialog.page_keys:  # history, Erweitert, sets and export are built on a visit
-                    dialog.show_page(key)
-                return dialog
-
-            window.settings_factory = every_area
             window.controller.press(0)
             window.open_history(0)
             window.enter_parent_mode()  # the sum was answered
-            for _ in range(2):
-                window.open_settings()
+            for _ in range(2):  # every side panel, built on its first visit and kept
+                for key in ("changes", "sets", "export", "levels", "devices", "system", "tempo", "loop"):
+                    window.open_tool(key)
+            window.leave_parent_mode()
+            window.enter_parent_mode()
+            window.open_tool("devices")  # a panel is still open when the parents leave
             window.leave_parent_mode()
             window.open_parent_area()  # the sum is still on show when the app ends
             timer.stop()

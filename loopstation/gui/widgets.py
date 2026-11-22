@@ -169,10 +169,17 @@ class BigButton(QAbstractButton):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), radius - 1, radius - 1)
 
-        metrics = QFontMetrics(self.font())
+        font = QFont(self.font())
+        metrics = QFontMetrics(font)
+        if not self.stacked:
+            # A button narrower than its word (a side panel) gets a smaller font, never a cut word.
+            while (font.pointSize() > 9 and 2 * min(self.PAD_X, 14) + self._icon_size(metrics) + self.GAP
+                   + metrics.horizontalAdvance(self.text()) > rect.width()):
+                font.setPointSize(font.pointSize() - 1)
+                metrics = QFontMetrics(font)
         icon_size = self._icon_size(metrics)
         text_width = metrics.horizontalAdvance(self.text())
-        painter.setFont(self.font())
+        painter.setFont(font)
         if self.stacked:
             content = icon_size + self.STACK_GAP + metrics.height()
             top = rect.center().y() - content / 2

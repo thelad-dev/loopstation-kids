@@ -313,20 +313,11 @@ def test_failing_to_reopen_keeps_the_old_names_and_tells_the_parents(tmp_path) -
 
 @pytest.fixture
 def page(qapp, tmp_path):
-    from PySide6.QtWidgets import QWidget
-
-    from loopstation.gui.settings_page import SettingsDialog
-
-    class Window(QWidget):
-        """Stands in for the main window: the page looks for ``audio_devices`` on its parent."""
-
-        audio_devices: Any = None
+    from loopstation.gui.settings_panels import SettingsPanels
 
     sd = windows_sd()
     audio = SoundDeviceAudio(SR, 10, sd=sd, clock=lambda: 0.0, platform="win32",
                              hostapi="Windows WASAPI")
-    window = Window()
-    window.audio_devices = audio
     running = make_settings(tmp_path, audio_hostapi="Windows WASAPI")
     applied: list[Settings] = []
 
@@ -335,10 +326,9 @@ def page(qapp, tmp_path):
         audio.select_devices(new.input_device, new.output_device, new.audio_hostapi)
         return restart_keys_changed(running, new)
 
-    dialog = SettingsDialog(tmp_path / "settings.toml", running, apply, template=None, parent=window)
-    yield dialog, applied, audio, sd
-    dialog.close()
-    window.close()
+    panels = SettingsPanels(tmp_path / "settings.toml", running, apply, template=None, source=audio)
+    panels.page("devices")
+    yield panels, applied, audio, sd
 
 
 def _labels(combo) -> list[str]:
@@ -346,15 +336,18 @@ def _labels(combo) -> list[str]:
 
 
 def test_the_page_lists_the_devices_of_the_chosen_audio_system(page) -> None:
-    dialog, *_ = page
+    dialog, applied, *_ = page
     hostapi = dialog.editors["audio_hostapi"].list  # a list of radio buttons, one per audio system
     assert hostapi.labels() == ["MME", "Windows WASAPI"]
     assert hostapi.value() == "Windows WASAPI"
     assert hostapi.by_name["Windows WASAPI"].isChecked()
     assert _labels(dialog.editors["input_device"].box) == ["Systemstandard", "Mikro", "Kids Mic"]
     assert _labels(dialog.editors["output_device"].box) == ["Systemstandard", "Boxen", "Kopfhörer"]
+    assert applied == []  # filling the lists saves nothing
     hostapi.select("MME")
     assert _labels(dialog.editors["input_device"].box) == ["Systemstandard", "Mikro"]
+    # The choice is saved and taken over at once ("" stands for the standard of the platform).
+    assert len(applied) == 1 and applied[0].audio_hostapi == hostapi.value() != "Windows WASAPI"
 
 
 def test_choosing_devices_saves_by_name_and_restarts_the_streams(page, tmp_path) -> None:
@@ -363,14 +356,14 @@ def test_choosing_devices_saves_by_name_and_restarts_the_streams(page, tmp_path)
     dialog, applied, _audio, sd = page
     mic = dialog.editors["input_device"].box
     mic.setCurrentIndex(mic.findData("Kids Mic"))
+    assert load_settings(tmp_path / "settings.toml").input_device == "Kids Mic"  # at once
     out = dialog.editors["output_device"].box
     out.setCurrentIndex(out.findData("Kopfhörer"))
-    assert dialog.save()
     saved = load_settings(tmp_path / "settings.toml")
     assert (saved.input_device, saved.output_device) == ("Kids Mic", "Kopfhörer")
-    assert applied[-1].output_device == "Kopfhörer"
+    assert applied[-1].output_device == "Kopfhörer" and len(applied) == 2  # one restart per choice
     assert sd.output.device == 5
-    assert "neu gestartet" in dialog.message.text()
+    assert "neu gestartet" in dialog.message
 
 
 def test_a_saved_device_that_is_gone_stays_listed_and_marked(qapp, tmp_path, page) -> None:
@@ -397,18 +390,22 @@ def test_asio_says_honestly_that_it_acts_after_a_restart(page, tmp_path) -> None
     from loopstation.config import load_settings
 
     dialog, applied, *_ = page
+    assert "Neustart" in dialog.restart_notes["asio"].text()  # at the switch, before it is touched
     dialog.editors["asio"]._box.setChecked(True)
-    assert dialog.save()
     assert load_settings(tmp_path / "settings.toml").asio is True
-    assert "wirkt nach Neustart" in dialog.message.text() and "ASIO" in dialog.message.text()
+    assert "wirkt nach Neustart" in dialog.message and "ASIO" in dialog.message
     assert applied[-1].asio is True
 
 
 def test_without_an_audio_engine_the_page_keeps_the_saved_names(qapp, tmp_path) -> None:
-    from loopstation.gui.settings_page import SettingsDialog
+    from loopstation.config import load_settings
+    from loopstation.gui.settings_panels import SettingsPanels
 
+    path = tmp_path / "settings.toml"
     running = make_settings(tmp_path, input_device="Kids Mic", audio_hostapi="Windows WASAPI")
-    dialog = SettingsDialog(tmp_path / "settings.toml", running, lambda new: [], template=None)
+    dialog = SettingsPanels(path, running, lambda new: [], template=None)
+    dialog.page("devices")
     assert dialog.editors["input_device"].value() == "Kids Mic"
-    assert dialog.collect().audio_hostapi == "Windows WASAPI"
-    dialog.close()
+    dialog.editors["asio"]._box.setChecked(True)  # another change keeps the names in the file
+    saved = load_settings(path)
+    assert saved.audio_hostapi == "Windows WASAPI" and saved.input_device == "Kids Mic"

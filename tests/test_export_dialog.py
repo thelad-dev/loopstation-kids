@@ -7,7 +7,6 @@ from conftest import make_settings
 from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import QWidget
 from test_export import session
-from test_parent_area import AutoDialog
 
 from loopstation.gui.export_dialog import (
     WORD_JOINER,
@@ -17,8 +16,6 @@ from loopstation.gui.export_dialog import (
     rate_text,
     unique_path,
 )
-from loopstation.gui.parent_nav import ParentPage
-from loopstation.gui.settings_page import SettingsDialog
 
 
 def texts(widget):
@@ -157,28 +154,10 @@ def test_the_default_folder_is_below_documents(qapp):
 # ---------------------------------------------- way in from the parents' area
 
 
-def test_parents_area_has_an_export_area_that_is_built_on_the_first_visit(qapp, tmp_path):
-    built = []
-    page = ParentPage("export", "download", "Export", lambda: built.append(1) or QWidget())
-    dialog = SettingsDialog(tmp_path / "settings.toml", make_settings(tmp_path), lambda s: [],
-                            None, None, [page])
-    assert built == [] and "export" in dialog.nav.buttons
-    assert dialog.nav.buttons["export"].text() == "Export"
-    dialog.nav.buttons["export"].click()
-    assert built == [1] and dialog.current_key() == "export"
-    dialog.nav.buttons["levels"].click()
-    dialog.nav.buttons["export"].click()
-    assert built == [1]  # built once, then kept
-
-
-def test_parents_area_without_further_areas_has_only_the_three_settings_pages(qapp, tmp_path):
-    dialog = SettingsDialog(tmp_path / "settings.toml", make_settings(tmp_path), lambda s: [])
-    assert list(dialog.nav.buttons) == ["levels", "devices", "tempo"]
-
-
-def test_main_window_offers_the_export_only_behind_the_gate(qapp, tmp_path, clock):
+def test_main_window_offers_the_export_only_behind_the_gate_and_builds_it_on_the_first_visit(
+        qapp, tmp_path, clock):
     from conftest import FakeAudio
-    from PySide6.QtWidgets import QDialog
+    from PySide6.QtWidgets import QAbstractButton
 
     from loopstation.controller import Controller
     from loopstation.gui.main_window import MainWindow
@@ -190,20 +169,22 @@ def test_main_window_offers_the_export_only_behind_the_gate(qapp, tmp_path, cloc
     win = MainWindow(controller, None, [], config_path=tmp_path / "settings.toml")
     try:
         # The child page has no export control at all.
-        from PySide6.QtWidgets import QAbstractButton
-
         child = [b.text() for b in win.frame.findChildren(QAbstractButton)]
         assert not any("xport" in t for t in child)
-        shown, exports = [], []
-        win.settings_factory = lambda *a: shown.append(a) or AutoDialog(QDialog.DialogCode.Rejected)
+        exports = []
         win.export_factory = lambda c, p: exports.append((c, p)) or QWidget()
+        win.open_tool("export")  # nothing without the parents' view
+        assert exports == []
         win.enter_parent_mode()  # the sum was answered
-        win.open_settings()
-        pages = shown[0][5]
-        assert [page.label for page in pages] == ["Verlauf & Undo", "Erweitert", "Export"]
-        pages[-1].build()
-        assert exports == [(controller, None)]
+        view = win.parent_view
+        assert view.toolbar.buttons["export"].text() == "Export"
+        view.toolbar.buttons["export"].click()
+        assert exports == [(controller, None)] and view.panel_key == "export"
+        view.toolbar.buttons["levels"].click()
+        view.toolbar.buttons["export"].click()
+        assert exports == [(controller, None)]  # built once, then kept
     finally:
+        win.leave_parent_mode()
         win.timer.stop()
         win.close()
         store.close()
@@ -283,38 +264,42 @@ def test_the_parents_choice_on_the_open_page_is_kept(qapp, tmp_path, clock):
         dialog.close()
 
 
-def test_every_visit_of_the_kept_export_area_chooses_from_what_loops_then(qapp, tmp_path, clock):
+def test_every_visit_of_the_kept_export_panel_chooses_from_what_loops_then(qapp, tmp_path, clock):
     from loopstation.controller import Mode
+    from loopstation.gui.main_window import MainWindow
 
     controller, _audio = session(tmp_path, clock)
     controller.stop_all()
     built = []
 
-    def build():
-        built.append(ExportDialog(controller, None, export_dir=tmp_path / "out", clock=clock))
+    def build(c, _parent):
+        built.append(ExportDialog(c, None, export_dir=tmp_path / "out", clock=clock))
         return built[-1]
 
-    page = ParentPage("export", "download", "Export", build)
-    dialog = SettingsDialog(tmp_path / "settings.toml", make_settings(tmp_path), lambda s: [],
-                            None, None, [page])
-    dialog.resize(1280, 800)
-    dialog.show()
+    window = MainWindow(controller, None, [], config_path=tmp_path / "settings.toml")
+    window.export_factory = build
+    window.resize(1280, 800)
+    window.show()
     try:
-        dialog.nav.buttons["export"].click()
+        window.enter_parent_mode()
+        buttons = window.parent_view.toolbar.buttons
+        buttons["export"].click()
         assert built[0].scope_all.isChecked()
-        dialog.nav.buttons["levels"].click()
+        buttons["levels"].click()
         controller.set_mode(Mode.LOOP)
         controller.press(0)
         controller.set_mode(Mode.PLAY)
-        dialog.nav.buttons["export"].click()
+        buttons["export"].click()
         assert len(built) == 1 and built[0].scope_running.isChecked()
         assert built[0].running_count.text() == "1 Pad"
-        dialog.nav.buttons["levels"].click()
+        buttons["export"].click()  # closed
         controller.stop_all()
-        dialog.nav.buttons["export"].click()
+        buttons["export"].click()
         assert built[0].scope_all.isChecked() and built[0].running_count.text() == "0 Pads"
     finally:
-        dialog.close()
+        window.leave_parent_mode()
+        window.timer.stop()
+        window.close()
 
 
 # ------------------------------------------------- the preview fits its rows

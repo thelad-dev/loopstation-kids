@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QMouseEvent, QPainter, QPainterPath, QPaintEvent, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QMouseEvent, QPainter, QPainterPath, QPaintEvent, QPen
 from PySide6.QtWidgets import QWidget
 
 from loopstation.gui.widgets import TEXT_DIM
@@ -234,7 +234,11 @@ class WaveformWidget(QWidget):
         width, top, bottom = panel.width(), panel.top() + LABEL_TOP, panel.bottom() - 4
         middle = (top + bottom) / 2
         half = (bottom - top) / 2 - 4
-        for position, bar_start, number in self.lines():
+        lines = self.lines()
+        # Narrow (a side panel): "1", "2" ... instead of "Schlag 1" when the words would run into each other.
+        step = min((b[0] - a[0] for a, b in zip(lines, lines[1:], strict=False)), default=1.0) * width
+        long_words = QFontMetrics(font).horizontalAdvance("Schlag 8") + 10 <= step
+        for position, bar_start, number in lines:
             x = panel.left() + position * width
             pen = QPen(QColor(BAR_LINE), 2 if bar_start else 1)
             if not bar_start:
@@ -242,7 +246,8 @@ class WaveformWidget(QWidget):
             painter.setPen(pen)
             painter.drawLine(QPointF(x, panel.top()), QPointF(x, bottom))
             painter.setPen(TEXT_DIM)
-            painter.drawText(QPointF(x + 6, panel.top() + 12), f"Schlag {number}")
+            word = f"Schlag {number}" if long_words else str(number)
+            painter.drawText(QPointF(x + 6, panel.top() + 12), word)
         columns = max(1, int(width / COLUMN_PITCH))
         pen = QPen(QColor(WAVE_COLOR), COLUMN_WIDTH)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)

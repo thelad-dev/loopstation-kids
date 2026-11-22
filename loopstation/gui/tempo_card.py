@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -114,6 +115,7 @@ class TempoCard(QFrame):
         layout.setContentsMargins(22, 18, 22, 18)
         layout.setSpacing(8)
         head = QLabel("Takt korrigieren (Eltern-BPM)")
+        head.setWordWrap(True)
         head.setStyleSheet("font-size: 19px; font-weight: bold;")
         layout.addWidget(head)
         layout.addWidget(dim_label("Vorrang vor gemessenem Takt (Regel 8)", 13.5))
@@ -127,14 +129,15 @@ class TempoCard(QFrame):
         self.bpm_spin = QSpinBox()
         self.bpm_spin.setRange(round(low), round(high))
         self.bpm_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.bpm_spin.setFixedWidth(140)
+        self.bpm_spin.setFixedWidth(120)
         minus.clicked.connect(self.bpm_spin.stepDown)
         plus.clicked.connect(self.bpm_spin.stepUp)
         row.addWidget(minus)
         row.addWidget(self.bpm_spin)
         row.addWidget(plus)
-        row.addWidget(dim_label(f"BPM ({round(low)}-{round(high)})", 14), 1)
+        row.addStretch(1)
         layout.addLayout(row)
+        layout.addWidget(dim_label(f"BPM ({round(low)}-{round(high)})", 14))
         layout.addSpacing(6)
         layout.addWidget(_heading("Taktart"))
         chips = QHBoxLayout()
@@ -161,9 +164,9 @@ class TempoCard(QFrame):
         self.measured_button = QPushButton("Gemessenen Takt")
         self.measured_button.setObjectName("secondary")
         self.measured_button.clicked.connect(weak_slot(self.use_measured_grid))
-        buttons.addWidget(self.apply_button)
-        buttons.addWidget(self.measured_button)
-        buttons.addStretch(1)
+        for button in (self.apply_button, self.measured_button):
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            buttons.addWidget(button, 1)
         layout.addLayout(buttons)
         self.tempo_status = dim_label("", 13.5)
         self._tempo_refused = False

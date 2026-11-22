@@ -12,7 +12,7 @@ from loopstation.config import SIGNATURES, ConfigError, Settings, parse_settings
 from loopstation.controller import Controller
 from loopstation.gui import grid_panel
 from loopstation.gui.main_window import MainWindow
-from loopstation.gui.settings_page import FIELDS, SettingsDialog
+from loopstation.gui.settings_panels import FIELDS
 from loopstation.store import EventStore
 
 SHIPPED = (Path(__file__).resolve().parent.parent / "settings.toml").read_text(encoding="utf-8")
@@ -69,7 +69,7 @@ def test_tiles_of_a_measured_grid_as_in_the_mockup():
         ("Tempo", "96 BPM", "gemessen"),
         ("Taktart", "4/4", "Standard"),
         ("Takt-Länge", "2,50 s", "1 Takt = 4 Schläge"),
-        ("Quelle", "Klatschen", "onset · Pad 1"),
+        ("Quelle", "Klatschen", "Pad 1"),
     ]
 
 
@@ -79,7 +79,8 @@ def test_tiles_name_a_length_grid_and_a_session_without_grid():
     info = GridInfo(bpm=72.0, signature="3/4", beats=3, seconds=2.5, source="duration", pad=None)
     tiles = grid_panel.tiles(info)
     assert tiles[0] == ("Tempo", "72 BPM", "aus der Aufnahmelänge")
-    assert tiles[1][2] == "gewählt" and tiles[3] == ("Quelle", "Aufnahmelänge", "duration")
+    assert tiles[1][2] == "gewählt" and tiles[3] == ("Quelle", "Aufnahmelänge", "für alle Pads")
+    assert not any("duration" in text for tile in tiles for text in tile)  # no internal key on the tile
     free = grid_panel.tiles(None, "onsets_without_beat_and_length_implausible")
     assert free[3] == ("Quelle", "Kein Takt", "Schläge unklar, Aufnahme zu lang")
     assert grid_panel.tiles(None)[0] == ("Tempo", "–", "kein Takt")
@@ -107,11 +108,12 @@ def parts(qapp, tmp_path, clock):
 
 @pytest.fixture
 def dialog(parts):
-    window, controller, _, path = parts
-    page = SettingsDialog(path, controller.settings, window.apply_settings, SHIPPED, window)
-    page.show()
-    yield page
-    page.close()
+    """The side panel "Takt" open in the parents' view of the real window; yields its ``SettingsPanels``."""
+    window = parts[0]
+    window.enter_parent_mode()
+    window.parent_view.bar_chip.click()
+    yield window.settings_panels
+    window.leave_parent_mode()
 
 
 def test_the_page_has_the_switch_the_signature_and_the_tempo_window(dialog):
@@ -123,11 +125,11 @@ def test_the_page_has_the_switch_the_signature_and_the_tempo_window(dialog):
     assert [f for f in FIELDS if f.key == "auto_grid"][0].label == "Takt aus Klatschen erkennen"
 
 
-def test_saving_the_page_writes_and_applies_the_grid_settings(parts, dialog):
+def test_a_change_on_the_panel_writes_and_applies_the_grid_settings(parts, dialog):
     _, controller, _, path = parts
     dialog.editors["auto_grid"]._box.setChecked(False)
+    assert "auto_grid = false" in path.read_text(encoding="utf-8")  # at once, no "Speichern"
     dialog.editors["time_signature"]._combo.setCurrentText("3/4")
-    assert dialog.save()
     text = path.read_text(encoding="utf-8")
     assert "auto_grid = false" in text and 'time_signature = "3/4"' in text
     assert controller.settings.auto_grid is False and controller.settings.time_signature == "3/4"
@@ -147,6 +149,6 @@ def test_the_card_shows_no_grid_before_a_recording_and_the_source_after(parts, d
         ("Tempo", "120 BPM", "gemessen"),
         ("Taktart", "4/4", "Standard"),
         ("Takt-Länge", "2,00 s", "1 Takt = 4 Schläge"),
-        ("Quelle", "Klatschen", "onset · Pad 1"),
+        ("Quelle", "Klatschen", "Pad 1"),
     ]
     assert panel.note.isHidden()  # the 'nothing is guessed' note is only for a session without grid

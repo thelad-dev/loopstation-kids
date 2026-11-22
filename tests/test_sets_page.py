@@ -14,7 +14,6 @@ from test_session import SET_SETTINGS, Running, content, sound_card, two_takes
 from loopstation import app as app_module
 from loopstation import sets
 from loopstation.gui.main_window import MainWindow
-from loopstation.gui.parent_nav import ParentPage
 from loopstation.gui.sets_page import (
     SetsDialog,
     clean_name,
@@ -22,7 +21,6 @@ from loopstation.gui.sets_page import (
     format_size,
     target_path,
 )
-from loopstation.gui.settings_page import SettingsDialog
 from loopstation.session import SetSession
 
 NOW = datetime(2026, 11, 20, 16, 48)
@@ -292,75 +290,57 @@ def test_the_dialog_is_not_on_the_child_page(running, qapp):
 # -------------------------------------------------------- window wiring
 
 
-def test_the_settings_page_gets_a_sets_button_only_with_a_session(running, qapp):
+def test_the_parents_view_has_a_sets_tool_only_with_a_session(running, qapp):
     with_session = MainWindow(running.controller, None, [], set_session=running.session,
                               config_path=running.settings_file)
     without = MainWindow(running.controller, None, [], config_path=running.settings_file)
     try:
-        seen = []
-
-        class Settings(QDialog):
-            def __init__(self, *args, **kwargs):
-                super().__init__()
-                seen.append([a.label for a in args[5]])
-
-            def exec(self):
-                return QDialog.DialogCode.Accepted
-
         for window in (with_session, without):
-            window.settings_factory = Settings
             window.enter_parent_mode()  # the sum was answered
-            window.open_settings()
-        assert "Sets" in seen[0] and "Sets" not in seen[1]
+            window.open_tool("sets")
+        assert not with_session.parent_view.toolbar.buttons["sets"].isHidden()
+        assert with_session.parent_view.panel_key == "sets"
+        assert without.parent_view.toolbar.buttons["sets"].isHidden()
+        assert without.parent_view.panel_key is None  # no session: nothing to open
     finally:
         for window in (with_session, without):
+            window.leave_parent_mode()
             window.timer.stop()
             window.close()
 
 
-def test_opening_a_set_closes_the_parents_area(running, qapp):
+def test_opening_a_set_closes_the_sets_panel(running, qapp):
     make_sets(running)
     handed = []
     window = MainWindow(running.controller, None, [], set_session=running.session,
                         config_path=running.settings_file, on_open_set=handed.append)
     try:
-        closed = []
-
-        class Parents(SettingsDialog):
-            """The real parents' area; ``exec`` stands in for the modal loop: visit "Sets", open a set."""
-
-            def exec(self):
-                self.show_page("sets")
-                sets = self.page("sets")
-                sets.open_tab.click()
-                sets.open_button.click()
-                return self.result()
-
-            def accept(self):
-                closed.append(1)
-                super().accept()
-
-        window.settings_factory = Parents
         window.enter_parent_mode()  # the sum was answered
-        window.open_settings()
-        assert len(handed) == 1 and closed == [1]
+        window.open_tool("sets")
+        sets_page = window.parent_view.side_panel.current_page()
+        sets_page.open_tab.click()
+        sets_page.open_button.click()
+        assert len(handed) == 1 and sets_page.result() == QDialog.DialogCode.Accepted
+        assert window.parent_view.panel_key is None and window.parent_mode
     finally:
+        window.leave_parent_mode()
         window.timer.stop()
         window.close()
 
 
-def test_cancelling_on_the_sets_area_goes_back_to_the_first_area(running, qapp):
-    dialog = SettingsDialog(running.settings_file, running.controller.settings, lambda new: [],
-                            None, None, [ParentPage("sets", "save", "Sets",
-                                                    lambda: SetsDialog(running.session, None, None))])
+def test_cancelling_on_the_sets_panel_closes_it(running, qapp):
+    window = MainWindow(running.controller, None, [], set_session=running.session,
+                        config_path=running.settings_file)
     try:
-        dialog.show_page("sets")
-        sets = dialog.page("sets")
-        assert dialog.current_key() == "sets"
-        sets.cancel_button.click()
-        assert dialog.current_key() == "levels" and dialog.result() == QDialog.DialogCode.Rejected
+        window.enter_parent_mode()
+        window.open_tool("sets")
+        sets_page = window.parent_view.side_panel.current_page()
+        sets_page.cancel_button.click()
+        assert window.parent_view.panel_key is None and sets_page.result() == QDialog.DialogCode.Rejected
     finally:
-        dialog.close()
+        window.leave_parent_mode()
+        window.timer.stop()
+        window.close()
 
 
 # ------------------------------------------------------- app.run: the swap

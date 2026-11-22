@@ -1,6 +1,7 @@
-"""Card "Aktueller Takt der Sitzung" of the parents' area (mockup 11, plan 2.2 rule 7).
+"""Card "Aktueller Takt der Sitzung" of the side panel "Takt" (mockup 11, plan 2.2 rule 7).
 
-Four tiles show tempo, time signature, bar length and where the bar came from.
+Four tiles (two by two, the panel is narrow) show tempo, time signature, bar length and where the bar
+came from.
 The panel owns no state: it reads ``Controller.grid_info()`` and, while the
 session has no grid, the outcome of the last grid-setting recording.
 """
@@ -9,8 +10,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtGui import QFont, QResizeEvent
+from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from loopstation.gui.parent_nav import fitted_font
 from loopstation.gui.widgets import TEXT, TEXT_DIM
 
 if TYPE_CHECKING:
@@ -54,7 +57,7 @@ def tiles(info: GridInfo | None, reason: str | None = None) -> list[tuple[str, s
         ("Tempo", f"{round(info.bpm)} BPM", TEMPO_HINTS.get(info.source, "")),
         ("Taktart", info.signature, "Standard" if info.signature == "4/4" else "gewählt"),
         ("Takt-Länge", format_seconds(info.seconds), f"1 Takt = {info.beats} Schläge"),
-        ("Quelle", SOURCES.get(info.source, info.source), f"{info.source}{pad}"),
+        ("Quelle", SOURCES.get(info.source, info.source), pad.removeprefix(" · ") or "für alle Pads"),
     ]
 
 
@@ -62,18 +65,20 @@ class _Tile(QFrame):
     def __init__(self, label: str) -> None:
         super().__init__()
         self.setObjectName("grid_tile")
-        self.setFixedHeight(128)
+        self.setFixedHeight(112)
         self.setStyleSheet("#grid_tile { background: #26262B; border-radius: 14px; }")
         self.label = QLabel(label)
         self.label.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 14px; font-weight: 600;")
         self.value = QLabel()
-        # The tile must not grow with its text (four tiles in a row at 1024 px): a long word is cut.
+        # The tile must not grow with its text (two tiles in a row in a narrow panel).
         self.value.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._size = 0
         self.hint = QLabel()
         self.hint.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.hint.setStyleSheet("color: #AEAEB2; font-size: 13px;")
+        self.hint.setWordWrap(True)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(0)
         layout.addWidget(self.label)
         layout.addStretch(1)
@@ -85,9 +90,20 @@ class _Tile(QFrame):
         self.label.setText(label)
         self.value.setText(value)
         self.hint.setText(hint)
-        # A long word ("Aufnahmelänge") has to fit the tile; the mockup only shows short ones.
-        size = 32 if len(value) <= 7 else 20 if len(value) <= 9 else 17
-        self.value.setStyleSheet(f"color: {TEXT.name()}; font-size: {size}px; font-weight: 800;")
+        self._fit()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 - Qt API
+        super().resizeEvent(event)
+        self._fit()
+
+    def _fit(self) -> None:
+        """The value as large as the tile allows: a long word ("Aufnahmelänge") gets a smaller font."""
+        room = self.contentsRect().width() - 32
+        font = fitted_font(self.value.text(), room, 28, QFont.Weight.ExtraBold, 12)
+        size = font.pixelSize()
+        if size != self._size:
+            self._size = size
+            self.value.setStyleSheet(f"color: {TEXT.name()}; font-size: {size}px; font-weight: 800;")
 
 
 class GridPanel(QFrame):
@@ -99,11 +115,12 @@ class GridPanel(QFrame):
         self.setObjectName("card")
         heading = QLabel("Aktueller Takt der Sitzung")
         heading.setStyleSheet("font-size: 20px; font-weight: bold;")
+        heading.setWordWrap(True)
         self.tiles = [_Tile(name) for name in ("Tempo", "Taktart", "Takt-Länge", "Quelle")]
-        row = QHBoxLayout()
-        row.setSpacing(16)
-        for tile in self.tiles:
-            row.addWidget(tile, 1)
+        row = QGridLayout()
+        row.setSpacing(12)
+        for index, tile in enumerate(self.tiles):
+            row.addWidget(tile, index // 2, index % 2)
         self.note = QLabel(NO_GRID_HINT)
         self.note.setWordWrap(True)
         self.note.setStyleSheet(f"color: {TEXT_DIM.name()}; font-size: 13px;")
