@@ -223,7 +223,7 @@ class GateOverlay(QWidget):
     It covers its parent completely and takes every click and key, so nothing reaches the pads
     below. ``answered(bool)`` reports the answer (right or wrong), ``cancelled`` the way back
     (the "Abbrechen" button or Esc). After a right answer the main window keeps the lock open
-    for ``parent_unlock_minutes`` (see settings).
+    for ``parent_hold_minutes`` (see settings).
     """
 
     answered = Signal(bool)

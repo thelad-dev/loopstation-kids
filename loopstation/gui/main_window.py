@@ -6,7 +6,7 @@ Launchpad); it contains no audio, MIDI or event-store logic of its own.
 It has two states: the child page (``frame``) and the parents' pad view
 (``parent_view``, Loopstation 2 variant A). The way from the children to the
 parents is the held lock plus a sum that lies over the window (``GateOverlay``);
-within ``parent_unlock_minutes`` after a right answer the sum is skipped. The way
+within ``parent_hold_minutes`` after a right answer the sum is skipped. The way
 back is one tap on "Kinder" or F1. The music goes on throughout.
 
 The tools of the parents' view open as side panels next to the pads, in this window; nothing of
@@ -101,7 +101,7 @@ MODES = [
 MODE_ACCENT = {mode: accent for mode, _icon, _word, accent in MODES}
 
 # Settings the window takes over while the app runs (the controller does not use them).
-PARENT_VIEW_SETTINGS = ("parent_unlock_minutes", "parent_idle_minutes")
+PARENT_VIEW_SETTINGS = ("parent_hold_minutes", "parent_hold_until_exit", "parent_idle_minutes")
 
 # Input that counts as "the parents are still here" (the idle return of the parents' view).
 INPUT_EVENTS = (
@@ -233,7 +233,8 @@ class MainWindow(QMainWindow):
         self._last_input = 0.0  # ``clock`` time of the last screen or keyboard input in the parents' view
         # Last parent-side input (also ends the unlock window on the child page).
         self._last_parent_input = 0.0
-        self._unlock_minutes = controller.settings.parent_unlock_minutes
+        self._hold_minutes = controller.settings.parent_hold_minutes
+        self._hold_until_exit = controller.settings.parent_hold_until_exit
         self._idle_minutes = controller.settings.parent_idle_minutes
         self._waves = WaveCache()  # mini waves of the tiles, kept across visits
         self._parent_selected = 0
@@ -506,9 +507,9 @@ class MainWindow(QMainWindow):
 
     def _unlock_deadline(self) -> float:
         """``clock`` time until which the lock stays open (``inf`` = until the program ends)."""
-        if self._unlock_minutes <= 0:
+        if self._hold_until_exit:
             return float("inf")
-        return self.clock() + 60 * self._unlock_minutes
+        return self.clock() + 60 * self._hold_minutes
 
     def _grant_unlock(self) -> None:
         """Right answer: open the unlock window from now (and note parent input)."""
@@ -749,7 +750,8 @@ class MainWindow(QMainWindow):
         """Live-apply ``settings``; returns the keys that need a restart."""
         restart = self.controller.apply_settings(settings)
         # The parents' view keeps its own two values (the controller does not need them).
-        self._unlock_minutes = settings.parent_unlock_minutes
+        self._hold_minutes = settings.parent_hold_minutes
+        self._hold_until_exit = settings.parent_hold_until_exit
         self._idle_minutes = settings.parent_idle_minutes
         wanted = self.controller.settings
         if wanted.launchpad != (self.launchpad is not None) and self.launchpad_factory is not None:
@@ -901,11 +903,10 @@ class MainWindow(QMainWindow):
         """Short remaining-time label for the parents' view (empty when the lock is shut)."""
         if not self._is_unlocked():
             return ""
-        if self._unlock_minutes <= 0 or not math.isfinite(self._unlocked_until):
+        if self._hold_until_exit or not math.isfinite(self._unlocked_until):
             return "offen"
         seconds = max(0, int(self._unlocked_until - self.clock()))
         minutes = (seconds + 59) // 60  # round up to whole minutes still open
         if minutes <= 0:
             return ""
-        unit = "Min" if minutes == 1 else "Min"
-        return f"noch {minutes} {unit}"
+        return f"noch {minutes} Min"

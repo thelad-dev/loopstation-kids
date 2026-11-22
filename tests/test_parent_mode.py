@@ -114,7 +114,7 @@ def world(qapp, tmp_path, clock):
 
 @pytest.fixture
 def lock_world(qapp, tmp_path, clock):
-    w = World(tmp_path, clock, parent_unlock_minutes=5)
+    w = World(tmp_path, clock, parent_hold_minutes=5)
     yield w
     w.close()
 
@@ -442,7 +442,7 @@ def test_the_child_page_is_as_before_after_a_visit(world):
 
 def test_the_default_keeps_the_lock_open_after_leaving(world):
     window = world.window
-    assert world.settings.parent_unlock_minutes == 15
+    assert world.settings.parent_hold_minutes == 15
     open_parents(window)
     window.leave_parent_mode()
     hold_the_lock(window)
@@ -488,10 +488,10 @@ def test_the_lock_button_and_shortcut_close_the_unlock_window(lock_world):
     assert window.gate_overlay is not None
 
 
-def test_zero_minutes_means_until_the_program_ends(lock_world):
+def test_the_exit_switch_means_until_the_program_ends(lock_world):
     world = lock_world
     window, clock = world.window, world.clock
-    window.apply_settings(replace(world.controller.settings, parent_unlock_minutes=0))
+    window.apply_settings(replace(world.controller.settings, parent_hold_until_exit=True))
     open_parents(window)
     assert window.parent_view.unlock_label.text() == "offen"
     window.leave_parent_mode()
@@ -504,14 +504,14 @@ def test_zero_minutes_means_until_the_program_ends(lock_world):
 
 
 def test_a_fresh_instance_asks_the_sum_again(qapp, tmp_path, clock):
-    first = World(tmp_path, clock, parent_unlock_minutes=15)
+    first = World(tmp_path, clock, parent_hold_minutes=15)
     try:
         open_parents(first.window)
         first.window.leave_parent_mode()
         assert first.window._is_unlocked()
     finally:
         first.close()
-    second = World(tmp_path, clock, parent_unlock_minutes=15)
+    second = World(tmp_path, clock, parent_hold_minutes=15)
     try:
         hold_the_lock(second.window)
         assert second.window.gate_overlay is not None and not second.window.parent_mode
@@ -582,7 +582,7 @@ def test_zero_idle_minutes_means_never(world):
 def test_kids_idle_ends_the_unlock_window_parent_idle_does_not(lock_world):
     window, clock = lock_world.window, lock_world.clock
     # Until program end, so only kids idle (not the minute timer) can shut the lock.
-    window.apply_settings(replace(lock_world.controller.settings, parent_unlock_minutes=0))
+    window.apply_settings(replace(lock_world.controller.settings, parent_hold_until_exit=True))
     open_parents(window)
     view = window.parent_view
     view.mode_switch.kids_button.click()  # leave on purpose: the unlock window stays
@@ -939,17 +939,27 @@ def test_the_sets_tool_is_there_only_with_a_session(qapp, tmp_path, clock):
 
 
 def test_the_two_new_settings_are_checked():
-    assert (Settings().parent_unlock_minutes, Settings().parent_idle_minutes) == (15, 10)
-    parsed = parse_settings({"parent_unlock_minutes": 120, "parent_idle_minutes": 30})
-    assert (parsed.parent_unlock_minutes, parsed.parent_idle_minutes) == (120, 30)
-    assert parse_settings({"parent_unlock_minutes": 0}).parent_unlock_minutes == 0
-    assert parse_settings({"parent_unlock_minutes": 1}).parent_unlock_minutes == 1
+    assert (Settings().parent_hold_minutes, Settings().parent_idle_minutes) == (15, 10)
+    assert Settings().parent_hold_until_exit is False
+    parsed = parse_settings({"parent_hold_minutes": 120, "parent_idle_minutes": 30})
+    assert (parsed.parent_hold_minutes, parsed.parent_idle_minutes) == (120, 30)
+    assert parse_settings({"parent_hold_minutes": 1}).parent_hold_minutes == 1
+    assert parse_settings({"parent_hold_until_exit": True}).parent_hold_until_exit is True
+    with pytest.raises(ConfigError):
+        parse_settings({"parent_hold_until_exit": 1})
     for bad in (-1, 241, 2.5, "5", True):
         with pytest.raises(ConfigError):
             parse_settings({"parent_idle_minutes": bad})
-    for bad in (-1, 121, 240, 2.5, "5", True):
+    for bad in (0, -1, 121, 240, 2.5, "5", True):
         with pytest.raises(ConfigError):
-            parse_settings({"parent_unlock_minutes": bad})
+            parse_settings({"parent_hold_minutes": bad})
+
+
+def test_an_old_unlock_key_is_ignored_and_never_opens_the_lock_for_good():
+    for old in (0, 5, 15):
+        parsed = parse_settings({"parent_unlock_minutes": old})
+        assert parsed.parent_hold_minutes == 15
+        assert parsed.parent_hold_until_exit is False
 
 
 # ---------------------------------------------------------------------- the look
