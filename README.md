@@ -226,7 +226,7 @@ Ein Werkzeug der Leiste links öffnet eine **Seitenleiste** rechts neben den Pad
 Unter den Pads liegt das **Detailfeld** des gewählten Pads. Zugeklappt ist es eine Zeile: Nummer, „Pad N“, Länge, Raster und Zustand, rechts die Reiter. Ein Tipp auf die Zeile, den Pfeil rechts, einen Reiter, Enter oder ein Doppeltipp auf eine Kachel klappt es auf; Esc, Enter oder der Pfeil klappt es wieder zu. Aufgeklappt nimmt es knapp die halbe Fensterhöhe, die Kacheln werden flacher und bleiben spielbar. Neben einer offenen Seitenleiste ist die Zeile schmal; dann weichen die Reiter, damit „Pad N“ und die Angaben lesbar bleiben. Die Reiter:
 
 - **Loop:** Wellenform mit Kürz-Griffen, Markern und Abspielkopf; darunter die Kürz-Bilanz und eine Zeile Anhören, Marker, Strecken, Export, Takt rasten, rechts Verwerfen und Übernehmen (siehe [Wellenform, Marker und Kürzen](#wellenform-marker-und-kürzen)). Ein gesperrter Knopf sagt, warum.
-- **Pad:** freier Modus, Start am Takt (die Einstellung `free_pad_on_grid`, gilt für alle freien Pads), die Takes dieses Pads zum Anhören und Zurückholen (ein Schritt auf dem Zurück-Stapel) und der Pegel der Aufnahme mit Zielzone und „zu laut“. Name und Lautstärke je Pad sind ausgegraut: sie kommen mit dem neuen Kern.
+- **Pad:** freier Modus, Start am Takt (die Einstellung `free_pad_on_grid`, gilt für alle freien Pads), die Takes dieses Pads zum Anhören und Zurückholen (ein Schritt auf dem Zurück-Stapel) und der Pegel der Aufnahme mit Zielzone und „zu laut“. Dazu je Pad: Name, Lautstärke mit Verstärkung (bis +18 dB, „Anheben“ hebt eine zu leise Aufnahme automatisch auf etwa -3 dB(FS); wird es dadurch zu laut, begrenzt der Soft-Limiter und das Feld sagt es), Startposition (grüne Marke in der Welle, wirkt beim Loslassen) und Padlänge in ganzen Takten (Auto = aus der Aufnahme). Diese Einstellungen stehen im Protokoll mit `source: "eltern"` (`pad_name`, `pad_gain`, `pad_start`, `pad_bars`) und haben ein eigenes Zurück/Wieder (Knöpfe im Reiter, Strg+Z und Strg+Umschalt+Z, solange der Reiter offen ist); ein Reglerzug ist ein Schritt, und das Zurück der Kinder bleibt unberührt.
 - **Aufnahme:** Mikrofonpegel (live während einer Aufnahme), längste Aufnahme und Aufnahmestart-Ton; das sind dieselben Einstellungen wie unter „System“, gesichert auf demselben Weg.
 - **Effekte (später):** ausgegraut.
 
@@ -246,7 +246,7 @@ Der Verlauf eines Pads (alle früheren Aufnahmen zum Anhören und Zurückholen) 
 | Enter | Detailfeld auf- und zuklappen |
 | M | Marker am Cursor der Welle (Reiter „Loop“) |
 | Esc | die oberste Ebene schließen: erst die Rechenaufgabe oder die Seitenleiste, dann das Detailfeld |
-| Strg+Z, Strg+Y | Zurück, Wiederholen (auch Strg+Umschalt+Z) |
+| Strg+Z, Strg+Y | Zurück, Wiederholen (auch Strg+Umschalt+Z); bei offenem Reiter „Pad“ gelten sie für die Pad-Einstellungen dieses Pads |
 | F1 | zur Kinderseite |
 
 Tippt man in ein Feld einer Leiste, bleiben die Tasten dort, bis die Leiste schließt oder eine Kachel angetippt wird. Tab springt nur zwischen sichtbaren Feldern. Die Pegel-Regler lassen sich mit den Pfeiltasten und Bild auf/ab verstellen.
