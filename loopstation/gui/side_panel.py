@@ -173,12 +173,6 @@ class SidePanelHost(QWidget):
         self.stack.setCurrentWidget(widget)
         self.say("")
 
-    def set_line(self, key: str, line: str) -> None:
-        """Change the line under the title of the page ``key`` (shown at once if it is open)."""
-        self._lines[key] = line
-        if key == self.key and not self.line.property("message"):
-            self.say("")
-
     def say(self, text: str, level: str = "ok") -> None:
         """``text`` in place of the line under the title; "" brings the line back."""
         if text:

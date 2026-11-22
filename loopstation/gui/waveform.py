@@ -94,6 +94,10 @@ class WaveformWidget(QWidget):
         self._trim: tuple[int, int] = (0, 0)
         self._drag: str | None = None  # "start" or "end" while a handle is held
         self.empty_text = "Auf diesem Pad ist noch kein Loop."
+        # Where the loop plays while it is listened to (a white line), None when it does not play.
+        self.play_frame: int | None = None
+        # Beat lines named "bar.beat" ("1.1", "1.2" ... as in the detail panel) instead of "Schlag n".
+        self.bar_labels = False
 
     def set_loop(self, data: np.ndarray | None, bar_frames: int | None, beats: int) -> None:
         """Show ``data`` (None = empty pad) with beat lines every ``bar_frames / beats`` frames."""
@@ -145,6 +149,12 @@ class WaveformWidget(QWidget):
         self._markers = sorted(frames)
         self.selected_marker = self._markers.index(chosen) if chosen in self._markers else None
         self.update()
+
+    def set_play_frame(self, frame: int | None) -> None:
+        """Show the play head at ``frame`` of the loop (None: hide it)."""
+        if frame != self.play_frame:
+            self.play_frame = frame
+            self.update()
 
     def clear_selection(self) -> None:
         """Forget the cursor and the selected marker (another pad or loop is shown)."""
@@ -238,7 +248,7 @@ class WaveformWidget(QWidget):
         # Narrow (a side panel): "1", "2" ... instead of "Schlag 1" when the words would run into each other.
         step = min((b[0] - a[0] for a, b in zip(lines, lines[1:], strict=False)), default=1.0) * width
         long_words = QFontMetrics(font).horizontalAdvance("Schlag 8") + 10 <= step
-        for position, bar_start, number in lines:
+        for index, (position, bar_start, number) in enumerate(lines):
             x = panel.left() + position * width
             pen = QPen(QColor(BAR_LINE), 2 if bar_start else 1)
             if not bar_start:
@@ -246,7 +256,10 @@ class WaveformWidget(QWidget):
             painter.setPen(pen)
             painter.drawLine(QPointF(x, panel.top()), QPointF(x, bottom))
             painter.setPen(TEXT_DIM)
-            word = f"Schlag {number}" if long_words else str(number)
+            if self.bar_labels:
+                word = f"{index // max(1, self._beats) + 1}.{number}"
+            else:
+                word = f"Schlag {number}" if long_words else str(number)
             painter.drawText(QPointF(x + 6, panel.top() + 12), word)
         columns = max(1, int(width / COLUMN_PITCH))
         pen = QPen(QColor(WAVE_COLOR), COLUMN_WIDTH)
@@ -258,6 +271,10 @@ class WaveformWidget(QWidget):
             painter.drawLine(QPointF(x, middle - reach), QPointF(x, middle + reach))
         self._paint_markers(painter, panel, bottom)
         self._paint_trim(painter, panel, bottom)
+        if self.play_frame is not None:
+            x = self._x_of(self.play_frame)
+            painter.setPen(QPen(QColor(CURSOR_COLOR), 2.5))
+            painter.drawLine(QPointF(x, panel.top()), QPointF(x, bottom))
         painter.end()
 
     def _paint_trim(self, painter: QPainter, panel: QRectF, bottom: float) -> None:
@@ -285,10 +302,15 @@ class WaveformWidget(QWidget):
                 painter.drawLine(QPointF(x + dx, grip.top() + 9), QPointF(x + dx, grip.bottom() - 9))
             if not (self.trimmed or self._drag):
                 continue  # untouched: only the grips, so the picture stays as in the mockup
-            painter.setPen(QColor(TRIM_COLOR))
             label = QRectF(x + 8, bottom - 22, 70, 18) if left else QRectF(x - 78, bottom - 22, 70, 18)
-            align = Qt.AlignmentFlag.AlignLeft if left else Qt.AlignmentFlag.AlignRight
-            painter.drawText(label, align | Qt.AlignmentFlag.AlignVCenter, name)
+            side = Qt.AlignmentFlag.AlignLeft if left else Qt.AlignmentFlag.AlignRight
+            align = side | Qt.AlignmentFlag.AlignVCenter
+            word = QFontMetrics(bold).boundingRect(label.toRect(), int(align), name)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(PANEL_COLOR))  # readable over the wave
+            painter.drawRoundedRect(QRectF(word).adjusted(-4, -1, 4, 1), 4, 4)
+            painter.setPen(QColor(TRIM_COLOR))
+            painter.drawText(label, align, name)
 
     def _paint_markers(self, painter: QPainter, panel: QRectF, bottom: float) -> None:
         if self.cursor_frame is not None:

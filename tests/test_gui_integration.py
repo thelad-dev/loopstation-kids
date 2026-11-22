@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from loopstation.controller import Controller, Mode
-from loopstation.gui.advanced_page import AdvancedDialog
+from loopstation.gui.detail_panel import DetailPanel
 from loopstation.gui.export_dialog import ExportDialog
 from loopstation.gui.history_dialog import HistoryDialog
 from loopstation.gui.main_window import MainWindow
@@ -79,12 +79,21 @@ class World:
         return {
             **hosts,
             # The other pages of the side panels; on their own they are top level windows here.
-            "advanced": AdvancedDialog(self.controller, None),
+            "detail": self.detail_panel(),
             "sets": SetsDialog(self.session, None, None),
             "export": ExportDialog(self.controller, None, export_dir=self.config.parent / "out",
                                    clock=self.clock),
             "history": HistoryDialog(self.controller, 0, self.window),
         }
+
+    def detail_panel(self) -> DetailPanel:
+        """The detail panel of the pads with every tab built, on its tab "Pad" (the one with most rows)."""
+        panels = self.panels
+        detail = DetailPanel(self.controller, None, export_dir=self.config.parent / "out",
+                             settings=lambda: panels)
+        for tab in ("loop", "record", "pad"):
+            detail.open_tab(tab)
+        return detail
 
     def close(self) -> None:
         self.window.timer.stop()
@@ -191,7 +200,7 @@ def test_the_child_volume_control_names_no_units(world):
 
 def test_the_parents_pages_are_not_reachable_without_the_gate(world):
     window = world.window
-    pages = (AdvancedDialog, SetsDialog, ExportDialog, SidePanelHost)
+    pages = (DetailPanel, SetsDialog, ExportDialog, SidePanelHost)
     assert [d for d in window.findChildren(QWidget) if isinstance(d, pages)] == []
     assert window.settings_panels is None and window.parent_view is None
     window.open_tool("levels")  # no way to a panel from the child page
@@ -220,7 +229,7 @@ def test_the_main_window_fits_1024_px(world):
         assert widget.mapTo(window, widget.rect().bottomRight()).x() <= MIN_WINDOW_WIDTH
 
 
-@pytest.mark.parametrize("name", [*SETTINGS_PANELS, "advanced", "sets", "export", "history"])
+@pytest.mark.parametrize("name", [*SETTINGS_PANELS, "detail", "sets", "export", "history"])
 def test_every_parents_page_fits_1024_px_without_a_sideways_scroll_bar(world, name):
     dialog = world.parent_pages()[name]
     # A settings panel fits the narrowest side panel (the other pages are checked there as well).
@@ -253,11 +262,12 @@ def lightest_pixel(widget: QWidget) -> int:
     return max(image.pixelColor(x, y).lightness() for x, y in pixels)
 
 
-@pytest.mark.parametrize("name", [*SETTINGS_PANELS, "advanced", "export"])
+@pytest.mark.parametrize("name", [*SETTINGS_PANELS, "detail", "export"])
 def test_scroll_bars_are_dark_not_the_white_native_ones(world, name):
     dialog = world.parent_pages()[name]
     width = PANEL_WIDTH[0] if name in SETTINGS_PANELS else MIN_WINDOW_WIDTH
-    dialog.resize(width, 360)  # short, so that every page has something to scroll
+    # Short, so that every page has something to scroll (the detail panel's tabs are low by design).
+    dialog.resize(width, 250 if name == "detail" else 360)
     dialog.show()
     QTest.qWaitForWindowExposed(dialog)
     QTest.qWait(30)
@@ -360,8 +370,11 @@ APP_SCRIPT = textwrap.dedent(
             window.open_history(0)
             window.enter_parent_mode()  # the sum was answered
             for _ in range(2):  # every side panel, built on its first visit and kept
-                for key in ("changes", "sets", "export", "levels", "devices", "system", "tempo", "loop"):
+                for key in ("changes", "sets", "export", "levels", "devices", "system", "tempo"):
                     window.open_tool(key)
+                for tab in ("loop", "pad", "record"):  # the detail panel of the pads
+                    window.parent_view.detail.open_tab(tab)
+                window.parent_view.detail.set_open(False)
             window.leave_parent_mode()
             window.enter_parent_mode()
             window.open_tool("devices")  # a panel is still open when the parents leave

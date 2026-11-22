@@ -47,7 +47,7 @@ from loopstation.gui.widgets import (
 
 NBSP = " "
 WORD_JOINER = "\u2060"  # no line break here, e.g. after the hyphen of "Cue-Punkte"
-CUE_TITLE = f"Marker als Cue-{WORD_JOINER}Punkte mitschreiben"  # also on the Erweitert page
+CUE_TITLE = f"Marker als Cue-{WORD_JOINER}Punkte mitschreiben"  # also on the panel "System"
 CHIP_FILL = "#2F3550"  # selected chip, as in the parents' area mockups
 CUSTOM_BARS = 0  # id of the "..." chip: the number comes from the spin box
 EXPORT_FOLDER = ("Loopstation", "Export")
@@ -91,7 +91,7 @@ def save_loop(
     """Write the loop of ``pad`` unchanged as WAV into ``export_dir``.
 
     Returns ``(path, text, is_error)``: the path (None if it could not be made) and the line to show.
-    Shared by the Export and the Erweitert area.
+    Shared by the Export area and the detail panel of the pads.
     """
     sample = None if pad is None else controller.pad(pad).sample
     data = None if sample is None else controller.sample_audio(sample)

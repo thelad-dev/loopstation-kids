@@ -1,4 +1,4 @@
-"""Erweitert: the parents' tempo (rule 8), the metronome and the waveform (offscreen, no hardware).
+"""The parents' tempo (rule 8), the metronome and the waveform of the detail panel (offscreen, no hardware).
 
 Controller on FakeAudio (clap mode where onsets matter), the quiet tick on the
 real SoundDeviceAudio with a stand-in device to see it pass the ceiling, and the
@@ -13,8 +13,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from conftest import FakeAudio, FakeClock, FakeSoundDevice, make_settings
+from PySide6.QtCore import QPoint
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QWidget
 
 from loopstation.audio import metronome
 from loopstation.audio.dynamics import block_peak, db_to_gain
@@ -22,7 +22,7 @@ from loopstation.audio.samples import load_wav
 from loopstation.audio.sounddevice_backend import SoundDeviceAudio
 from loopstation.config import ConfigError, Settings, parse_settings
 from loopstation.controller import Controller, Mode
-from loopstation.gui.advanced_page import AdvancedPage, loop_title
+from loopstation.gui.detail_panel import DetailPanel, loop_title
 from loopstation.gui.grid_panel import GridPanel
 from loopstation.gui.tempo_card import MetronomeCard, MetronomeStrip, TempoCard
 from loopstation.gui.waveform import WAVE_COLOR, WaveformWidget, beat_lines, peak_columns
@@ -393,11 +393,10 @@ def test_the_waveform_renders_offscreen_with_its_beat_lines(qapp):
 
 
 def test_loop_titles_say_how_the_loop_sits_on_the_grid():
-    assert loop_title(5, 20000, 20000, 20000, SR) == "Pad 6 · Aufnahme 2,50 s · 1 Takt · im Raster"
-    assert loop_title(0, 12000, 16000, 8000, SR) == (
-        "Pad 1 · Aufnahme 1,50 s · 2 Takte · wird ans Raster angepasst")
-    assert loop_title(1, 12000, 12000, None, SR) == "Pad 2 · Aufnahme 1,50 s · freie Länge"
-    assert loop_title(2, None, None, None, SR) == "Pad 3 · noch kein Loop"
+    assert loop_title(20000, 20000, 20000, SR) == "Aufnahme 2,50 s · 1 Takt · im Raster"
+    assert loop_title(12000, 16000, 8000, SR) == "Aufnahme 1,50 s · 2 Takte · wird ans Raster angepasst"
+    assert loop_title(12000, 12000, None, SR) == "Aufnahme 1,50 s · freie Länge"
+    assert loop_title(None, None, None, SR) == "noch kein Loop"
 
 
 # --- the pages -------------------------------------------------------------------------------
@@ -405,11 +404,14 @@ def test_loop_titles_say_how_the_loop_sits_on_the_grid():
 
 @pytest.fixture
 def page(qapp, tmp_path, clock):
+    """The detail panel of pad 1, unfolded on its tab "Loop"."""
     controller, audio = build(tmp_path, clock, claps=[0.5, 1.0])
     record(controller, clock, 0, 3.0)
-    dialog = AdvancedPage(controller, export_dir=tmp_path / "out")
-    yield dialog, controller, audio
-    dialog.close()
+    panel = DetailPanel(controller, export_dir=tmp_path / "out")
+    panel.resize(1200, 400)
+    panel.set_open(True)
+    yield panel, controller, audio
+    panel.close()
     controller.store.close()
 
 
@@ -426,31 +428,40 @@ def tempo(qapp, tmp_path, clock):
 
 
 def test_the_page_shows_the_loop_of_the_session(page):
-    dialog, controller, _ = page
-    assert dialog.pad == 0
-    assert dialog.wave_title.text().startswith("Pad 1 · Aufnahme 2,00 s")
-    assert len(dialog.waveform.lines()) == 4
-    dialog.choose_pad(5)
-    assert dialog.waveform.lines() == [] and "noch kein Loop" in dialog.wave_title.text()
-    assert not dialog.save_button.isEnabled()  # nothing to save on an empty pad
+    panel, controller, _ = page
+    loop = panel.loop_tab
+    assert panel.pad == 0
+    assert panel.open_info.startswith("Aufnahme 2,00 s")
+    assert len(loop.waveform.lines()) == 4
+    panel.show_pad(5)
+    assert loop.waveform.lines() == [] and "noch kein Loop" in panel.open_info
+    assert not loop.export_button.isEnabled()  # nothing to save on an empty pad
+    assert "noch kein Loop" in loop.export_button.toolTip()  # and it says why
 
 
 def test_the_page_saves_the_shown_loop_as_wav(page, tmp_path):
-    dialog, controller, _ = page
-    assert "pad01_" in dialog.target_label.text()
-    path = dialog.export_loop()
+    panel, controller, _ = page
+    loop = panel.loop_tab
+    assert "pad01_" in loop.export_button.toolTip()
+    loop.export_button.click()
+    path = panel.last_path
     assert path is not None and path.parent == tmp_path / "out" and path.suffix == ".wav"
-    assert path.exists() and dialog.last_path == path
-    assert "Gespeichert" in dialog.loop_message.text()
-    dialog.choose_pad(5)
-    assert dialog.export_loop() is None
-    assert "keine lesbare Aufnahme" in dialog.loop_message.text()
+    assert path.exists()
+    assert "Gespeichert" in loop.trim.message.text()
+    panel.show_pad(5)
+    assert loop.export_loop() is None
+    assert "keine lesbare Aufnahme" in loop.trim.message.text()
 
 
-def test_the_cue_switch_of_the_page_acts_at_once(page):
-    dialog, controller, _ = page
+def test_the_cue_switch_of_the_system_panel_acts_at_once(page, tmp_path):
+    from loopstation.gui.settings_panels import SettingsPanels
+
+    _panel, controller, _ = page
+    panels = SettingsPanels(tmp_path / "settings.toml", controller.settings, controller.apply_settings,
+                            controller=controller)
+    panels.page("system")
     assert controller.settings.export_cue_points is True
-    dialog.cue_switch.setChecked(False)
+    panels.editors["export_cue_points"]._box.setChecked(False)
     assert controller.settings.export_cue_points is False
 
 
@@ -559,8 +570,10 @@ def test_the_strip_renders_with_and_without_a_grid(qapp):
     assert not strip.grab().toImage().isNull()
 
 
-def test_the_parents_view_offers_the_loop_panel_and_the_child_page_has_nothing_of_it(qapp, tmp_path, clock):
+def test_the_parents_view_offers_the_loop_tab_and_the_child_page_has_nothing_of_it(qapp, tmp_path, clock):
     from conftest import FakeAudio as Audio
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QAbstractButton
 
     from loopstation.gui.main_window import MainWindow
@@ -571,13 +584,16 @@ def test_the_parents_view_offers_the_loop_panel_and_the_child_page_has_nothing_o
     window = MainWindow(controller, None, [], config_path=tmp_path / "settings.toml")
     try:
         child = [b.text() for b in window.frame.findChildren(QAbstractButton)]
-        assert not any(word in text for text in child for word in ("Erweitert", "Metronom", "BPM"))
-        opened = []
-        window.advanced_factory = lambda c, p: opened.append((c, p)) or QWidget()
+        assert not any(word in text for text in child for word in ("Marker", "Strecken", "Metronom", "BPM"))
+        assert not window.frame.findChildren(DetailPanel)
+        window.resize(1280, 800)
+        window.show()
         window.enter_parent_mode()  # the sum was answered
-        window.parent_view.detail.clicked.emit()  # a tap on the detail line
-        assert opened == [(controller, None)] and window.parent_view.panel_key == "loop"
-        assert window.parent_view.side_panel.title.text() == "Loop"
+        detail = window.parent_view.detail
+        assert not detail.pages  # nothing built before it is unfolded
+        QTest.mouseClick(detail, Qt.MouseButton.LeftButton, pos=detail.rect().topLeft() + QPoint(300, 30))
+        assert detail.is_open and detail.tab == "loop" and detail.loop_tab.isVisible()
+        assert window.parent_view.panel_key is None
     finally:
         window.leave_parent_mode()
         window.timer.stop()

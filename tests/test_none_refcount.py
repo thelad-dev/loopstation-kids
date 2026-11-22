@@ -82,14 +82,15 @@ def test_drawing_the_window_and_void_qt_calls_keep_the_references_to_none(tmp_pa
 
 GC_CHILD = textwrap.dedent(
     f"""
-    import gc, sys, tempfile
+    import gc, sys, tempfile, weakref
     from pathlib import Path
     sys.path.insert(0, {str(ROOT / "tests")!r})
     from PySide6.QtWidgets import QApplication
     app = QApplication([])
     from conftest import FakeAudio, FakeClock, make_settings
     from loopstation.controller import Controller
-    from loopstation.gui.advanced_page import AdvancedPage
+    from loopstation.gui.detail_panel import DetailPanel
+    from loopstation.gui.settings_panels import SettingsPanels
     from loopstation.store import EventStore
 
     tmp = Path(tempfile.mkdtemp())
@@ -98,9 +99,19 @@ GC_CHILD = textwrap.dedent(
     store = EventStore(settings.log_dir, settings.pad_count, clock=clock)
     controller = Controller(store, FakeAudio(clock), settings, clock=clock)
     controller.startup()
+    controller.press(0)
+    clock.advance(2.0)
+    controller.press(0)  # a loop on pad 1, so every tab has something to show
+    panels = SettingsPanels(tmp / "settings.toml", controller.settings, controller.apply_settings,
+                            controller=controller)
     for _ in range(3):
-        page = AdvancedPage(controller, None)
+        page = DetailPanel(controller, None, export_dir=tmp / "out", settings=lambda: panels)
+        for tab in ("loop", "pad", "record"):  # every tab is built on its first visit
+            page.open_tab(tab)
+        page.refresh()
+        alive = weakref.ref(page)
         del page
+        assert alive() is None, "a reference cycle keeps the detail panel alive"
         gc.collect()
     print("collected", flush=True)
     store.close()
@@ -108,10 +119,11 @@ GC_CHILD = textwrap.dedent(
 )
 
 
-def test_a_dropped_loop_page_is_collected_without_a_crash(tmp_path):
+def test_a_dropped_detail_panel_is_collected_without_a_crash(tmp_path):
     """PySide6 before 6.12 crashes when the garbage collector clears a cycle through a widget; the
-    loop page holds itself only weakly, so dropping it frees it at once and nothing is left to clear."""
-    script = tmp_path / "gc_loop_page.py"
+    detail panel and its tabs hold themselves only weakly, so dropping it frees it at once and nothing
+    is left to clear."""
+    script = tmp_path / "gc_detail_panel.py"
     script.write_text(GC_CHILD, encoding="utf-8")
     env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "PYTHONPATH": str(ROOT)}
     done = subprocess.run([sys.executable, str(script)], cwd=ROOT, env=env,
