@@ -68,6 +68,12 @@ class NullAudio:
     def set_volume(self, volume: float) -> None:
         pass
 
+    def set_pad_gain(self, pad: int, gain: float) -> None:
+        pass
+
+    def poll_pad_clipping(self, pad: int) -> bool:
+        return False
+
     def set_ceiling_db(self, db: float) -> None:
         pass
 

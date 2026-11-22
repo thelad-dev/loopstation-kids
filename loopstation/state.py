@@ -52,6 +52,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from loopstation import events as ev
+from loopstation.audio.dynamics import PAD_GAIN_MAX
 from loopstation.trim import shift_markers
 
 log = logging.getLogger(__name__)
@@ -70,6 +71,14 @@ class PadState:
     free: bool = False
     # Every sample ever recorded on this pad, oldest first, without duplicates.
     history: list[str] = field(default_factory=list)
+    # Parents' label (empty = show "Pad N"); annotation, not on the undo stack.
+    name: str = ""
+    # Linear playback gain 0..1 (1 = full); undoable via ``pad_gain``.
+    gain: float = 1.0
+    # Loop start offset in frames of the shaped (fitted) loop; undoable.
+    start_frames: int = 0
+    # Whole bars the pad loops for, or None = auto from the recording length.
+    bars: int | None = None
 
 
 @dataclass
@@ -132,6 +141,10 @@ class AppState:
                 looping=bool(pad.get("looping", False)),
                 free=bool(pad.get("free", False)),
                 history=list(pad.get("history", [])),
+                name=_pad_name(pad.get("name")),
+                gain=_pad_gain(pad.get("gain")),
+                start_frames=_pad_start(pad.get("start_frames")),
+                bars=_pad_bars(pad.get("bars")),
             )
             for pad_id, pad in raw.get("pads", {}).items()
         }
@@ -156,7 +169,39 @@ def _pad_to_dict(pad: PadState) -> dict[str, Any]:
     out: dict[str, Any] = {"sample": pad.sample, "looping": pad.looping, "history": list(pad.history)}
     if pad.free:
         out["free"] = True  # left out otherwise: snapshots of sessions without free pads stay as they were
+    if pad.name:
+        out["name"] = pad.name
+    if pad.gain != 1.0:
+        out["gain"] = pad.gain
+    if pad.start_frames:
+        out["start_frames"] = pad.start_frames
+    if pad.bars is not None:
+        out["bars"] = pad.bars
     return out
+
+
+def _pad_name(raw: Any) -> str:
+    return raw.strip() if isinstance(raw, str) else ""
+
+
+def _pad_gain(raw: Any) -> float:
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return 1.0
+    return min(PAD_GAIN_MAX, max(0.0, float(raw)))
+
+
+def _pad_start(raw: Any) -> int:
+    if not isinstance(raw, int) or isinstance(raw, bool) or raw < 0:
+        return 0
+    return raw
+
+
+def _pad_bars(raw: Any) -> int | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, int) or isinstance(raw, bool) or raw < 1:
+        return None
+    return raw
 
 
 def parse_master(raw: Any) -> dict[str, Any] | None:
@@ -231,6 +276,9 @@ def _entry_to_dict(entry: dict[str, Any]) -> dict[str, Any]:
         out["master"] = None if entry["master"] is None else dict(entry["master"])
     if "free" in entry:
         out["free"] = {str(p): flag for p, flag in sorted(entry["free"].items())}
+    for key in ("gain", "start_frames", "bars"):
+        if key in entry:
+            out[key] = {str(p): value for p, value in sorted(entry[key].items())}
     return out
 
 
@@ -245,6 +293,12 @@ def _entry_from_dict(raw: dict[str, Any]) -> dict[str, Any]:
     # Only entries that switched the free mode of a pad carry the key.
     if "free" in raw:
         entry["free"] = {int(p): bool(flag) for p, flag in raw["free"].items()}
+    if "gain" in raw:
+        entry["gain"] = {int(p): _pad_gain(value) for p, value in raw["gain"].items()}
+    if "start_frames" in raw:
+        entry["start_frames"] = {int(p): _pad_start(value) for p, value in raw["start_frames"].items()}
+    if "bars" in raw:
+        entry["bars"] = {int(p): _pad_bars(value) for p, value in raw["bars"].items()}
     return entry
 
 
@@ -278,15 +332,29 @@ def _push(stack: list[dict[str, Any]], entry: dict[str, Any]) -> None:
 
 
 def _push_undo(
-    state: AppState, seq: int, previous: dict[int, str | None], free: dict[int, bool] | None = None
+    state: AppState,
+    seq: int,
+    previous: dict[int, str | None],
+    free: dict[int, bool] | None = None,
+    *,
+    gain: dict[int, float] | None = None,
+    start_frames: dict[int, int] | None = None,
+    bars: dict[int, int | None] | None = None,
 ) -> None:
     """Push the undo entry of a new content change; that ends the redo chain.
 
     ``free`` is given when the change also moved pads out of (or into) the free mode.
+    ``gain`` / ``start_frames`` / ``bars`` remember pad playback shape the same way.
     """
     entry: dict[str, Any] = {"seq": seq, "pads": dict(previous)}
     if free:
         entry["free"] = dict(free)
+    if gain:
+        entry["gain"] = dict(gain)
+    if start_frames:
+        entry["start_frames"] = dict(start_frames)
+    if bars:
+        entry["bars"] = dict(bars)
     _push(state.undo_stack, entry)
     state.redo_stack.clear()
 
@@ -330,6 +398,12 @@ def _entry_without(
         out["free"] = free
     else:
         out.pop("free", None)
+    for key in ("gain", "start_frames", "bars"):
+        kept = {p: value for p, value in entry.get(key, {}).items() if p in pads}
+        if kept:
+            out[key] = kept
+        else:
+            out.pop(key, None)
     return out
 
 
@@ -359,10 +433,16 @@ def _travel(state: AppState, event: ev.Event, undoing: bool) -> None:
         moved = dict(entry["pads"])
         del source[index]
     moved_free = {p: flag for p, flag in entry.get("free", {}).items() if p in moved}
+    moved_gain = {p: value for p, value in entry.get("gain", {}).items() if p in moved}
+    moved_start = {p: value for p, value in entry.get("start_frames", {}).items() if p in moved}
+    moved_bars = {p: value for p, value in entry.get("bars", {}).items() if p in moved}
 
     master_before = state.master
     replaced: dict[int, str | None] = {}
     replaced_free: dict[int, bool] = {}
+    replaced_gain: dict[int, float] = {}
+    replaced_start: dict[int, int] = {}
+    replaced_bars: dict[int, int | None] = {}
     for p, sample in moved.items():
         pad = _pad(state, p)
         replaced[p] = pad.sample
@@ -375,9 +455,28 @@ def _travel(state: AppState, event: ev.Event, undoing: bool) -> None:
             if pad.free != moved_free[p]:
                 pad.looping = False
             pad.free = moved_free[p]
+        if p in moved_gain:
+            replaced_gain[p] = pad.gain
+            pad.gain = moved_gain[p]
+        if p in moved_start:
+            replaced_start[p] = pad.start_frames
+            if pad.start_frames != moved_start[p]:
+                pad.looping = False
+            pad.start_frames = moved_start[p]
+        if p in moved_bars:
+            replaced_bars[p] = pad.bars
+            if pad.bars != moved_bars[p]:
+                pad.looping = False
+            pad.bars = moved_bars[p]
     twin: dict[str, Any] = {"seq": event.seq, "pads": replaced}
     if replaced_free:
         twin["free"] = replaced_free
+    if replaced_gain:
+        twin["gain"] = replaced_gain
+    if replaced_start:
+        twin["start_frames"] = replaced_start
+    if replaced_bars:
+        twin["bars"] = replaced_bars
 
     # The grid comes back with the entry whose event changed it. A step on a
     # single pad only restores a grid that is gone; it never replaces another.
@@ -444,6 +543,36 @@ def apply(state: AppState, event: ev.Event) -> AppState:
                 _push_undo(new, event.seq, {pad_id: pad.sample}, {pad_id: pad.free})
                 pad.free = free
                 pad.looping = False  # it plays differently now: the loop has to be started again
+
+    elif event.type == ev.PAD_NAME:
+        if pad_id is not None:
+            _pad(new, pad_id).name = _pad_name(event.data.get("name"))
+
+    elif event.type == ev.PAD_GAIN:
+        if pad_id is not None:
+            pad = _pad(new, pad_id)
+            gain = _pad_gain(event.data.get("gain"))
+            if gain != pad.gain:
+                _push_undo(new, event.seq, {pad_id: pad.sample}, gain={pad_id: pad.gain})
+                pad.gain = gain
+
+    elif event.type == ev.PAD_START:
+        if pad_id is not None:
+            pad = _pad(new, pad_id)
+            start = _pad_start(event.data.get("start_frames"))
+            if start != pad.start_frames:
+                _push_undo(new, event.seq, {pad_id: pad.sample}, start_frames={pad_id: pad.start_frames})
+                pad.start_frames = start
+                pad.looping = False
+
+    elif event.type == ev.PAD_BARS:
+        if pad_id is not None:
+            pad = _pad(new, pad_id)
+            bars = _pad_bars(event.data.get("bars"))
+            if bars != pad.bars:
+                _push_undo(new, event.seq, {pad_id: pad.sample}, bars={pad_id: pad.bars})
+                pad.bars = bars
+                pad.looping = False
 
     elif event.type == ev.RESTORE_PAD:
         sample = event.data.get("sample")

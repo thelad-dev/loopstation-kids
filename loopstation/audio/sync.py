@@ -80,6 +80,44 @@ def fit_exact(data: np.ndarray, frames: int) -> np.ndarray:
     return out
 
 
+def rotate_to_start(data: np.ndarray, start_frames: int) -> np.ndarray:
+    """``data`` with frame ``start_frames`` moved to the front (circular); silence stays put.
+
+    ``start_frames`` is taken modulo the length. Returns ``data`` itself when the
+    start is already at zero or the buffer is empty.
+    """
+    length = len(data)
+    if length == 0:
+        return data
+    start = int(start_frames) % length
+    if start == 0:
+        return data
+    return np.ascontiguousarray(np.concatenate((data[start:], data[:start])))
+
+
+def shape_loop(
+    data: np.ndarray,
+    grid: int | None,
+    grace: int = 0,
+    bars: int | None = None,
+    start_frames: int = 0,
+) -> np.ndarray:
+    """Pad loop as heard: optional whole-bar length, then start offset.
+
+    Without a ``grid`` the recording keeps its length (free pad / no bar yet) and
+    only the start rotates. With a grid, ``bars is None`` uses ``fit_to_grid``;
+    a positive ``bars`` cuts or pads with silence to exactly that many bars
+    (``fit_exact``), independent of the raw length.
+    """
+    if grid is None or grid <= 0:
+        shaped = data
+    elif bars is None:
+        shaped = fit_to_grid(data, grid, grace)
+    else:
+        shaped = fit_exact(data, max(1, int(bars)) * grid)
+    return rotate_to_start(shaped, start_frames)
+
+
 def seam_fade_frames(length: int, sample_rate: int) -> int:
     """Length in frames of the fade-out at the end of a loop of ``length`` frames."""
     if length <= 0:

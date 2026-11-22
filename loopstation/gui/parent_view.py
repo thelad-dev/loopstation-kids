@@ -150,18 +150,19 @@ class TileWave:
 
 
 class WaveCache:
-    """Peaks of each sample, computed once (per sample, free mode and bar length) and kept."""
+    """Peaks of each sample, computed once (per sample, free mode, bars and grid) and kept."""
 
     def __init__(self) -> None:
-        self._waves: OrderedDict[tuple[str, bool, int | None], TileWave | None] = OrderedDict()
+        self._waves: OrderedDict[tuple, TileWave | None] = OrderedDict()
 
     def get(self, controller: Controller, sample: str, pad: int, free: bool,
             grid: int | None) -> TileWave | None:
-        key = (sample, free, grid)
+        state = controller.pad(pad)
+        key = (sample, free, grid, state.bars, state.start_frames)
         if key in self._waves:
             self._waves.move_to_end(key)
             return self._waves[key]
-        data = controller.loop_audio(sample, pad)
+        data = controller.loop_view_audio(sample, pad)
         if data is None:
             data = controller.sample_audio(sample)
         wave = None
@@ -611,10 +612,11 @@ class TileLook:
     selected: bool
     length: str
     wave: TileWave | None
+    name: str = ""
 
 
 class ParentPadTile(QWidget):
-    """A wide pad tile: number, length, mini wave and the state symbol in a start field at the bottom left.
+    """A wide pad tile: number, optional name, length, mini wave and the state symbol.
 
     A tap on the start field (on a free pad: the round middle) acts like a tap on the pad of the child page;
     a tap anywhere else only chooses the pad. ``touched(index)`` on every press, ``chosen(index)`` on a
@@ -632,7 +634,7 @@ class ParentPadTile(QWidget):
     def __init__(self, index: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.index = index
-        self.look = TileLook("white", False, False, False, False, False, "", None)
+        self.look = TileLook("white", False, False, False, False, False, "", None, "")
         self.start_held = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -739,8 +741,11 @@ class ParentPadTile(QWidget):
         number_px = min(15.0, max(11.0, body.height() * 0.085))
         painter.setFont(_font(number_px))
         painter.setPen(ink)
+        title = look.name.strip() or str(self.index + 1)
+        if look.name.strip():
+            title = f"{self.index + 1} · {look.name.strip()}"
         painter.drawText(QRectF(body.left() + 14, body.top() + 10, body.width() - 28, number_px * 1.6),
-                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, str(self.index + 1))
+                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, title)
         field = self.start_field()
         if look.wave is not None:
             height = min(body.height() * WAVE_SHARE, WAVE_MOST)
@@ -1034,6 +1039,9 @@ class ParentView(QWidget):
             state = controller.pad(index)
             wave = (self.waves.get(controller, state.sample, index, state.free, grid)
                     if state.sample is not None else None)
+            length = length_text(wave, state.free, grid, rate)
+            if state.bars is not None and not state.free and grid:
+                length = "1 Takt" if state.bars == 1 else f"{state.bars} Takte"
             tile.set_look(TileLook(
                 color=self._colors.get(index, "white"),
                 filled=state.sample is not None,
@@ -1041,8 +1049,9 @@ class ParentView(QWidget):
                 free=state.free,
                 recording=index == controller.recording_pad,
                 selected=index == self.selected,
-                length=length_text(wave, state.free, grid, rate),
+                length=length,
                 wave=wave,
+                name=state.name,
             ))
         self._update_detail()
 
@@ -1051,7 +1060,10 @@ class ParentView(QWidget):
         look = tile.look
         number = tile.index + 1
         help_text = KEYS_HELP if self.toolbar.keys_button.isChecked() else ""
-        self.detail.set_content(number, look.color, f"Pad {number}", self._facts(look), help_text)
+        title = look.name.strip() or f"Pad {number}"
+        if look.name.strip():
+            title = f"Pad {number} · {look.name.strip()}"
+        self.detail.set_content(number, look.color, title, self._facts(look), help_text)
 
     def _facts(self, look: TileLook) -> str:
         if look.recording:

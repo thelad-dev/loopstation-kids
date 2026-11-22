@@ -16,8 +16,9 @@ blocks are mapped to output frames ("which frame could be heard when the
 microphone picked this up") with the input and output latency, so the new
 loop lines up with what the child heard while recording.
 
-Levels: the output is the sum of all voices times the master volume (which
-moves in a ramp, never in a jump), kept under the ceiling by a peak limiter
+Levels: the output is the sum of all voices (each with its own pad gain,
+ramped like the master) times the master volume (which moves in a ramp,
+never in a jump), kept under the ceiling by a peak limiter
 (``dynamics.PeakLimiter``). The microphone gets a trim in dB, an optional
 auto gain and a soft clipper; its peak and clipped blocks are counted so the
 controller can warn about a recording that is too loud.
@@ -38,6 +39,7 @@ import numpy as np
 from loopstation.audio.devices import HostApiGroup, Kind, list_devices
 from loopstation.audio.dynamics import (
     CLIP_LEVEL,
+    PAD_GAIN_MAX,
     PeakLimiter,
     auto_gain_step,
     block_peak,
@@ -79,6 +81,9 @@ class _Voice:
     synced: bool = False
     # The sample the caller handed in (``data`` may be a seam-faded copy).
     source: np.ndarray | None = None
+    # Per-pad gain target and the gain last applied (ramped in the callback).
+    gain_target: float = 1.0
+    gain: float = 1.0
 
 
 class SoundDeviceAudio:
@@ -113,6 +118,9 @@ class SoundDeviceAudio:
         self._lock = threading.Lock()
         self._voices: dict[int, _Voice] = {}
         self._effects: list[_Voice] = []
+        # Per-pad gain targets (0 .. +18 dB); a playing voice ramps its ``gain`` towards this.
+        self._pad_gains: dict[int, float] = {}
+        self._pad_clipped: dict[int, bool] = {}
 
         # Output frame counter and the time the latest output block was
         # requested (used to place microphone blocks between two callbacks).
@@ -300,27 +308,45 @@ class SoundDeviceAudio:
 
     # ------------------------------------------------------------ callbacks
 
-    @staticmethod
-    def _mix_voice(out: np.ndarray, voice: _Voice) -> bool:
-        """Add ``voice`` into ``out``; return False when it has finished."""
+    def _mix_voice(self, out: np.ndarray, voice: _Voice, pad: int | None) -> bool:
+        """Add ``voice`` into ``out`` with pad gain + soft limit; False when it has finished.
+
+        The gain moves at most ``_gain_step`` per sample (same ramp as the master
+        volume), applied as one mid-block level so the callback allocates nothing.
+        Boost above 0 dB is soft-limited so a loud pad does not hard-clip.
+        """
         length = len(voice.data)
         if length == 0:
             return False
         filled = 0
         frames = len(out)
+        end_gain = ramp_gain(voice.gain, voice.gain_target, frames, self._gain_step)
+        level = np.float32((voice.gain + end_gain) * 0.5 if end_gain != voice.gain else end_gain)
+        scratch = self._voice[:frames]
+        scratch.fill(0.0)
         while filled < frames:
             count = min(frames - filled, length - voice.pos)
-            out[filled:filled + count] += voice.data[voice.pos:voice.pos + count]
+            scratch[filled:filled + count] = voice.data[voice.pos:voice.pos + count]
             filled += count
             voice.pos += count
             if voice.pos >= length:
                 if not voice.loop:
-                    return False
+                    break
                 voice.pos = 0
-        return True
+        if level != 1.0:
+            scratch *= level
+        np.abs(scratch, out=self._voice_abs[:frames])
+        peak = float(self._voice_abs[:frames].max()) if frames else 0.0
+        # Soft-limit only when boost pushes past full scale; unity playback stays bit-exact.
+        if peak > 1.0:
+            if pad is not None:
+                self._pad_clipped[pad] = True
+            soft_clip(scratch, abs_buf=self._voice_abs)
+        out += scratch
+        voice.gain = end_gain
+        return voice.loop or voice.pos < length
 
-    @classmethod
-    def _render(cls, out: np.ndarray, voice: _Voice, block_start: int) -> bool:
+    def _render(self, out: np.ndarray, voice: _Voice, block_start: int, pad: int | None = None) -> bool:
         """Mix the part of ``voice`` that falls into this block; False when it is over."""
         frames = len(out)
         begin = voice.start - block_start
@@ -332,7 +358,7 @@ class SoundDeviceAudio:
             stop = min(frames, voice.end - block_start)
             if stop <= begin:
                 return False
-        alive = cls._mix_voice(out[begin:stop], voice)
+        alive = self._mix_voice(out[begin:stop], voice, pad)
         if voice.end is not None and block_start + frames >= voice.end:
             return False
         return alive
@@ -341,6 +367,8 @@ class SoundDeviceAudio:
         self._mix = np.zeros(frames, dtype=np.float32)
         self._ramp = np.arange(1, frames + 1, dtype=np.float32)
         self._gains = np.empty(frames, dtype=np.float32)
+        self._voice = np.zeros(frames, dtype=np.float32)
+        self._voice_abs = np.empty(frames, dtype=np.float32)
 
     def _output_callback(self, outdata: np.ndarray, frames: int, _time: Any, status: Any) -> None:
         if frames > len(self._mix):
@@ -351,10 +379,11 @@ class SoundDeviceAudio:
             start = self._frame
             self._block_start = start
             self._block_time = self._clock()
-            finished = [p for p, v in self._voices.items() if not self._render(mix, v, start)]
+            finished = [p for p, v in self._voices.items() if not self._render(mix, v, start, p)]
             for pad in finished:
                 del self._voices[pad]
             self._effects = [e for e in self._effects if self._render(mix, e, start)]
+            # Effects ignore pad gains (their gain_target stays 1).
             self._frame = start + frames
             target, ceiling = self._volume, self._ceiling
         # Master volume in a ramp, then the limiter (the only thing that
@@ -447,6 +476,19 @@ class SoundDeviceAudio:
     def set_volume(self, volume: float) -> None:
         with self._lock:
             self._volume = min(1.0, max(0.0, float(volume)))
+
+    def set_pad_gain(self, pad: int, gain: float) -> None:
+        gain = min(PAD_GAIN_MAX, max(0.0, float(gain)))
+        with self._lock:
+            self._pad_gains[pad] = gain
+            voice = self._voices.get(pad)
+            if voice is not None:
+                voice.gain_target = gain
+
+    def poll_pad_clipping(self, pad: int) -> bool:
+        """True if this pad soft-limited since the last poll (boost pushed past 0 dBFS)."""
+        with self._lock:
+            return self._pad_clipped.pop(pad, False)
 
     def set_ceiling_db(self, db: float) -> None:
         with self._lock:
@@ -607,6 +649,7 @@ class SoundDeviceAudio:
         played = soften_seam(data, self.sample_rate) if loop and self._soft_seam else data
         with self._lock:
             now = self._frame
+            gain = self._pad_gains.get(pad, 1.0)
             if free and loop:
                 # A free pad keeps its own length: its voice is not ``synced``, so it
                 # neither anchors the grid nor stops at a boundary. ``align`` only
@@ -614,10 +657,12 @@ class SoundDeviceAudio:
                 start = now
                 if align and self._grid is not None and self._grid_running(exclude=pad):
                     start = next_boundary(now, self._origin, self._grid)
-                self._voices[pad] = _Voice(played, True, start=start, source=data)
+                self._voices[pad] = _Voice(
+                    played, True, start=start, source=data, gain_target=gain, gain=gain)
                 return
             if not (loop and self._grid is not None):
-                self._voices[pad] = _Voice(played, loop, start=now, source=data)
+                self._voices[pad] = _Voice(
+                    played, loop, start=now, source=data, gain_target=gain, gain=gain)
                 return
             old = self._voices.get(pad)
             if old is not None and old.synced and old.end is not None and old.source is data:
@@ -629,7 +674,8 @@ class SoundDeviceAudio:
                 # Nothing else on the grid: start right away and anchor it here.
                 self._origin = now
                 start = now
-            self._voices[pad] = _Voice(played, True, start=start, synced=True, source=data)
+            self._voices[pad] = _Voice(
+                played, True, start=start, synced=True, source=data, gain_target=gain, gain=gain)
 
     def stop(self, pad: int, at_boundary: bool = False) -> None:
         with self._lock:

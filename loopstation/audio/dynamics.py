@@ -117,19 +117,29 @@ class PeakLimiter:
         np.clip(block, -ceiling, ceiling, out=block)
 
 
-def soft_clip(block: np.ndarray, knee: float = 0.7) -> np.ndarray:
+def soft_clip(block: np.ndarray, knee: float = 0.7, abs_buf: np.ndarray | None = None) -> np.ndarray:
     """Round off peaks above ``knee`` (in place); the result never exceeds +-1.
 
     Below the knee the signal passes unchanged; above it a tanh curve joins
     with the same slope and approaches +-1 smoothly. It is monotonic.
+    ``abs_buf`` (same length as ``block``) avoids allocating in the audio callback.
     """
-    magnitude = np.abs(block)
+    magnitude = abs_buf[: len(block)] if abs_buf is not None else np.abs(block)
+    if abs_buf is not None:
+        np.abs(block, out=magnitude)
     over = magnitude > knee
     if over.any():
         span = 1.0 - knee
         shaped = knee + span * np.tanh((magnitude[over] - knee) / span)
         block[over] = np.copysign(shaped, block[over])
     return block
+
+
+# Pad boost: linear gain may exceed 1 (0 dB). Soft-limit at the pad keeps the sum safe.
+PAD_GAIN_MAX_DB = 18.0
+PAD_GAIN_MAX = db_to_gain(PAD_GAIN_MAX_DB)
+PAD_NORMALIZE_TARGET_DB = -3.0
+PAD_NORMALIZE_TARGET = db_to_gain(PAD_NORMALIZE_TARGET_DB)
 
 
 # --------------------------------------------------------------- auto gain

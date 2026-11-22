@@ -7,9 +7,9 @@ takes about 45 % of the window height and shows the chosen pad in tabs:
 - **Loop:** the wave on the beat lines with the trim handles, the markers and the play head; one row of
   actions (Anhören, Marker, Strecken, Export, Takt rasten) and, on the right, Verwerfen and Übernehmen
   for the trim. The line under the wave says what a trim would make of the loop, or why a button waits.
-- **Pad:** free mode, start on the bar (a setting for all free pads), the takes of this pad (listen,
-  bring back) and the level of the take with its target zone and "zu laut". Name and pad volume need
-  the new core: they are shown greyed out.
+- **Pad:** name, free mode, start on the bar (a setting for all free pads), pad volume, start offset
+  and length in bars, the takes of this pad (listen, bring back) and the level of the take with its
+  target zone and "zu laut".
 - **Aufnahme:** the microphone level, the longest recording and the record start tone. The two settings
   are the ones of the panel "System": the same inputs save the same way (``SettingsPanels.mirror``).
 - **Effekte (später):** visible, greyed out.
@@ -33,6 +33,7 @@ from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QMouseEvent, QPainter, QPaintEvent, QPen, QResizeEvent
 from PySide6.QtWidgets import (
     QAbstractButton,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -45,6 +46,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from loopstation.audio.base import PREVIEW_VOICE
+from loopstation.audio.dynamics import PAD_GAIN_MAX_DB, db_to_gain, gain_to_db
 from loopstation.controller import NEAR_CLIP_DB, HistoryEntry
 from loopstation.gui.export_dialog import default_export_dir, save_loop
 from loopstation.gui.grid_panel import format_seconds
@@ -81,10 +84,41 @@ INFO_LEAST = 200  # the folded line keeps this much room for "Pad N" and its fac
 BADGE_END = MARGIN + 36 + 16  # where "Pad N" begins, right of the badge
 TABS = (("loop", "Loop"), ("pad", "Pad"), ("record", "Aufnahme"), ("effects", "Effekte (später)"))
 NEW_CORE = "kommt mit dem neuen Kern"
+PAD_BAR_CHOICES = (1, 2, 4, 8, 16)  # whole bars; 0 in the button group means "auto"
+# Slider: 0..100 = 0..100 % (up to 0 dB), 100..100+PAD_GAIN_MAX_DB = boost in dB.
+PAD_VOLUME_UNITY = 100
+PAD_VOLUME_MAX = PAD_VOLUME_UNITY + int(PAD_GAIN_MAX_DB)
 LABEL = QColor("#C7C7CC")
 OFF = QColor("#55555C")
 WARN, LOUD, GOOD = "#FF9F0A", "#FFD60A", "#32D74B"
 TAKE_WAVE_BARS = 26
+
+
+def pad_gain_to_slider(gain: float) -> int:
+    """Linear pad gain to slider position (0 .. PAD_VOLUME_MAX)."""
+    if gain <= 1.0:
+        return max(0, min(PAD_VOLUME_UNITY, round(gain * PAD_VOLUME_UNITY)))
+    return min(PAD_VOLUME_MAX, PAD_VOLUME_UNITY + round(gain_to_db(gain)))
+
+
+def pad_slider_to_gain(position: int) -> float:
+    """Slider position to linear pad gain (0 .. +18 dB)."""
+    if position <= PAD_VOLUME_UNITY:
+        return max(0.0, position / PAD_VOLUME_UNITY)
+    return db_to_gain(min(PAD_GAIN_MAX_DB, position - PAD_VOLUME_UNITY))
+
+
+def pad_gain_label(gain: float) -> str:
+    """'70 % · −3,1 dB' or '+6,0 dB · Verstärkung'."""
+    db = gain_to_db(gain) if gain > 0 else float("-inf")
+    if gain <= 1.0:
+        percent = round(gain * 100)
+        if not math.isfinite(db):
+            return "0 % · stumm"
+        db_text = f"{db:.1f}".replace(".", ",")
+        return f"{percent} % · {db_text} dB"
+    db_text = f"+{db:.1f}".replace(".", ",")
+    return f"{db_text} dB · Verstärkung"
 
 ACTION_QSS = (
     "QPushButton#action {{ color: #F2F2F2; background: #26262B; border: 1.5px solid #3A3A41; "
@@ -150,6 +184,9 @@ def _font(pixels: float, weight: QFont.Weight = QFont.Weight.Bold) -> QFont:
 
 def _heading(text: str) -> QLabel:
     label = QLabel(text)
+    label.setWordWrap(True)
+    label.setMinimumWidth(0)
+    label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
     label.setStyleSheet(f"color: {LABEL.name()}; font-size: 14px; font-weight: bold;")
     return label
 
@@ -157,6 +194,9 @@ def _heading(text: str) -> QLabel:
 def _dim(text: str, size: float = 13, color: str | None = None) -> QLabel:
     label = QLabel(text)
     label.setWordWrap(True)
+    label.setMinimumWidth(0)
+    # Word-wrapped labels otherwise keep a one-line minimumWidth and force sideways scroll.
+    label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
     label.setStyleSheet(f"color: {color or TEXT_DIM.name()}; font-size: {size}px;")
     return label
 
@@ -165,6 +205,8 @@ def _switch_row(switch: QWidget, title: str, hint: QLabel) -> QWidget:
     """A switch beside its title and a dim line under it."""
     name = QLabel(title)
     name.setWordWrap(True)  # a narrow column breaks the title instead of cutting it
+    name.setMinimumWidth(0)
+    name.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
     name.setStyleSheet("font-size: 16px; font-weight: 600;")
     texts = QVBoxLayout()
     texts.setContentsMargins(0, 0, 0, 0)
@@ -172,6 +214,7 @@ def _switch_row(switch: QWidget, title: str, hint: QLabel) -> QWidget:
     texts.addWidget(name)
     texts.addWidget(hint)
     row = QWidget()
+    row.setMinimumWidth(0)
     layout = QHBoxLayout(row)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(14)
@@ -183,13 +226,16 @@ def _switch_row(switch: QWidget, title: str, hint: QLabel) -> QWidget:
 def _column(*items: QWidget, spacing: int = 8) -> QWidget:
     """``items`` one under the other at the top of a scroll area (a short window scrolls, never cuts)."""
     inner = QWidget()
+    inner.setMinimumWidth(0)
     layout = QVBoxLayout(inner)
     layout.setContentsMargins(0, 0, 12, 0)  # room for the scroll bar
     layout.setSpacing(spacing)
     for item in items:
+        item.setMinimumWidth(0)
         layout.addWidget(item)
     layout.addStretch(1)
     area = scrolled(inner)
+    area.setMinimumWidth(0)
     area.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # a tap on empty room leaves the keys to the pads
     return area
 
@@ -291,13 +337,16 @@ class LoopTab(QWidget):
         self.pad = panel.pad
         self._loop_key: object = None
         self._marker_key: object = None
-        self._play: tuple[float, int, int] | None = None  # (start time, first frame, frames) while it plays
+        # (start time, first display frame, frames to play, wrap around the wave)
+        self._play: tuple[float, int, int, bool] | None = None
         self._tip_stamp = ""  # the minute the tooltip of "Export" was made for
         self.waveform = WaveformWidget()
         self.waveform.setMinimumHeight(FLAG_ROOM + 56)  # a low panel scrolls rather than flatten the wave
         self.waveform.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.waveform.bar_labels = True
+        self.waveform.start_editable = True
         self.waveform.selection_changed.connect(weak_slot(self._selection_changed))
+        self.waveform.start_changed.connect(weak_slot(self._start_dragged, pass_signal_args=True))
         tab = weakref.ref(self)
         self.trim = TrimBalance(self.controller, self.waveform, lambda: _pad_of(tab),
                                 on_done=weak_slot(self.reload))
@@ -401,12 +450,18 @@ class LoopTab(QWidget):
         grid = None if state.free else controller.grid_frames()
         info = controller.grid_info()
         beats = 4 if info is None else info.beats
-        key = (pad, sample, grid, beats)
+        start = state.start_frames
+        bars = state.bars
+        key = (pad, sample, grid, beats, start, bars)
         if key != self._loop_key:
             self._loop_key = key
-            played = None if sample is None else controller.loop_audio(sample, pad)
-            self.waveform.set_loop(played, grid, beats)
+            # Wave shows the fitted loop; the green mark is the start; playback rotates it.
+            viewed = None if sample is None else controller.loop_view_audio(sample, pad)
+            self.waveform.set_loop(viewed, grid, beats)
+            self.waveform.set_start_frame(start)
             self._marker_key = None
+        else:
+            self.waveform.set_start_frame(start)
         marks = controller.markers(pad) if sample is not None else []
         marker_key = (key, tuple(marks), controller.recording_pad is None)
         if marker_key != self._marker_key:
@@ -416,6 +471,10 @@ class LoopTab(QWidget):
             self.trim.idle_hint = self._hint()
             self.trim.refresh()
             self._update_buttons()
+
+    def _start_dragged(self, frame: int) -> None:
+        """The green start mark was moved: keep the pad's start in step (undoable)."""
+        self.controller.set_pad_start(self.pad, frame)
 
     def _hint(self) -> str:
         """What the line under the wave says while nothing is trimmed: what to do, or why a button waits."""
@@ -488,12 +547,17 @@ class LoopTab(QWidget):
         play = self._play
         if play is None:
             return
-        start, first, frames = play
+        start, first, frames, wrap = play
         done = round((self.controller.now() - start) * self.controller.sample_rate)
         if done >= frames:
             self._stop_head()
             return
-        self.waveform.set_play_frame(min(self.waveform.loop_frames, first + done))
+        # Full-loop listen: the heard buffer is rotated, the wave is not — wrap the head.
+        if wrap and self.waveform.loop_frames:
+            position = (first + done) % self.waveform.loop_frames
+        else:
+            position = first + done
+        self.waveform.set_play_frame(min(self.waveform.loop_frames, position))
 
     def _stop_head(self) -> None:
         if self._play is not None:
@@ -525,13 +589,16 @@ class LoopTab(QWidget):
             if self.trim.message.isVisible():
                 return  # refused: the line says why
             plan = self.trim.check().plan
-            first, frames = wave.trim_range[0], (0 if plan is None else plan.frames)
+            first, frames, wrap = wave.trim_range[0], (0 if plan is None else plan.frames), False
         else:
-            # The loop as on the pad (fitted to the bars), so the play head matches what is heard.
-            if controller.trim_preview(self.pad, 0, wave.loop_frames, snap=False) is not None:
-                controller.preview(sample)
-            first, frames = 0, wave.loop_frames
-        self._play = (controller.now(), first, frames)
+            # Heard audio (rotated by the start mark); the play head runs on the shown wave.
+            played = controller.loop_audio(sample, self.pad)
+            if played is not None:
+                controller.audio.play(PREVIEW_VOICE, played, loop=False)
+            first = wave.start_frame
+            frames = len(played) if played is not None else wave.loop_frames
+            wrap = True
+        self._play = (controller.now(), first, frames, wrap)
         self.listen_button.setText("Stopp")
         self.listen_button.setIcon(qicon("stop", TEXT, 24))
         self.listen_button.setEnabled(True)
@@ -662,7 +729,7 @@ class TakeRow(QFrame):
 
 
 class PadTab(QWidget):
-    """Free mode, start on the bar, the takes of the pad and the level of its take."""
+    """Name, free mode, start on the bar, pad volume, start/length, takes and take level."""
 
     def __init__(self, panel: DetailPanel) -> None:
         super().__init__()
@@ -670,13 +737,18 @@ class PadTab(QWidget):
         self.pad = panel.pad
         self._takes_key: object = None
         self._level_key: object = None
+        self._shape_key: object = None
         self._take_cache: dict[str, tuple[np.ndarray, int, float]] = {}  # sample -> (peaks, frames, peak)
         self.take_rows: dict[str, TakeRow] = {}
 
-        # Left: name, free mode, start on the bar, pad volume.
+        # Left: name, free mode, start on the bar, pad volume, start offset, length in bars.
         self.name_edit = QLineEdit()
-        self.name_edit.setEnabled(False)
-        self.name_edit.setToolTip(f"Der Name eines Pads {NEW_CORE}")
+        self.name_edit.setPlaceholderText("Pad-Name")
+        self.name_edit.setMaxLength(40)
+        self.name_edit.setMinimumWidth(0)
+        self.name_edit.setToolTip("Name dieses Pads (nur Eltern sehen ihn)")
+        self.name_edit.setAccessibleName("Pad-Name")
+        self.name_edit.editingFinished.connect(weak_slot(self._name_finished))
         self.free_switch = ToggleSwitch()
         self.free_switch.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.free_switch.setAccessibleName("Freier Modus")
@@ -693,11 +765,51 @@ class PadTab(QWidget):
         else:
             on_grid_row = _dim("„Start am Takt“ gibt es in der Leiste „Takt“.")
         self.volume_slider = QSlider(Qt.Orientation.Horizontal)
-        self.volume_slider.setEnabled(False)
-        self.volume_slider.setValue(70)
-        self.volume_slider.setToolTip(f"Die Lautstärke je Pad {NEW_CORE}")
-        left = _column(_heading("Name"), self.name_edit, _dim(NEW_CORE, 12.5), free_row, on_grid_row,
-                       _heading("Pad-Lautstärke"), self.volume_slider, _dim(NEW_CORE, 12.5), spacing=10)
+        self.volume_slider.setRange(0, PAD_VOLUME_MAX)
+        self.volume_slider.setValue(PAD_VOLUME_UNITY)
+        self.volume_slider.setToolTip(
+            "Lautstärke und Verstärkung dieses Pads (0 % bis +18 dB). Doppelklick setzt auf 0 dB.")
+        self.volume_slider.setAccessibleName("Pad-Lautstärke")
+        self.volume_slider.valueChanged.connect(weak_slot(self._volume_moved, pass_signal_args=True))
+        self.volume_slider.sliderReleased.connect(weak_slot(self._volume_committed))
+        self.volume_slider.mouseDoubleClickEvent = self._volume_double_click  # type: ignore[method-assign]
+        self.volume_label = _dim("100 % · 0,0 dB", 13)
+        self.volume_clip = _dim("", 12.5, WARN)
+        self.volume_clip.hide()
+        self.normalize_button = QPushButton("Anheben")
+        self.normalize_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.normalize_button.setMinimumWidth(0)
+        self.normalize_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.normalize_button.setToolTip(
+            "Automatisch anheben: Pad-Verstärkung so setzen, dass die Spitze etwa −3 dBFS erreicht")
+        self.normalize_button.setAccessibleName("Automatisch anheben")
+        self.normalize_button.clicked.connect(weak_slot(self._normalize_gain))
+        vol_row = QWidget()
+        vol_row.setMinimumWidth(0)
+        vol_layout = QHBoxLayout(vol_row)
+        vol_layout.setContentsMargins(0, 0, 0, 0)
+        vol_layout.setSpacing(10)
+        self.volume_slider.setMinimumWidth(0)
+        vol_layout.addWidget(self.volume_slider, 1)
+        vol_layout.addWidget(self.volume_label)
+        self.start_label = _dim("0 · Schlag 1", 13)
+        self.start_hint = _dim("in der Welle (Reiter Loop) als grüne Marke ziehbar", 12.5)
+        self.bars_combo = QComboBox()
+        self.bars_combo.setMinimumWidth(0)
+        self.bars_combo.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.bars_combo.setAccessibleName("Padlänge in Takten")
+        self.bars_combo.addItem("Auto", None)
+        for count in PAD_BAR_CHOICES:
+            self.bars_combo.addItem("1 Takt" if count == 1 else f"{count} Takte", count)
+        self.bars_combo.currentIndexChanged.connect(weak_slot(self._bars_chosen))
+        self.bars_hint = _dim("ganze Takte · Auto = aus der Aufnahme", 12.5)
+        left = _column(
+            _heading("Name"), self.name_edit, free_row, on_grid_row,
+            _heading("Pad-Lautstärke"), vol_row, self.volume_clip, self.normalize_button,
+            _heading("Startposition"), self.start_label, self.start_hint,
+            _heading("Padlänge in Takten"), self.bars_combo, self.bars_hint,
+            spacing=10,
+        )
 
         # Middle: the takes.
         self.takes_box = QWidget()
@@ -736,10 +848,11 @@ class PadTab(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 6, 0, 0)
-        layout.setSpacing(28)
+        layout.setSpacing(16)
         layout.addWidget(left, 30)
         layout.addWidget(middle, 36)
         layout.addWidget(right, 35)
+        self.setMinimumWidth(0)
         self.refresh()
 
     def show_pad(self, pad: int) -> None:
@@ -749,6 +862,35 @@ class PadTab(QWidget):
     def set_free(self, free: bool) -> None:
         """The switch "Freier Modus": the pad keeps its own length (one step on the Zurück stack)."""
         self.controller.set_free(self.pad, free)
+        self.refresh()
+
+    def _name_finished(self) -> None:
+        self.controller.set_pad_name(self.pad, self.name_edit.text())
+        self.refresh()
+
+    def _volume_moved(self, value: int) -> None:
+        # Live without a log line per tick; the release (or a click) writes one undoable event.
+        gain = pad_slider_to_gain(value)
+        self.controller.audio.set_pad_gain(self.pad, gain)
+        self.volume_label.setText(pad_gain_label(gain))
+        if not self.volume_slider.isSliderDown():
+            self.controller.set_pad_gain(self.pad, gain)
+
+    def _volume_committed(self) -> None:
+        self.controller.set_pad_gain(self.pad, pad_slider_to_gain(self.volume_slider.value()))
+
+    def _volume_double_click(self, _event) -> None:  # noqa: ANN001 - Qt API
+        self.volume_slider.setValue(PAD_VOLUME_UNITY)
+        self.controller.set_pad_gain(self.pad, 1.0)
+        self.volume_label.setText(pad_gain_label(1.0))
+
+    def _normalize_gain(self) -> None:
+        gain = self.controller.normalize_pad_gain(self.pad)
+        if gain is not None:
+            self.refresh()
+
+    def _bars_chosen(self) -> None:
+        self.controller.set_pad_bars(self.pad, self.bars_combo.currentData())
         self.refresh()
 
     def refresh(self) -> None:
@@ -765,8 +907,60 @@ class PadTab(QWidget):
             self.on_grid_hint.setText(
                 "wartet auf den nächsten Takt · gilt für alle freien Pads" if state.free
                 else "wirkt nur bei einem freien Pad · gilt für alle freien Pads")
+        self._update_shape()
         self._update_takes()
         self._update_level()
+
+    def _update_shape(self) -> None:
+        controller = self.controller
+        state = controller.pad(self.pad)
+        recording = controller.recording_pad is not None
+        grid = controller.grid_frames()
+        key = (self.pad, state.name, state.gain, state.start_frames, state.bars, state.free, grid, recording)
+        if key == self._shape_key:
+            return
+        self._shape_key = key
+        if not self.name_edit.hasFocus():
+            self.name_edit.blockSignals(True)
+            self.name_edit.setText(state.name)
+            self.name_edit.blockSignals(False)
+        self.name_edit.setEnabled(not recording)
+        self.volume_slider.blockSignals(True)
+        self.volume_slider.setValue(pad_gain_to_slider(state.gain))
+        self.volume_slider.blockSignals(False)
+        self.volume_label.setText(pad_gain_label(state.gain))
+        self.volume_slider.setEnabled(not recording)
+        self.normalize_button.setEnabled(not recording and state.sample is not None)
+        clipped = self.controller.audio.poll_pad_clipping(self.pad)
+        self.volume_clip.setVisible(clipped)
+        if clipped:
+            self.volume_clip.setText("Begrenzt · Verstärkung übersteuert den Soft-Limiter")
+        info = controller.grid_info()
+        beats = 4 if info is None else info.beats
+        bar = grid or 0
+        if bar > 0 and state.start_frames:
+            beat_frames = bar / max(1, beats)
+            total_beats = state.start_frames / beat_frames
+            bar_index = int(total_beats) // beats + 1
+            beat_index = int(total_beats) % beats + 1
+            ms = round(1000 * state.start_frames / controller.sample_rate)
+            self.start_label.setText(f"Takt {bar_index}.{beat_index} · {ms} ms")
+        elif state.start_frames:
+            ms = round(1000 * state.start_frames / controller.sample_rate)
+            self.start_label.setText(f"{ms} ms")
+        else:
+            self.start_label.setText("Anfang · Schlag 1")
+        index = self.bars_combo.findData(state.bars)
+        self.bars_combo.blockSignals(True)
+        self.bars_combo.setCurrentIndex(0 if index < 0 else index)
+        self.bars_combo.blockSignals(False)
+        can_bars = not recording and not state.free and grid is not None
+        self.bars_combo.setEnabled(can_bars)
+        self.bars_hint.setText(
+            "nicht während einer Aufnahme" if recording
+            else "im freien Modus gilt die eigene Länge" if state.free
+            else "erst braucht die Sitzung einen Takt" if grid is None
+            else "ganze Takte · Auto = aus der Aufnahme")
 
     # ----------------------------------------------------------------- takes
 
@@ -1133,14 +1327,14 @@ class DetailPanel(QWidget):
         controller = self.controller
         state = controller.pad(self.pad)
         grid = None if state.free else controller.grid_frames()
-        key = (self.pad, state.sample, grid)
+        key = (self.pad, state.sample, grid, state.bars, state.start_frames, state.name)
         if key == self._info_key:
             return
         self._info_key = key
         recorded = played = None
         if state.sample is not None:
             raw = controller.sample_audio(state.sample)
-            loop = controller.loop_audio(state.sample, self.pad)
+            loop = controller.loop_view_audio(state.sample, self.pad)
             if raw is not None and loop is not None:
                 recorded, played = len(raw), len(loop)
         self.open_info = loop_title(recorded, played, grid, controller.sample_rate)

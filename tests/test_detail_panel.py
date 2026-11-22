@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QAbstractButton, QPushButton, QScrollArea
 from test_parent_mode import ShapedAudio, World, _difference, _part, calls, open_parents, tap
 
 from loopstation.audio.base import PREVIEW_VOICE
+from loopstation.audio.dynamics import db_to_gain
 from loopstation.config import load_settings
 from loopstation.controller import Controller, Mode
 from loopstation.gui.detail_panel import BADGE_END, INFO_LEAST
@@ -270,22 +271,41 @@ def test_the_verdict_of_the_take_level_goes_with_the_number_shown(world):
     assert view.detail.pad_tab.verdict.text() == "Spitze \u221212 dBFS · im Ziel"
 
 
-def test_greyed_fields_cannot_be_used(world):
+def test_pad_name_volume_start_and_bars_work_in_the_detail_panel(world):
     world.record(0, 2.0)
-    view = open_parents(world.window)
+    window, controller = world.window, world.controller
+    view = open_parents(window)
     detail = view.detail
     detail.open_tab("pad")
     pad = detail.pad_tab
-    QTest.keyClicks(pad.name_edit, "Trommel")
-    assert pad.name_edit.text() == "" and not pad.name_edit.isEnabled()
-    assert "neuen Kern" in pad.name_edit.toolTip()
-    value = pad.volume_slider.value()
-    QTest.mouseClick(pad.volume_slider, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
-                     QPoint(5, pad.volume_slider.height() // 2))
-    assert pad.volume_slider.value() == value and not pad.volume_slider.isEnabled()
+    pad.name_edit.setFocus()
+    pad.name_edit.setText("Trommel")
+    pad.name_edit.editingFinished.emit()
+    tick(world)
+    assert controller.pad_name(0) == "Trommel"
+    assert "Trommel" in detail.title
+    pad.volume_slider.setValue(40)  # 40 % → gain 0.4
+    tick(world)
+    assert controller.pad_gain(0) == pytest.approx(0.4)
+    assert world.audio.pad_gains[0] == pytest.approx(0.4)
+    pad.volume_slider.setValue(106)  # +6 dB boost
+    tick(world)
+    assert controller.pad_gain(0) == pytest.approx(db_to_gain(6.0), rel=0.02)
+    pad.normalize_button.click()
+    tick(world)
+    assert controller.pad_gain(0) > 1.0  # quiet test take is lifted toward −3 dBFS
+    pad.bars_combo.setCurrentIndex(pad.bars_combo.findData(2))
+    tick(world)
+    assert controller.pad_bars(0) == 2
+    view.detail.open_tab("loop")
+    loop = view.detail.loop_tab
+    assert loop.waveform.start_editable
+    loop.waveform.start_changed.emit(1000)
+    tick(world)
+    assert controller.pad_start_frames(0) == 1000
     effects = detail.tab_buttons["effects"]
     QTest.mouseClick(effects, Qt.MouseButton.LeftButton)
-    assert detail.tab == "pad" and not effects.isEnabled() and "neuen Kern" in effects.toolTip()
+    assert detail.tab == "loop" and not effects.isEnabled() and "neuen Kern" in effects.toolTip()
 
 
 def test_start_on_the_bar_is_the_setting_of_the_panel_takt(world):
@@ -556,13 +576,12 @@ def test_the_loop_tab_looks_like_the_mockup(world):
     assert _difference(dark, mockup) > 3 * LOOP_THRESHOLD
 
 
-# Mockup L2-04: whole 12.1, head 7.7, the left column 26.8 (the mockup shows a name and an active pad
-# volume, here greyed out until the new core), takes 18.6, level 13.9. Counter-checks: the tab "Loop"
-# in its place (whole 17.4, left 43, takes 38, level 31), the folded panel (about 69, parts over 120).
+# Mockup L2-04: whole 12.1, head 7.7, the left column (name, free mode, pad volume, start/length),
+# takes 18.6, level 13.9. Counter-checks: the tab "Loop" in its place, the folded panel.
 PAD_THRESHOLD = 14.5
 PAD_PARTS = {
     "head": ((108, 427, 1148, 64), (143, 8), 10.0),
-    "left": ((124, 495, 310, 270), (39, 34), 33.0),
+    "left": ((124, 495, 310, 270), (39, 34), 39.0),
     "takes": ((470, 495, 370, 220), (46, 27), 27.0),
     "level": ((870, 495, 370, 270), (46, 34), 21.0),
 }

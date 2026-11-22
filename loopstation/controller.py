@@ -21,7 +21,12 @@ import numpy as np
 from loopstation import events as ev
 from loopstation.audio import metronome
 from loopstation.audio.base import PREVIEW_VOICE, AudioBackend
-from loopstation.audio.dynamics import db_to_gain, gain_to_db
+from loopstation.audio.dynamics import (
+    PAD_GAIN_MAX,
+    PAD_NORMALIZE_TARGET,
+    db_to_gain,
+    gain_to_db,
+)
 from loopstation.audio.effects import start_beep, stop_beep
 from loopstation.audio.onset import GridResult, derive_grid, detect_onsets, nearest_transient, rotate_to_onset
 from loopstation.audio.samples import load_wav, parse_stamp, sample_filename, save_wav
@@ -44,6 +49,7 @@ from loopstation.audio.sync import (
     fit_to_grid,
     grace_frames,
     max_grid_frames,
+    shape_loop,
 )
 from loopstation.clips import ClipEvent, ClipLog
 from loopstation.config import SIGNATURES, Settings, restart_keys_changed
@@ -256,7 +262,7 @@ class Controller:
         self._engine: tuple[tuple[str, int], StretchEngine] | None = None
         log.info("stretch engine: %s", engine_notice(settings.stretch_engine))
         # Samples fitted to a grid for loop playback, keyed by (sample, grid).
-        self._fitted: dict[tuple[str, int], np.ndarray] = {}
+        self._fitted: dict[tuple, np.ndarray] = {}
         self._grid_sent: int | None = None
         self._session_started: float | None = None
         self._notice: tuple[str, float] | None = None
@@ -409,6 +415,11 @@ class Controller:
         self.audio.set_volume(self._volume)
         self.audio.set_input_gain_db(self._input_gain_db)
         self.audio.set_auto_gain(self._auto_gain)
+        self._push_pad_gains()
+
+    def _push_pad_gains(self) -> None:
+        for pad_id, pad in self.store.state.pads.items():
+            self.audio.set_pad_gain(pad_id, pad.gain)
 
     def set_volume(self, volume: float) -> float:
         """Set the master volume (clamped to 0..ceiling); returns the value that applies."""
@@ -816,6 +827,106 @@ class Controller:
         self.store.append(ev.PAD_FREE, pad, {"free": free})
         self._changed()
 
+    def pad_name(self, pad: int) -> str:
+        """Parents' label of ``pad`` (empty when none was set)."""
+        return self.pad(pad).name
+
+    def set_pad_name(self, pad: int, name: str) -> None:
+        """Set the parents' label of ``pad`` (not on the undo stack; not while recording)."""
+        if not 0 <= pad < self.pad_count or self._recording is not None:
+            return
+        text = name.strip() if isinstance(name, str) else ""
+        if text == self.pad(pad).name:
+            return
+        self.store.append(ev.PAD_NAME, pad, {"name": text})
+        self._changed()
+
+    def pad_gain(self, pad: int) -> float:
+        """Linear playback gain of ``pad`` (0 silent .. 1 full)."""
+        return self.pad(pad).gain
+
+    def set_pad_gain(self, pad: int, gain: float) -> float:
+        """Set the pad volume/boost (0 .. +18 dB); returns the value that applies. Undoable."""
+        if not 0 <= pad < self.pad_count:
+            return 1.0
+        gain = min(PAD_GAIN_MAX, max(0.0, float(gain)))
+        if gain == self.pad(pad).gain:
+            self.audio.set_pad_gain(pad, gain)
+            return gain
+        self.store.append(ev.PAD_GAIN, pad, {"gain": gain})
+        self.audio.set_pad_gain(pad, gain)
+        self._changed()
+        return gain
+
+    def normalize_pad_gain(self, pad: int) -> float | None:
+        """Set the pad gain so the loop peaks near -3 dBFS (not destructive). None without sound."""
+        if not 0 <= pad < self.pad_count:
+            return None
+        sample = self.pad(pad).sample
+        if sample is None:
+            return None
+        data = self.loop_view_audio(sample, pad)
+        if data is None or not len(data):
+            return None
+        peak = float(np.max(np.abs(data)))
+        if peak <= 0:
+            return None
+        return self.set_pad_gain(pad, min(PAD_GAIN_MAX, PAD_NORMALIZE_TARGET / peak))
+
+    def pad_start_frames(self, pad: int) -> int:
+        """Start offset of the pad loop in frames of the shaped (fitted) loop."""
+        return self.pad(pad).start_frames
+
+    def set_pad_start(self, pad: int, start_frames: int) -> None:
+        """Set the loop start offset. Undoable; a running loop restarts on the grid."""
+        if not 0 <= pad < self.pad_count or self._recording is not None:
+            return
+        start = max(0, int(start_frames))
+        view = self.loop_view_audio(self.pad(pad).sample, pad) if self.pad(pad).sample else None
+        if view is not None and len(view):
+            start %= len(view)
+        if start == self.pad(pad).start_frames:
+            return
+        was_looping = self.pad(pad).looping
+        self.store.append(ev.PAD_START, pad, {"start_frames": start})
+        if was_looping:
+            self._reload_loop(pad)
+        self._changed()
+
+    def pad_bars(self, pad: int) -> int | None:
+        """Whole bars this pad loops for, or None (auto from the recording)."""
+        return self.pad(pad).bars
+
+    def set_pad_bars(self, pad: int, bars: int | None) -> None:
+        """Set the pad length in whole bars (None = auto). Undoable; restarts a running loop."""
+        if not 0 <= pad < self.pad_count or self._recording is not None:
+            return
+        value = None if bars is None else max(1, int(bars))
+        if value == self.pad(pad).bars:
+            return
+        was_looping = self.pad(pad).looping
+        self.store.append(ev.PAD_BARS, pad, {"bars": value})
+        if was_looping:
+            self._reload_loop(pad)
+        self._changed()
+
+    def _reload_loop(self, pad: int) -> None:
+        """Start a looping pad again with its current shape (start/bars/free), on the grid."""
+        state = self.pad(pad)
+        if state.sample is None:
+            return
+        # PAD_START / PAD_BARS clear looping; put the loop back on so the pad keeps playing.
+        if not state.looping:
+            self.store.append(ev.LOOP_ON, pad)
+        self.audio.stop(pad)
+        data = self._loop_data(state.sample, pad)
+        if data is None:
+            return
+        if state.free:
+            self.audio.play(pad, data, loop=True, free=True, align=self.settings.free_pad_on_grid)
+        else:
+            self.audio.play(pad, data, loop=True)
+
     def press_down(self, pad: int) -> None:
         """A pad is pressed (finger down, Launchpad note on).
 
@@ -1042,21 +1153,48 @@ class Controller:
                 return None
         return self._cache[sample]
 
+    def loop_view_audio(self, sample: str, pad: int | None = None) -> np.ndarray | None:
+        """Loop as drawn in the wave (fitted length, start mark still at ``start_frames``)."""
+        return self._loop_base(sample, pad)
+
+    def _loop_base(self, sample: str, pad: int | None = None) -> np.ndarray | None:
+        """Fitted (or free) loop without the start rotation; what the wave shows."""
+        data = self._load(sample)
+        if data is None:
+            return None
+        state = self.pad(pad) if pad is not None else None
+        grid = None if state is not None and state.free else self._apply_grid()
+        bars = None if state is None else state.bars
+        grace = 0 if grid is None else grace_frames(grid, self.audio.sample_rate)
+        key = (sample, grid, bars)
+        if key not in self._fitted:
+            self._fitted[key] = shape_loop(data, grid, grace, bars, start_frames=0)
+        return self._fitted[key]
+
     def _loop_data(self, sample: str, pad: int | None = None) -> np.ndarray | None:
         """Sample data for loop playback, fitted to the grid if there is one.
 
         Recordings made on the grid already fit; older versions (or a changed
         sample rate) are padded or cut here, the file itself stays untouched.
-        A free pad (``pad`` given) keeps its own length: no fitting at all.
+        A free pad (``pad`` given) keeps its own length: no bar fit, but the
+        start offset still rotates. With ``bars`` set the loop is cut or padded
+        to that many bars independent of the raw length.
         """
-        data = self._load(sample)
-        grid = self._apply_grid()
-        if data is None or grid is None or (pad is not None and self.pad(pad).free):
-            return data
-        key = (sample, grid)
-        if key not in self._fitted:
-            self._fitted[key] = fit_to_grid(data, grid, grace_frames(grid, self.audio.sample_rate))
-        return self._fitted[key]
+        base = self._loop_base(sample, pad)
+        if base is None:
+            return None
+        start = 0 if pad is None else self.pad(pad).start_frames
+        if not start:
+            return base
+        state = None if pad is None else self.pad(pad)
+        grid = None if state is None or state.free else self._grid()
+        bars = None if state is None else state.bars
+        key = (sample, grid, bars, start)
+        cached = self._fitted.get(key)
+        if cached is None:
+            cached = shape_loop(base, grid=None, start_frames=start)
+            self._fitted[key] = cached
+        return cached
 
     # ----------------------------------------- parents' grid and metronome
 
@@ -1127,8 +1265,13 @@ class Controller:
         for pad in running:
             self.audio.stop(pad)
         for pad in running:
-            data = self._loop_data(self.pad(pad).sample)
-            if data is not None:
+            state = self.pad(pad)
+            data = self._loop_data(state.sample, pad)
+            if data is None:
+                continue
+            if state.free:
+                self.audio.play(pad, data, loop=True, free=True, align=self.settings.free_pad_on_grid)
+            else:
                 self.audio.play(pad, data, loop=True)
         self._apply_grid()
 
@@ -1289,14 +1432,20 @@ class Controller:
         """Log an undo or redo of ``entry`` and stop the pads whose sound changes."""
         affected = [pad] if pad is not None else list(entry["pads"])
         free = entry.get("free", {})
+        starts = entry.get("start_frames", {})
+        bars = entry.get("bars", {})
         for pad_id in affected:
-            if self.pad(pad_id).sample != entry["pads"][pad_id] or self.pad(pad_id).free != free.get(
-                pad_id, self.pad(pad_id).free
-            ):
+            state = self.pad(pad_id)
+            if (state.sample != entry["pads"][pad_id]
+                    or state.free != free.get(pad_id, state.free)
+                    or state.start_frames != starts.get(pad_id, state.start_frames)
+                    or state.bars != bars.get(pad_id, state.bars)):
                 self.audio.stop(pad_id)
         had_content = self.store.state.has_content()
         self.store.append(kind, pad, {"target": entry["seq"]})
         self._content_changed(had_content)
+        for pad_id in affected:
+            self.audio.set_pad_gain(pad_id, self.pad(pad_id).gain)
         if kind == ev.REDO or pad is not None:
             # A sound brought back into an empty session sets the loop length again.
             for pad_id in affected:

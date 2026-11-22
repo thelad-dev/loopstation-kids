@@ -29,6 +29,7 @@ FLAG_ROOM = 22  # space above the panel for the marker flags
 GRAB_PIXELS = 14  # a click this close to a marker's line selects it
 TRIM_COLOR = "#7FA7FF"  # the parents' accent: the handles that shorten the loop
 TRIM_DIM = QColor(14, 14, 16, 170)  # what a trim would cut off
+START_COLOR = "#32D74B"  # loop start mark (pad start offset)
 
 
 def peak_columns(data: np.ndarray, columns: int) -> np.ndarray:
@@ -78,6 +79,8 @@ class WaveformWidget(QWidget):
     selection_changed = Signal()
     # A trim handle moved (``trim_range`` has the new frames).
     trim_changed = Signal()
+    # The loop-start mark was dragged (``start_frame`` has the new frames).
+    start_changed = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -92,17 +95,33 @@ class WaveformWidget(QWidget):
         self.selected_marker: int | None = None  # index into the markers
         # Handles that shorten the loop: ``(start, end)`` in frames, the whole loop when untouched.
         self._trim: tuple[int, int] = (0, 0)
-        self._drag: str | None = None  # "start" or "end" while a handle is held
+        self._drag: str | None = None  # "start", "end" or "loop_start" while a handle is held
+        self._start_frame = 0  # where the pad loop begins inside the shown wave
+        self.start_editable = False  # parents' Loop tab: drag the green start mark
         self.empty_text = "Auf diesem Pad ist noch kein Loop."
         # Where the loop plays while it is listened to (a white line), None when it does not play.
         self.play_frame: int | None = None
         # Beat lines named "bar.beat" ("1.1", "1.2" ... as in the detail panel) instead of "Schlag n".
         self.bar_labels = False
 
+    @property
+    def start_frame(self) -> int:
+        return self._start_frame
+
+    def set_start_frame(self, frame: int) -> None:
+        """Put the loop-start mark at ``frame`` (clamped into the loop)."""
+        size = 0 if self._data is None else len(self._data)
+        frame = 0 if size <= 0 else min(max(0, int(frame)), size - 1)
+        if frame != self._start_frame:
+            self._start_frame = frame
+            self.update()
+
     def set_loop(self, data: np.ndarray | None, bar_frames: int | None, beats: int) -> None:
         """Show ``data`` (None = empty pad) with beat lines every ``bar_frames / beats`` frames."""
         self._data, self._bar_frames, self._beats = data, bar_frames, beats
         self._trim, self._drag = (0, 0 if data is None else len(data)), None
+        if data is None or self._start_frame >= len(data):
+            self._start_frame = 0
         self.update()
 
     @property
@@ -135,13 +154,20 @@ class WaveformWidget(QWidget):
         self.set_trim_range(0, 0 if self._data is None else len(self._data))
 
     def handle_at(self, x: float) -> str | None:
-        """``"start"`` or ``"end"`` if pixel ``x`` is on a handle (the nearer one), else None."""
+        """``"start"``, ``"end"`` or ``"loop_start"`` if pixel ``x`` is on a handle, else None.
+
+        Trim handles win when they share a pixel with the start mark (usually at frame 0).
+        """
         if self._data is None:
             return None
-        handles = zip(("start", "end"), self._trim, strict=True)
+        handles: list[tuple[str, int]] = [("start", self._trim[0]), ("end", self._trim[1])]
         near = [(abs(self._x_of(frame) - x), name) for name, frame in handles]
         near = [item for item in near if item[0] <= GRAB_PIXELS]
-        return min(near)[1] if near else None
+        if near:
+            return min(near)[1]
+        if self.start_editable and abs(self._x_of(self._start_frame) - x) <= GRAB_PIXELS:
+            return "loop_start"
+        return None
 
     def set_markers(self, frames: list[int]) -> None:
         """Show markers at ``frames`` (positions in the loop); the selection moves with the list."""
@@ -200,6 +226,13 @@ class WaveformWidget(QWidget):
         panel = self._panel()
         size = 0 if self._data is None else len(self._data)
         frame = round((x - panel.left()) / max(1.0, panel.width()) * size)
+        if self._drag == "loop_start":
+            frame = 0 if size <= 0 else min(max(0, frame), size - 1)
+            if frame != self._start_frame:
+                self._start_frame = frame
+                self.update()
+                self.start_changed.emit(frame)
+            return
         start, end = self._trim
         if self._drag == "start":
             self.set_trim_range(frame, end)
@@ -271,6 +304,7 @@ class WaveformWidget(QWidget):
             painter.drawLine(QPointF(x, middle - reach), QPointF(x, middle + reach))
         self._paint_markers(painter, panel, bottom)
         self._paint_trim(painter, panel, bottom)
+        self._paint_loop_start(painter, panel, bottom)
         if self.play_frame is not None:
             x = self._x_of(self.play_frame)
             painter.setPen(QPen(QColor(CURSOR_COLOR), 2.5))
@@ -311,6 +345,26 @@ class WaveformWidget(QWidget):
             painter.drawRoundedRect(QRectF(word).adjusted(-4, -1, 4, 1), 4, 4)
             painter.setPen(QColor(TRIM_COLOR))
             painter.drawText(label, align, name)
+
+    def _paint_loop_start(self, painter: QPainter, panel: QRectF, bottom: float) -> None:
+        """Green start mark: where this pad's loop begins inside the shown wave."""
+        if self._data is None or (self._start_frame <= 0 and not self.start_editable):
+            return
+        x = self._x_of(self._start_frame)
+        painter.setPen(QPen(QColor(START_COLOR), 3))
+        painter.drawLine(QPointF(x, panel.top()), QPointF(x, bottom))
+        if not self.start_editable:
+            return
+        grip = QRectF(x - 6, panel.top() + 8, 12, 22)
+        painter.setBrush(QColor(START_COLOR))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(grip, 4, 4)
+        bold = QFont()
+        bold.setPointSizeF(8.5)
+        bold.setBold(True)
+        painter.setFont(bold)
+        painter.setPen(QColor(START_COLOR))
+        painter.drawText(QPointF(x + 8, panel.top() + 20), "Start")
 
     def _paint_markers(self, painter: QPainter, panel: QRectF, bottom: float) -> None:
         if self.cursor_frame is not None:

@@ -76,6 +76,7 @@ class FakeAudio:
         # Level chain as the controller sets it (kept apart from ``calls``);
         # the real maths is tested against SoundDeviceAudio.
         self.volume = 1.0
+        self.pad_gains: dict[int, float] = {}
         self.ceiling_db = 0.0
         self.input_gain_db = 0.0
         self.auto_gain = False
@@ -155,6 +156,15 @@ class FakeAudio:
     def set_volume(self, volume: float) -> None:
         self.volume = volume
         self.levels.append(("volume", volume))
+
+    def set_pad_gain(self, pad: int, gain: float) -> None:
+        from loopstation.audio.dynamics import PAD_GAIN_MAX
+
+        self.pad_gains[pad] = min(PAD_GAIN_MAX, max(0.0, float(gain)))
+        self.levels.append(("pad_gain", pad, self.pad_gains[pad]))
+
+    def poll_pad_clipping(self, pad: int) -> bool:
+        return False
 
     def set_ceiling_db(self, db: float) -> None:
         self.ceiling_db = db
