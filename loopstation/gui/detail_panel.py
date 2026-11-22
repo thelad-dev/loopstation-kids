@@ -1160,7 +1160,9 @@ class DetailPanel(QWidget):
             lines = [" · ".join(parts[i:i + size]) for i in range(0, len(parts), size)]
             longest = max(lines, key=QFontMetrics(_font(pixels, QFont.Weight.Medium)).horizontalAdvance)
             font = fitted_font(longest, room, pixels, QFont.Weight.Medium, least)
-            if QFontMetrics(font).horizontalAdvance(longest) <= room:
+            metrics = QFontMetrics(font)
+            # Judge every line with the fitted font: its hinting can make another line the widest.
+            if all(metrics.horizontalAdvance(line) <= room for line in lines):
                 return lines, font
         metrics = QFontMetrics(font)
         return [metrics.elidedText(line, Qt.TextElideMode.ElideRight, int(room)) for line in lines], font
