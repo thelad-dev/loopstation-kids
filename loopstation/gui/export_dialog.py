@@ -551,12 +551,12 @@ class ExportPage(QWidget):
         self.stand_in_widgets.setVisible(grid is None)
 
         if grid is None:
-            self.session_label.setText("Session · kein Takt")
+            self.session_label.setText("Sitzung · kein Takt")
         else:
             seconds = german_number(ex.bar_seconds(grid, rate), 2)
             bpm = ex.bpm_of(grid, rate)
             tempo = f" · {german_number(bpm, 0)} BPM · 4/4" if 40 <= bpm <= 200 else ""
-            self.session_label.setText(f"Session · Takt {seconds} s{tempo}")
+            self.session_label.setText(f"Sitzung · Takt {seconds} s{tempo}")
         self.fade_hint.setText(
             f"{round(ex.FADE_OUT_SECONDS * 1000)}{NBSP}ms Fade gegen Knacken")
         self.format_hint.setText(f"mono, 24{NBSP}Bit, {rate_text(rate)}")

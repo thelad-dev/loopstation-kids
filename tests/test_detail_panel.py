@@ -260,6 +260,16 @@ def test_a_take_that_was_too_loud_says_so(world):
     assert pad.loud_box.isHidden()
 
 
+def test_the_verdict_of_the_take_level_goes_with_the_number_shown(world):
+    world.record(0, 2.0)  # the test take peaks at 0.25: -12.04 dBFS, shown as -12, the low end of the target
+    view = open_parents(world.window)
+    tick(world)
+    assert view.detail.info.endswith("Spitze \u221212 dBFS")  # the folded line writes it the same way
+    view.detail.open_tab("pad")
+    tick(world)
+    assert view.detail.pad_tab.verdict.text() == "Spitze \u221212 dBFS · im Ziel"
+
+
 def test_greyed_fields_cannot_be_used(world):
     world.record(0, 2.0)
     view = open_parents(world.window)

@@ -384,6 +384,9 @@ def test_no_internal_key_and_no_long_dash_in_any_text_of_the_parents_view(parts)
     for key in INTERNAL_KEYS:
         assert re.search(rf"(?<![A-Za-zÄÖÜäöü]){key}(?![A-Za-zÄÖÜäöü])", joined) is None, key
     assert "—" not in joined and "–" not in joined, [t for t in texts if "—" in t or "–" in t]
+    # No references into the planning notes ("Regel 8", "§3") and no English "Session" beside "Sitzung".
+    found = re.findall(r".{0,30}(?:Regel \d|§|\bSession\b).{0,10}", joined)
+    assert not found, found
 
 
 def test_the_audio_system_is_a_list_of_the_systems_the_machine_has(qapp, tmp_path, monkeypatch):

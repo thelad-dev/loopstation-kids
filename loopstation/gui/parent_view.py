@@ -25,6 +25,7 @@ from PySide6.QtWidgets import QAbstractButton, QWidget
 
 from loopstation.gui.detail_panel import DetailPanel
 from loopstation.gui.icons import draw_icon
+from loopstation.gui.level_panel import format_db
 from loopstation.gui.parent_gate import PARENT_ACCENT
 from loopstation.gui.parent_nav import ACTIVE_FILL, CARD_BORDER, CARD_FILL, draw_line, fitted_font, paint_icon
 from loopstation.gui.pulse_strip import DOT_OFF, DOT_ON
@@ -1032,7 +1033,7 @@ class ParentView(QWidget):
         else:
             parts.append("bereit")
         if look.wave is not None and math.isfinite(look.wave.peak_db):
-            parts.append(f"Spitze {look.wave.peak_db:.0f} dBFS")
+            parts.append(f"Spitze {format_db(min(0, round(look.wave.peak_db)), 'dBFS')}")
         return " · ".join(parts)
 
     # --------------------------------------------------------------- paint

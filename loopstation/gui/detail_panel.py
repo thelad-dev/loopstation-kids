@@ -861,12 +861,13 @@ class PadTab(QWidget):
             loud_now = LABELS[0] in labels or peak_db >= NEAR_CLIP_DB
             self.meter.setEnabled(True)
             self.meter.set_state(peak, peak, loud_now)
-            shown = f"Spitze {format_db(min(0, round(peak_db)), 'dBFS')}" if peak > 0 else "Stille"
+            rounded = min(0, round(peak_db))  # the verdict follows the number shown (-12.04 reads -12)
+            shown = f"Spitze {format_db(rounded, 'dBFS')}" if peak > 0 else "Stille"
             if loud_now:
                 self._say(f"{shown} · zu laut", WARN, True)
-            elif peak_db > TARGET_HIGH_DB:
+            elif rounded > TARGET_HIGH_DB:
                 self._say(f"{shown} · etwas laut", LOUD, True)
-            elif peak_db >= TARGET_LOW_DB:
+            elif rounded >= TARGET_LOW_DB:
                 self._say(f"{shown} · im Ziel", GOOD, True)
             else:
                 self._say(f"{shown} · leise", TEXT_DIM.name(), True)
