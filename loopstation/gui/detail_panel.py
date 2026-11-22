@@ -1169,12 +1169,23 @@ class DetailPanel(QWidget):
         return lines, font, QFontMetrics(font).height() * len(lines) + 6
 
     def say(self, text: str, level: str = "ok") -> None:
-        """``text`` under the head while the panel is open ("" takes it away); a refused value in red."""
+        """``text`` under the head of the open panel, in place of the facts in the folded line ("" takes
+        it away); a refused value in red."""
         color = {"ok": GOOD, "warning": WARN, "error": "#FF3B30"}.get(level, TEXT_DIM.name())
         self.message.setStyleSheet(f"color: {color}; font-size: 14px; font-weight: bold;")
+        self.message.setProperty("color", color)
         self.message.setText(text)
         self.message.setVisible(bool(text) and self.is_open)
         self._place()
+        self.update()
+
+    def shown_info(self) -> tuple[str, QColor]:
+        """The line under "Pad N" as it is drawn: the facts, or (folded) a message of the settings."""
+        if self.is_open:
+            return self.open_info, TEXT_DIM
+        if self.message.text():
+            return self.message.text(), QColor(str(self.message.property("color")))
+        return self.info, TEXT_DIM
 
     def _message_height(self) -> int:
         if self.message.isHidden():
@@ -1254,9 +1265,10 @@ class DetailPanel(QWidget):
             right = end - help_width - 24
         room = max(10.0, right - left)
         draw_line(painter, QRectF(left, 8, room, 26), self.title, _font(18), TEXT)
-        info = self.open_info if self.is_open else self.info
-        draw_line(painter, QRectF(left, 34, room, 22), info,
-                   fitted_font(info, room, 14, QFont.Weight.Normal, 12), TEXT_DIM)
+        info, color = self.shown_info()
+        said = not self.is_open and bool(self.message.text())  # a message of the settings, in bold
+        weight = QFont.Weight.Bold if said else QFont.Weight.Normal
+        draw_line(painter, QRectF(left, 34, room, 22), info, fitted_font(info, room, 14, weight, 12), color)
         lines, help_font, _height = self._help_strip()
         if lines:
             painter.setFont(help_font)

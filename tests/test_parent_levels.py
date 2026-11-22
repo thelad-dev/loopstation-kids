@@ -19,7 +19,7 @@ from loopstation.gui import level_panel
 from loopstation.gui.level_panel import PANEL_KEYS, describe_clip, format_db, format_when
 from loopstation.gui.main_window import MainWindow
 from loopstation.gui.peak_meter import peak_to_position
-from loopstation.gui.settings_panels import NOTES, SettingsPanels
+from loopstation.gui.settings_panels import NOTES, NUMBER_PAUSE_MS, SettingsPanels
 from loopstation.store import EventStore
 
 SHIPPED = (Path(__file__).resolve().parent.parent / "settings.toml").read_text(encoding="utf-8")
@@ -213,10 +213,34 @@ def test_ceiling_slider_by_mouse_and_keyboard(parts, dialog):
     assert controller.max_level_db == -12.0
     assert load_settings(path).max_level_db == -12.0
     QTest.keyClick(ceiling, Qt.Key.Key_Right)
-    assert controller.max_level_db == -11.0 and load_settings(path).max_level_db == -11.0
+    assert controller.max_level_db == -11.0  # live at once
+    assert load_settings(path).max_level_db == -12.0  # saved after the pause, as a number field
+    QTest.qWait(NUMBER_PAUSE_MS + 200)
+    assert load_settings(path).max_level_db == -11.0
     for _ in range(5):
         QTest.keyClick(ceiling, Qt.Key.Key_PageDown)  # five steps each
     assert controller.max_level_db == -30.0  # stops at the end of the range
+    assert load_settings(path).max_level_db == -11.0
+
+
+def test_arrow_keys_on_a_level_slider_write_the_file_once_after_the_pause(parts, dialog):
+    _, controller, path = parts
+    trim = dialog.panel.trim
+    said = []
+    dialog.said.connect(lambda text, _level: said.append(text))
+    trim.setFocus()
+    for _ in range(6):
+        QTest.keyClick(trim, Qt.Key.Key_Right)
+    assert controller.input_gain_db == 3.0 and not path.exists()  # live, nothing written per step
+    QTest.qWait(NUMBER_PAUSE_MS + 200)
+    assert load_settings(path).input_gain_db == 3.0
+    assert said == ["Gespeichert: Mikrofonpegel"]
+    # Left within the pause: saved at once, as a number field that is left.
+    QTest.keyClick(trim, Qt.Key.Key_Left)
+    trim.clearFocus()
+    assert load_settings(path).input_gain_db == 2.5
+    QTest.qWait(NUMBER_PAUSE_MS + 200)
+    assert said == ["Gespeichert: Mikrofonpegel"] * 2  # and not once more after the pause
 
 
 def test_trim_and_switches_write_the_file_and_reach_the_engine(parts, dialog):

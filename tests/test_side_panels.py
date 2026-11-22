@@ -220,6 +220,30 @@ def test_a_change_is_saved_and_said_in_the_head(parts):
     parts.window.showMaximized()
 
 
+def test_a_save_after_the_pause_is_said_in_the_panel_that_is_open_then(parts):
+    parts.open("system")
+    panels_of(parts).editors["max_record_seconds"]._dspin.setValue(17)  # waits for its pause
+    parts.open("changes")  # another panel opens within the pause
+    QTest.qWait(settings_panels.NUMBER_PAUSE_MS + 200)
+    assert load_settings(parts.config).max_record_seconds == 17.0
+    assert parts.view.side_panel.message() == "Gespeichert: Längste Aufnahme"
+
+
+def test_a_save_after_the_pause_with_no_panel_open_is_said_in_the_folded_line(parts):
+    parts.open("system")
+    panels = panels_of(parts)
+    panels._calm.setInterval(300)  # the message goes back to the facts sooner than in the app
+    panels.editors["max_record_seconds"]._dspin.setValue(18)
+    parts.view.toolbar.buttons["pads"].click()  # the panel closes within the pause
+    detail = parts.view.detail
+    facts = detail.shown_info()[0]
+    QTest.qWait(settings_panels.NUMBER_PAUSE_MS + 100)
+    text, color = detail.shown_info()
+    assert text == "Gespeichert: Längste Aufnahme" and color.name().upper() == "#32D74B"
+    QTest.qWait(400)
+    assert detail.shown_info()[0] == facts  # and then the facts again
+
+
 def test_a_refusal_stays_in_the_head_when_the_panel_opens_again(parts):
     parts.open("system")
     edit = panels_of(parts).editors["data_dir"]._edit

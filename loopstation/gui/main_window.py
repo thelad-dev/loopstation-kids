@@ -665,13 +665,20 @@ class MainWindow(QMainWindow):
         return panels
 
     def _panels_said(self, text: str, level: str) -> None:
+        """What the settings say (saved, refused) goes to the head of the open side panel, else to the
+        detail panel (folded: in its line). A save that comes from a pause after another panel opened is
+        shown there, not lost; "" takes the message away wherever it is."""
         view = self.parent_view
         if view is None:
             return
-        if view.panel_key in SETTINGS_PANELS:
+        if not text:
+            view.side_panel.say("")
+            view.detail.say("")
+        elif view.panel_key is not None:
             view.side_panel.say(text, level)
-        elif view.detail.is_open or not text:
-            view.detail.say(text, level)  # a setting of the tabs "Pad" and "Aufnahme"
+            view.detail.say("")
+        else:
+            view.detail.say(text, level)
 
     def _detail_folded(self) -> None:
         """The detail panel folded or unfolded (a side panel may have closed for it): the keys go to the

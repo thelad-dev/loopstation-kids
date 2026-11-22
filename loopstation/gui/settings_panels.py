@@ -1012,16 +1012,27 @@ class SettingsPanels(QObject):
     def _level_edited(self, key: str, value: Any, final: bool) -> None:
         """A control of the level section changed: the controller takes it over at once.
 
-        While a slider is dragged only the level setter acts; at the end of the drag (or on a switch, a
-        key press) the value is saved like every other change.
+        While a slider is dragged or stepped with the keys only the level setter acts; the value is saved
+        like a number field: at the end of the drag, when the slider is left, or after the pause. A switch
+        saves at once.
         """
+        pause = self._pauses.get((key, False))
         if not final:
             setter = {"max_level_db": "set_max_level_db", "input_gain_db": "set_input_gain_db"}.get(key)
             if setter is not None and self.controller is not None:
                 getattr(self.controller, setter)(value)
                 self._applied = replace(self._applied, **{key: value})
+                if pause is None:
+                    pause = QTimer(self)
+                    pause.setSingleShot(True)
+                    pause.setInterval(NUMBER_PAUSE_MS)
+                    pause.timeout.connect(weak_slot(self._commit_editor, key))
+                    self._pauses[(key, False)] = pause
+                pause.start()
                 self.refresh_levels()
                 return
+        if pause is not None:
+            pause.stop()
         self.commit({key: value})
         self.refresh_levels()
 
