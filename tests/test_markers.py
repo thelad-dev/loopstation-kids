@@ -25,7 +25,7 @@ from loopstation.audio.stretch import (
 from loopstation.config import ConfigError, Settings, parse_settings
 from loopstation.controller import LIVE_SETTINGS, MARKER_STRETCH_REFUSALS, Controller, Mode
 from loopstation.gui.detail_panel import DetailPanel, LoopTab
-from loopstation.gui.export_dialog import ExportDialog
+from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.waveform import MARKER_COLOR, WaveformWidget, marker_name
 from loopstation.state import MAX_MARKERS, AppState, apply, parse_markers, replay
 from loopstation.store import EventStore
@@ -639,7 +639,7 @@ def test_the_dialog_writes_cue_points_when_the_switch_is_on(qapp, tmp_path, cloc
 
     controller, _ = session(tmp_path, clock)
     controller.add_marker(1, 4000)
-    dialog = ExportDialog(controller, None, export_dir=tmp_path / "out", clock=clock)
+    dialog = ExportPage(controller, None, export_dir=tmp_path / "out", clock=clock)
     dialog.pad_chips[1].click()
     assert dialog.cue_switch.isChecked()
     dialog.loop_button.click()
@@ -659,7 +659,7 @@ def test_the_dialog_still_saves_when_the_cue_chunks_fail(qapp, tmp_path, clock, 
     controller, _ = session(tmp_path, clock)
     controller.add_marker(1, 4000)
     monkeypatch.setattr(ex, "_add_cue_chunks", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
-    dialog = ExportDialog(controller, None, export_dir=tmp_path / "out", clock=clock)
+    dialog = ExportPage(controller, None, export_dir=tmp_path / "out", clock=clock)
     dialog.pad_chips[1].click()
     dialog.loop_button.click()
     assert dialog.last_path is not None and dialog.last_path.is_file()

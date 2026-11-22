@@ -111,7 +111,6 @@ TOOLS = (
     ("devices", "headphones", "Geräte"),
     ("system", "gear", "System"),
 )
-TOOL_GROUP = 4
 
 
 def decimal(value: float, places: int) -> str:

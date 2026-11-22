@@ -35,7 +35,7 @@ from loopstation.gui.changes_page import ChangesPage
 from loopstation.gui.detail_panel import DetailPanel, LoopTab, PadTab, RecordTab
 from loopstation.gui.export_dialog import ExportPage
 from loopstation.gui.main_window import TOOL_HEADS, MainWindow
-from loopstation.gui.parent_nav import WIDE_PAGE, CardGrid, breakable, dim_label
+from loopstation.gui.parent_nav import CardColumn, breakable, dim_label
 from loopstation.gui.sets_page import SetsPage
 from loopstation.gui.settings_panels import FIELDS, SETTINGS_PANELS, SettingsPanels, panel_of
 from loopstation.gui.side_panel import SAVED_LINE
@@ -502,18 +502,17 @@ def test_a_folder_path_in_a_wrapped_label_breaks_at_the_folders(qapp, path):
         assert plain.minimumSizeHint().width() > 2 * wrapped.minimumSizeHint().width()
 
 
-def test_two_columns_on_a_wide_page_and_one_on_a_narrow_page(qapp):
-    left, right, wide = QLabel("links"), QLabel("rechts"), QLabel("breit")
-    grid = CardGrid([[wide], [left, right]], ratio=(3, 2))
-    grid.resize(WIDE_PAGE + 100, 300)
-    grid.show()
-    QTest.qWait(20)
-    assert grid.wide and left.y() == right.y() and left.x() < right.x()
-    assert left.width() > right.width()  # 3 : 2
-    grid.resize(600, 300)
-    QTest.qWait(20)
-    assert not grid.wide and left.x() == right.x() and left.y() < right.y()
-    grid.close()
+def test_cards_stand_one_under_the_other_at_any_width(qapp):
+    first, last = QLabel("oben"), QLabel("unten")
+    column = CardColumn([first, last], stretch_last=True)
+    for width in (420, 1200):
+        column.resize(width, 400)
+        column.show()
+        QTest.qWait(20)
+        assert first.x() == last.x() == 0 and first.y() < last.y()
+        assert first.width() == last.width() == width  # as wide as the column
+        assert last.height() > first.height()  # the last card takes the spare height
+    column.close()
 
 
 # ---------------------------------------------------------- the lifetime of the pages

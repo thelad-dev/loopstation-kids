@@ -10,7 +10,7 @@ from test_export import session
 
 from loopstation.gui.export_dialog import (
     WORD_JOINER,
-    ExportDialog,
+    ExportPage,
     default_export_dir,
     frames_text,
     rate_text,
@@ -28,7 +28,7 @@ def texts(widget):
 
 def make(qapp, tmp_path, clock, **overrides):
     controller, _audio = session(tmp_path, clock, **overrides)
-    dialog = ExportDialog(controller, None, export_dir=tmp_path / "out", clock=clock)
+    dialog = ExportPage(controller, None, export_dir=tmp_path / "out", clock=clock)
     dialog.resize(1280, 800)
     return dialog, controller
 
@@ -121,7 +121,7 @@ def test_nothing_to_export_says_so(qapp, tmp_path, clock):
     from test_controller import build
 
     controller, _ = build(tmp_path, clock)
-    dialog = ExportDialog(controller, None, export_dir=tmp_path / "out", clock=clock)
+    dialog = ExportPage(controller, None, export_dir=tmp_path / "out", clock=clock)
     assert dialog.export_sum() is None
     assert "nichts zu exportieren" in dialog.sum_message.text()
     assert not dialog.loop_button.isEnabled() and dialog.selected_loop_pad() is None
@@ -273,7 +273,7 @@ def test_every_visit_of_the_kept_export_panel_chooses_from_what_loops_then(qapp,
     built = []
 
     def build(c, _parent):
-        built.append(ExportDialog(c, None, export_dir=tmp_path / "out", clock=clock))
+        built.append(ExportPage(c, None, export_dir=tmp_path / "out", clock=clock))
         return built[-1]
 
     window = MainWindow(controller, None, [], config_path=tmp_path / "settings.toml")
@@ -339,7 +339,7 @@ def test_the_preview_on_the_page_shows_all_rows_without_its_own_scrollbar(qapp, 
     from PySide6.QtWidgets import QScrollArea
 
     dialog, _ = silent_session(qapp, tmp_path, clock)
-    dialog.resize(940, 640)  # its room inside the parents' area at 1280 x 800
+    dialog.resize(446, 581)  # its room in the side panel at 1280 x 800
     dialog.show()  # the page itself may scroll, the preview must not
     try:
         qapp.processEvents()

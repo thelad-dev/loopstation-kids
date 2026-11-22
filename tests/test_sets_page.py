@@ -15,7 +15,7 @@ from loopstation import app as app_module
 from loopstation import sets
 from loopstation.gui.main_window import MainWindow
 from loopstation.gui.sets_page import (
-    SetsDialog,
+    SetsPage,
     clean_name,
     format_loop,
     format_size,
@@ -37,7 +37,7 @@ def running(tmp_path, clock):
 
 
 def dialog_for(running, qapp, opened=None):
-    dialog = SetsDialog(running.session, opened.append if opened is not None else None, clock=lambda: NOW)
+    dialog = SetsPage(running.session, opened.append if opened is not None else None, clock=lambda: NOW)
     return dialog
 
 

@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 from loopstation import sets
 from loopstation.gui.icons import draw_icon
 from loopstation.gui.parent_gate import PARENT_ACCENT
-from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardGrid, CurrentPageStack, fitted_font, scrolled
+from loopstation.gui.parent_nav import SCROLLBAR_GAP_QSS, CardColumn, CurrentPageStack, fitted_font, scrolled
 from loopstation.gui.widgets import (
     ACCENT_GRAY,
     ACCENT_ORANGE,
@@ -398,7 +398,7 @@ class SetsPage(QWidget):
         right_widget.setLayout(right)
         columns = QVBoxLayout(page)
         columns.setContentsMargins(0, 0, 0, 0)
-        columns.addWidget(CardGrid([[form_card, right_widget]], ratio=(29, 17), gap=20, stretch_last=True), 1)
+        columns.addWidget(CardColumn([form_card, right_widget], stretch_last=True), 1)
         return page
 
     def _build_open_page(self) -> QWidget:
@@ -478,7 +478,7 @@ class SetsPage(QWidget):
         right_widget.setLayout(right)
         columns = QVBoxLayout(page)
         columns.setContentsMargins(0, 0, 0, 0)
-        columns.addWidget(CardGrid([[list_card, right_widget]], ratio=(29, 17), gap=20, stretch_last=True), 1)
+        columns.addWidget(CardColumn([list_card, right_widget], stretch_last=True), 1)
         return page
 
     @staticmethod
@@ -646,6 +646,3 @@ class SetsPage(QWidget):
             self._on_open(prepared)
         self.accept()
 
-
-# The page used to be a dialog of its own; the name stays for code that still imports it.
-SetsDialog = SetsPage
