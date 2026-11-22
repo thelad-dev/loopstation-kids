@@ -292,7 +292,7 @@ def test_the_switches_sit_where_the_mockup_has_them(parts):
         assert panel_of(key) == "levels", key
     for key in ("rows", "cols", "sample_rate", "data_dir", "launchpad", "fullscreen", "max_record_seconds",
                 "sound_effects", "record_start_tone", "stretch_engine", "snap_markers", "export_cue_points",
-                "parent_unlock_minutes", "parent_idle_minutes"):
+                "parent_hold_minutes", "parent_hold_until_exit", "parent_idle_minutes"):
         assert panels.page("system").isAncestorOf(panels.editors[key].widget), key
 
 

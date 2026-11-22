@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QMouseEvent, QPainter, QPaintEvent, QPen, QResizeEvent
-from PySide6.QtWidgets import QAbstractButton, QWidget
+from PySide6.QtWidgets import QAbstractButton, QLabel, QWidget
 
 from loopstation.gui.detail_panel import DetailPanel
 from loopstation.gui.icons import draw_icon
@@ -100,7 +100,8 @@ SOURCE_WORDS = {
 }
 # The keys of the parents' view (the main window handles them), shown behind "Tasten ?".
 KEYS_HELP = ("Pfeile wählen · Leertaste spielt · L Loop · R nimmt auf · Entf löscht · Enter Detailfeld · "
-             "M Marker · Esc schließt · Strg+Z zurück · Strg+Y wieder · F1 Kinderseite")
+             "M Marker · Esc schließt · Strg+Z zurück · Strg+Y wieder · F1 Kinderseite · "
+             "Strg+Umschalt+L sperrt")
 
 # (tool key, icon, word) of the tool bar; the separator falls before "Pegel".
 TOOLS = (
@@ -517,7 +518,7 @@ class ToolButton(QAbstractButton):
 
 
 class ToolBar(QWidget):
-    """The left column: Pads, Verlauf, Sets, Export | Pegel, Geräte, System; "Tasten ?" at the bottom.
+    """The left column: Pads, Verlauf, Sets, Export | Pegel, Geräte, System; lock + "Tasten ?" at the bottom.
 
     The lit tool is the page shown: "Pads" while no side panel is open, else the tool of the panel.
     """
@@ -527,6 +528,8 @@ class ToolBar(QWidget):
     TOP = 14
     BOTTOM = 10
     SEPARATOR = 22
+    LOCK_HEIGHT = 52
+    UNLOCK_HEIGHT = 18
 
     def __init__(self, with_sets: bool, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -536,6 +539,16 @@ class ToolBar(QWidget):
             button.setVisible(key != "sets" or with_sets)
             self.buttons[key] = button
         self.current: str | None = None
+        self.unlock_label = QLabel(self)
+        self.unlock_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.unlock_label.setStyleSheet(
+            f"color: {TEXT_DIM.name()}; font-size: 11px; font-weight: bold; background: transparent;")
+        self.unlock_label.setToolTip("So lange bleibt das Schloss ohne neue Rechenaufgabe offen")
+        self.unlock_label.hide()
+        self.lock_button = ToolButton("lock", "lock", "Sperren", self)
+        self.lock_button.setCheckable(False)
+        self.lock_button.setToolTip("Elternbereich jetzt sperren (Strg+Umschalt+L)")
+        self.lock_button.setAccessibleName("Elternbereich jetzt sperren")
         self.keys_button = ToolButton("keys", "keyboard", "Tasten ?", self)
         self._separator_y: float | None = None
         self.set_current(None)
@@ -551,8 +564,10 @@ class ToolBar(QWidget):
         super().resizeEvent(event)
         shown = [b for b in self.buttons.values() if not b.isHidden()]
         keys_height = 64
+        label_h = self.UNLOCK_HEIGHT if self.unlock_label.isVisible() else 0
+        bottom_block = keys_height + self.LOCK_HEIGHT + label_h + 8
         extra = self.SEPARATOR - (self.STEP - self.ITEM)  # the separator widens one gap by this much
-        room = self.height() - self.TOP - self.BOTTOM - keys_height - extra - 12
+        room = self.height() - self.TOP - self.BOTTOM - bottom_block - extra - 12
         step = min(float(self.STEP), room / max(1, len(shown)))
         side = self.width() - 12
         y = float(self.TOP)
@@ -562,7 +577,12 @@ class ToolBar(QWidget):
                 y += extra
             button.setGeometry(6, round(y), side, round(step - (self.STEP - self.ITEM)))
             y += step
-        self.keys_button.setGeometry(6, self.height() - self.BOTTOM - keys_height, side, keys_height)
+        bottom = self.height() - self.BOTTOM
+        self.keys_button.setGeometry(6, bottom - keys_height, side, keys_height)
+        lock_top = bottom - keys_height - self.LOCK_HEIGHT - 4
+        self.lock_button.setGeometry(6, lock_top, side, self.LOCK_HEIGHT)
+        if label_h:
+            self.unlock_label.setGeometry(6, lock_top - label_h, side, label_h)
         self.update()
 
     def paintEvent(self, _event: QPaintEvent) -> None:  # noqa: N802 - Qt API
@@ -819,14 +839,15 @@ class TileGrid(QWidget):
 class ParentView(QWidget):
     """Header, tool bar, tiles, detail panel and (while a tool is open) its side panel in one frame.
 
-    Signals (handled by the main window): ``kids_requested`` (the switch), ``tool_requested(key)``
-    (a tool of the bar, also "tempo" from the bar chip; "pads" and the cross of the panel close it),
-    ``pads_touched`` (a press on a tile), ``pad_down(index)`` /
-    ``pad_up(index, inside)`` around a press on a start field, ``undo_requested``, ``redo_requested``,
-    ``stop_requested``.
+    Signals (handled by the main window): ``kids_requested`` (the switch), ``lock_requested``
+    (lock the parents' area now), ``tool_requested(key)`` (a tool of the bar, also "tempo" from the
+    bar chip; "pads" and the cross of the panel close it), ``pads_touched`` (a press on a tile),
+    ``pad_down(index)`` / ``pad_up(index, inside)`` around a press on a start field,
+    ``undo_requested``, ``redo_requested``, ``stop_requested``.
     """
 
     kids_requested = Signal()
+    lock_requested = Signal()
     tool_requested = Signal(str)
     pads_touched = Signal()
     pad_down = Signal(int)
@@ -857,10 +878,13 @@ class ParentView(QWidget):
         self.undo_button = self.header.undo_button
         self.redo_button = self.header.redo_button
         self.stop_button = self.header.stop_button
+        self.lock_button = self.toolbar.lock_button
+        self.unlock_label = self.toolbar.unlock_label
         self.volume_slider = self.header.volume_slider
         self.tiles = self.grid.tiles
 
         self.mode_switch.kids_button.clicked.connect(self.kids_requested)
+        self.lock_button.clicked.connect(self.lock_requested)
         self.bar_chip.clicked.connect(weak_slot(self._tool, "tempo"))
         self.undo_button.clicked.connect(self.undo_requested)
         self.redo_button.clicked.connect(self.redo_requested)
@@ -978,6 +1002,16 @@ class ParentView(QWidget):
         return QSize(1000, 600)
 
     # ------------------------------------------------------------- refresh
+
+    def set_unlock_remaining(self, text: str) -> None:
+        """Dim remaining-time mark above "Sperren" (empty hides it)."""
+        label = self.unlock_label
+        shown = bool(text)
+        if label.text() == text and label.isVisible() == shown:
+            return
+        label.setText(text)
+        label.setVisible(shown)
+        self.toolbar.resizeEvent(QResizeEvent(self.toolbar.size(), self.toolbar.size()))
 
     def refresh(self, colors: dict[int, str], levels: tuple[float, ...]) -> None:
         """Bring the view in line with the controller; ``colors`` are those the child page shows."""

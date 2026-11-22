@@ -173,11 +173,14 @@ FIELDS: list[Field] = [
     Field("peak_meter", "Pegelanzeige bei Aufnahme", "bool"),
     Field("launchpad", "Launchpad benutzen", "bool"),
     Field("fullscreen", "Vollbild", "bool"),
-    Field("parent_unlock_minutes", "Schloss offen lassen", "int", 0, 15, suffix=" min",
-          hint="So lange darf erneutes Halten des Schlosses die Elternansicht ohne Rechenaufgabe öffnen, "
-               "wenn die Eltern es in der Aufgabe einschalten. 0 = immer fragen."),
+    Field("parent_hold_minutes", "Schloss offen lassen", "int", 1, 120, suffix=" min",
+          hint="Nach der Rechenaufgabe bleibt das Schloss so lange offen: erneutes Halten öffnet "
+               "ohne Aufgabe, jede Eingabe im Elternbereich verlängert die Frist."),
+    Field("parent_hold_until_exit", "Schloss bis Programmende offen lassen", "bool",
+          hint="Ein: keine Frist, die Rechenaufgabe kommt erst nach einem Neustart wieder."),
     Field("parent_idle_minutes", "Zurück zur Kinderseite nach", "int", 0, 240, suffix=" min",
-          hint="Ohne Eingabe kehrt die Elternansicht nach dieser Zeit zur Kinderseite zurück. 0 = nie."),
+          hint="Ohne Eingabe kehrt die Elternansicht nach dieser Zeit zur Kinderseite zurück, das Schloss "
+               "bleibt dabei offen (das regelt allein \"Schloss offen lassen\"). 0 = nie."),
     Field("rows", "Zeilen", "int", 1, 16),
     Field("cols", "Spalten", "int", 1, 16),
     Field("sample_rate", "Abtastrate", "int", 8000, 192000, suffix=" Hz"),
@@ -200,7 +203,7 @@ SYSTEM_SECTIONS = (
     ("Bedienung", ("launchpad", "fullscreen")),
     ("Aufnahme", ("max_record_seconds", "sound_effects", "record_start_tone")),
     ("Bearbeiten und Sichern", ("stretch_engine", "snap_markers", "export_cue_points")),
-    ("Elternansicht", ("parent_unlock_minutes", "parent_idle_minutes")),
+    ("Elternansicht", ("parent_hold_minutes", "parent_hold_until_exit", "parent_idle_minutes")),
     ("Raster, Klang und Ordner", ("rows", "cols", "sample_rate", "data_dir")),
 )
 SETTINGS_PANELS = ("levels", "devices", "tempo", "system")
