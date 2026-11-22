@@ -1148,6 +1148,19 @@ class DetailPanel(QWidget):
 
     # ---------------------------------------------------------------- geometry
 
+    @staticmethod
+    def _wrapped_help(parts: list[str], room: float, pixels: int) -> list[str]:
+        """``parts`` filled greedily into lines of at most ``room`` px at ``pixels``; a part too long
+        for a line of its own still gets one."""
+        metrics = QFontMetrics(_font(pixels, QFont.Weight.Medium))
+        lines: list[str] = []
+        for part in parts:
+            if lines and metrics.horizontalAdvance(f"{lines[-1]} · {part}") <= room:
+                lines[-1] = f"{lines[-1]} · {part}"
+            else:
+                lines.append(part)
+        return lines
+
     def help_lines(self, room: float) -> tuple[list[str], QFont]:
         """The key help in one line, or in two or three when it does not fit ``room`` px."""
         parts = self.help.split(" · ")
@@ -1156,14 +1169,17 @@ class DetailPanel(QWidget):
         # One line at 14 px, else two at 13, else three at 12 (each may give one pixel); the last way
         # shrinks the three lines further rather than cut them.
         for count, pixels, least in ((1, 14, 13), (2, 13, 12), (3, 12, 11), (3, 11, 10)):
-            size = -(-len(parts) // count)  # parts per line, rounded up
-            lines = [" · ".join(parts[i:i + size]) for i in range(0, len(parts), size)]
+            lines = self._wrapped_help(parts, room, pixels)
+            if len(lines) > count:
+                continue
             longest = max(lines, key=QFontMetrics(_font(pixels, QFont.Weight.Medium)).horizontalAdvance)
             font = fitted_font(longest, room, pixels, QFont.Weight.Medium, least)
             metrics = QFontMetrics(font)
             # Judge every line with the fitted font: its hinting can make another line the widest.
             if all(metrics.horizontalAdvance(line) <= room for line in lines):
                 return lines, font
+        lines = self._wrapped_help(parts, room, 10)
+        font = fitted_font(max(lines, key=len), room, 11, QFont.Weight.Medium, 10)
         metrics = QFontMetrics(font)
         return [metrics.elidedText(line, Qt.TextElideMode.ElideRight, int(room)) for line in lines], font
 
